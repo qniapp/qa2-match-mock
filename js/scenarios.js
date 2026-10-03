@@ -10,20 +10,20 @@ var SCENARIOS = (function () {
   var clientJoins = ['client.friendMatch', 'client.enterCode', 'client.joinMatch'];
   var toReady = hostCreates.concat(clientJoins, ['sys.peerConnected', 'sys.ready']);
   var bothStart = ['host.startMatch', 'client.startMatch', 'sys.bothStarted'];
-  var toGame = ['vs.done', 'countdown.done'];
-  var both = { U2: 'both' };
+  var toGame = ['vs.done', 'game.countdownDone']; // VS 画面 → ゲーム本体のカウントダウン → プレイ開始
+  var both = { U31: 'both' };
   var clientOnly = 'このシナリオではホストは関与しない';
-  var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でゲーム中まで (12 手順)
+  var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (12 手順)
   var postMatch = '対戦後の部分は図が無く、画面もボタンもすべて仮 (未決 U20〜U30)。Win / Lose は端末の下のモック操作で、勝敗判定そのものは対象外。';
 
   return [
     { id: '1', title: '通常対戦', diagram: '01', opts: both,
-      desc: 'ホストが Create Match、クライアントが Match Code で Join Match。自動で Friend joined! → Ready になり、両者が Start Match を押すと VS 画面 → 3·2·1 → ゲーム開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。',
+      desc: 'ホストが Create Match、クライアントが Match Code で Join Match。自動で Friend joined! → Ready になり、両者が Start Match を押すと VS 画面 → ゲーム画面に移り、ゲーム本体のカウントダウン (3 → 2 → 1) のあとプレイ開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。モック独自の 3·2·1 は置かない (U2 で決定)。',
       steps: toReady.concat(bothStart, toGame) },
-    { id: '1b', title: '通常対戦 (U2 別案: 自動開始)', diagram: '01', opts: { U2: 'auto' },
-      desc: '未決 U2 の別案。Ready になったら Start Match を押さずに自動で VS 画面へ進む。',
+    { id: '1b', title: '通常対戦 (U31 別案: 自動開始)', diagram: '01', opts: { U31: 'auto' },
+      desc: '未決 U31 の別案。Ready になったら Start Match を押さずに自動で VS 画面へ進む。',
       steps: toReady.concat(['sys.autoStart'], toGame) },
-    { id: '2a', title: '待機中にホストが別画面へ → 戻って対戦', diagram: '02', opts: { U2: 'both', U14: 'keep', U1: 'lobby' },
+    { id: '2a', title: '待機中にホストが別画面へ → 戻って対戦', diagram: '02', opts: { U31: 'both', U14: 'keep', U1: 'lobby' },
       desc: 'ホストが待機中に ‹ で戻ると、Friend Match トップに青い "Waiting for your friend…" バナー。さらに他の画面 (ステージ選択) へ行っても表示が続く。クライアントが入ると緑 "Friend joined!" → 赤 "Ready to start"。クライアント側は "Host User / Away"。ホストが赤いトーストをタップするとロビーの Ready に戻り、クライアントは Friend joined! → Ready。',
       steps: hostCreates.concat(['host.back', 'host.back'], clientJoins,
         ['sys.ready', 'host.tapToast', 'sys.ready'], bothStart, toGame) },
@@ -68,7 +68,7 @@ var SCENARIOS = (function () {
       desc: 'Match は存在するが、すでにほかの人が入っている。赤字で "The match is already full."。',
       steps: clientJoins },
     { id: '11', title: 'ランダム対戦 (旧案)', diagram: '00',
-      desc: '09-30 の旧案 (図00)。Random Match で "Waiting for opponent…" とピンクのトースト。相手が見つかったら合意どおり VS 画面 → 3·2·1 → ゲーム。10-02 の図に無いので扱いは未決 (U13)。',
+      desc: '09-30 の旧案 (図00)。Random Match で "Waiting for opponent…" とピンクのトースト。相手が見つかったら合意どおり VS 画面 → ゲーム本体のカウントダウン → プレイ開始。10-02 の図に無いので扱いは未決 (U13)。',
       steps: ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound'].concat(toGame) },
     { id: '12', title: 'VS 画面中の切断', diagram: 'なし (合意事項)', opts: both,
       desc: 'VS 画面中に相手が切断した場合の戻り先は未決 (U3)。未決パネルのトグルで戻り先を切り替えられる (既定: ロビーで "Connection lost.")。',
@@ -86,7 +86,7 @@ var SCENARIOS = (function () {
       desc: 'ホストの下の Lose を押すと、ホストは "LOSE"、クライアントは自動で "WIN!"。今度はクライアントが先に Back to Friend Match で抜ける。' + postMatch,
       steps: toMatchEnd.concat(['host.lose', 'client.backToFriendMatch']) },
     { id: '15c', title: '対戦後に再戦 (仮)', diagram: 'なし (対戦後)', opts: both,
-      desc: 'ホストが勝ったあと、クライアントが Rematch を押すと "Waiting for your friend…"、ホストには "Your friend wants a rematch"。ホストも Rematch を押すと VS 画面 → 3·2·1 → ゲーム。今度はクライアントが Win を押す。再戦の有無・同意の要否・VS 画面を挟むか・Match Code の再利用はすべて未決 (U23)。' + postMatch,
+      desc: 'ホストが勝ったあと、クライアントが Rematch を押すと "Waiting for your friend…"、ホストには "Your friend wants a rematch"。ホストも Rematch を押すと VS 画面 → ゲーム本体のカウントダウン → プレイ開始。今度はクライアントが Win を押す。再戦の有無・同意の要否・VS 画面を挟むか・Match Code の再利用はすべて未決 (U23)。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch'], toGame, ['client.win']) },
   ];
 })();

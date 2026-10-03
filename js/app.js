@@ -6,7 +6,7 @@
   'use strict';
 
   var STEP_DELAY = 1200;
-  var EVENT_DELAY = { 'vs.done': 2500, 'countdown.done': 3000 };
+  var EVENT_DELAY = { 'vs.done': 2500, 'game.countdownDone': GAME_COUNTDOWN_MS };
   var MATCH_CODE = 'QWERTY123';
   var STAGE_TILES = [
     { label: 'H²', color: 'var(--h)' }, { label: 'X²', color: 'var(--x)' },
@@ -14,12 +14,16 @@
     { label: 'H²→Z', color: 'var(--h)' }, { label: 'T²→S', color: 'var(--swap)' },
     { label: '', color: 'var(--cnot)' }, { label: '', color: 'var(--y)' },
   ];
+  // ゲーム画面のプレースホルダー: 列ごとに下から積んだブロック ('+' は丸いブロック)
+  var FIELD = [['S', 'H', 'Z', 'S'], ['Z', 'S', 'Y'], ['T', 'S', '+'], ['Z', 'T', 'S'], ['S', 'T', 'H', '+'], ['H', 'Z', '+', 'Z']];
+  var OPP_FIELD = [['H', 'S', 'Z'], ['Z', 'T'], ['S', 'Y', 'T', 'Z'], ['T', 'Z'], ['+', 'H', 'S'], ['Z', 'H']];
 
   var app = {
     scenario: null, // null = 自由操作
     step: 0, // 再生済みの手順数
     detached: false, // シナリオの途中で手順と違う操作をした
     failedStep: -1,
+    cd: 3, // 手順で止めているとき、ゲーム本体のカウントダウンで表示しておく数字 (#...&cd=3|2|1)
     opts: Engine.defaultOpts(),
     ctx: Engine.defaultCtx(),
     state: null,
@@ -36,6 +40,15 @@
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
+  }
+
+  // シナリオを手順で進めている間は、アニメーションを止めて決まった 1 フレームを出す
+  function frozen() {
+    return !!(scenarioActive() && !app.playTimer);
+  }
+
+  function inGameCountdown() {
+    return Engine.DEVICES.some(function (d) { return SCREENS[app.state[d]].countdown; });
   }
 
   function undecidedById(id) {
@@ -293,15 +306,23 @@
       return '<div class="vs">' + card('host') + '<div class="vs-mark">VS</div>' + card('client') +
         '<div class="vs-bar"><i></i></div></div>';
     },
-    countdown: function () {
-      return '<div class="countdown"><div class="cd-label">Match start</div><div class="cd-nums"><b>3</b><b>2</b><b>1</b></div></div>';
-    },
-    game: function (dev) {
-      var cells = '';
-      for (var i = 0; i < 40; i++) cells += '<i></i>';
-      return '<div class="game"><div class="board">' + cells + '</div>' +
-        '<div class="game-label">Game in progress (mock)</div>' +
-        '<button type="button" class="btn mock-only"' + attrs(dev, 'backToOnline') + '>Back to Online Battle</button></div>';
+    // ゲーム画面のプレースホルダー。HUD とカウントダウンは実機 (VsAI) の画面にならう
+    game: function (dev, s) {
+      var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
+      var me = '<div class="g-me">' +
+        '<div class="g-hud"><div class="g-time"><span>Time</span><b>0:00</b></div>' +
+        '<div class="g-score"><span>Score</span><b>0</b></div></div>' +
+        (s.countdown ? '' : '<div class="g-pause" title="ポーズボタン (プレイ開始後に出る)"><i></i><i></i></div>') +
+        fieldHtml(FIELD, 'g-field') +
+        (s.countdown ? countdownHtml() + decidedNoteHtml('U2', 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。' + GAME_COUNTDOWN_PREMISE)
+          : '<div class="g-mock"><span>Game in progress (mock)</span>' +
+            '<button type="button" class="btn mock-only"' + attrs(dev, 'backToOnline') + '>Back to Online Battle</button></div>') +
+        '<div class="g-bar"><span class="g-gauge"><i></i></span><span class="g-up">︽</span></div>' +
+        '</div>';
+      return '<div class="game' + (s.countdown ? ' counting' : '') + '">' +
+        '<div class="g-opp"><div class="g-score small"><span>Score</span><b>0</b></div>' +
+        '<div class="g-opp-name">' + esc(opp.name) + '</div>' +
+        fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>';
     },
     // 対戦後 (図なし)。値もボタンも仮で、未決の要素にはその場で未決バッジを付ける
     result: function (dev, s) {
@@ -331,6 +352,30 @@
         '</div>';
     },
   };
+
+  function fieldHtml(cols, cls) {
+    return '<div class="' + cls + '">' + cols.map(function (col) {
+      return '<div class="g-col">' + col.map(function (b) {
+        return b === '+' ? '<i class="blk plus">+</i>' : '<i class="blk b-' + b + '">' + b + '</i>';
+      }).join('') + '</div>';
+    }).join('') + '</div>';
+  }
+
+  // ゲーム本体の開始カウントダウン: 数字と細いリングが拡大しながら現れ、ズームしながら消える。
+  // 手順で止めているときは app.cd の数字を「静止」した姿勢で出す
+  function countdownHtml() {
+    var step = function (n, i) {
+      return '<div class="g-cd-step" style="animation-delay: ' + (GAME_COUNTDOWN.delay + i * GAME_COUNTDOWN.digit) + 'ms">' +
+        '<i class="g-cd-ring"></i><b class="g-cd-digit">' + n + '</b></div>';
+    };
+    if (frozen()) return '<div class="g-cd frozen" data-cd="' + app.cd + '">' + step(app.cd, 0) + '</div>';
+    return '<div class="g-cd">' + GAME_COUNTDOWN.digits.map(step).join('') + '</div>';
+  }
+
+  function decidedNoteHtml(id, text) {
+    return '<div class="decided-note"><button type="button" class="pill-decided small" data-undecided="' + id + '">決定 ' + id + '</button> ' +
+      esc(text) + '</div>';
+  }
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる
   function mockControlsHtml(dev) {
@@ -362,7 +407,7 @@
 
     var screen = $('.screen', root);
     var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + dialogHtml(dev, dlg) + note;
-    // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを途中から再開させない)
+    // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを最初からやり直させない)
     if (screen.dataset.html !== html) {
       screen.className = 'screen view-' + spec.view;
       screen.innerHTML = html;
@@ -370,20 +415,30 @@
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
 
-    // 未決バッジ: 画面・ダイアログ・直前に発火した行 (この端末に関係するもの) の未決を集める
+    // 未決バッジ: 画面・ダイアログ・直前に発火した行 (この端末に関係するもの) の未決を集める。決定済みの項目は緑の「決定」
     var ids = spec.undecided.slice();
+    var decided = spec.decided.slice();
     if (dlg && DIALOGS[dlg].undecided) ids = ids.concat(DIALOGS[dlg].undecided);
     var r = app.lastRow;
-    if (r && (r.to[dev] !== '*' || (r.dialog && dev in r.dialog))) ids = ids.concat(r.undecided);
-    ids = ids.filter(function (id, i) { return ids.indexOf(id) === i; });
+    if (r && (r.to[dev] !== '*' || (r.dialog && dev in r.dialog))) {
+      ids = ids.concat(r.undecided);
+      decided = decided.concat(r.decided);
+    }
+    var uniq = function (list) { return list.filter(function (id, i) { return list.indexOf(id) === i; }); };
+    ids = uniq(ids);
+    decided = uniq(decided);
+    var n = ids.length + decided.length;
     var strip = $('.undecided-strip', root);
-    strip.classList.toggle('compact', ids.length > 2);
-    strip.classList.toggle('dense', ids.length > 4);
-    strip.innerHTML = ids.map(function (id) {
-      var u = undecidedById(id);
-      return '<button type="button" class="pill-undecided" data-undecided="' + id + '" title="' + esc(u.title + ' - ' + u.desc) + '">' +
-        '未決 ' + id + ' <span>' + esc(u.title) + '</span></button>';
-    }).join('');
+    strip.classList.toggle('compact', n > 2);
+    strip.classList.toggle('dense', n > 4);
+    strip.innerHTML = ids.map(function (id) { return pillHtml(id, 'pill-undecided', '未決'); }).join('') +
+      decided.map(function (id) { return pillHtml(id, 'pill-decided', '決定'); }).join('');
+  }
+
+  function pillHtml(id, cls, word) {
+    var u = undecidedById(id);
+    return '<button type="button" class="' + cls + '" data-undecided="' + id + '" title="' + esc(u.title + ' - ' + u.desc) + '">' +
+      word + ' ' + id + ' <span>' + esc(u.title) + '</span></button>';
   }
 
   // ---- パネル ---------------------------------------------------------------
@@ -405,6 +460,9 @@
     $('#btn-auto').disabled = !scenarioActive() && !app.playTimer;
     $('#btn-auto').textContent = app.playTimer ? '■ 停止' : '自動再生';
     $('#btn-auto').classList.toggle('playing', !!app.playTimer);
+    var cd = $('#cd-freeze');
+    cd.hidden = !(frozen() && inGameCountdown());
+    $$('[data-cd]', cd).forEach(function (b) { b.classList.toggle('active', parseInt(b.dataset.cd, 10) === app.cd); });
   }
 
   function renderScenarioDetail() {
@@ -486,6 +544,8 @@
       if (r.note) memo += esc(r.note) + ' ';
       memo += r.undecided.map(function (id) {
         return '<button type="button" class="pill-undecided small" data-undecided="' + id + '">' + id + '</button>';
+      }).join('') + r.decided.map(function (id) {
+        return '<button type="button" class="pill-decided small" data-undecided="' + id + '">決定 ' + id + '</button>';
       }).join('');
       var dlg = function (d) { return r.dialog && d in r.dialog ? r.dialog[d] : undefined; };
       // 1 段目に状態とイベント、2 段目にメモ・未決 (狭いパネルでも状態名を読めるように)
@@ -513,8 +573,15 @@
   }
 
   function renderUndecided() {
-    $('#undecided-count').textContent = '(' + UNDECIDED.length + ')';
+    var open = UNDECIDED.filter(function (u) { return !u.decided; }).length;
+    $('#undecided-count').textContent = '(' + open + ')';
     $('#undecided-list').innerHTML = UNDECIDED.map(function (u) {
+      if (u.decided) {
+        var d = u.decided;
+        return '<li id="u-' + u.id + '" class="decided"><div class="u-head"><span class="pill-decided">決定 ' + u.id + '</span> ' + esc(u.title) +
+          ' <small>(' + esc(d.by) + ' ' + esc(d.date) + ')</small></div><p>' + esc(u.desc) + '</p>' +
+          '<p><b>理由:</b> ' + esc(d.reason) + '</p><p><b>前提:</b> ' + esc(d.premise) + '</p></li>';
+      }
       var opts = u.options ? '<div class="u-options">' + u.options.map(function (o) {
         var checked = app.opts[u.id] === o.value ? ' checked' : '';
         return '<label><input type="radio" name="opt-' + u.id + '" value="' + esc(o.value) + '" data-opt="' + u.id + '"' + checked + '> ' +
@@ -541,6 +608,7 @@
 
   function updateHash() {
     var hash = app.scenario ? '#s=' + app.scenario.id + '&step=' + app.step : '#s=free';
+    if (frozen() && inGameCountdown()) hash += '&cd=' + app.cd;
     if (location.hash !== hash) history.replaceState(null, '', hash);
   }
 
@@ -550,8 +618,8 @@
   }
 
   function render() {
-    // シナリオを手順で進めている間はアニメーションを止めて最終フレームを出す (スクリーンショットを決定的にする)
-    document.body.classList.toggle('static', !!(scenarioActive() && !app.playTimer));
+    // シナリオを手順で進めている間はアニメーションを止めて決まったフレームを出す (スクリーンショットを決定的にする)
+    document.body.classList.toggle('static', frozen());
     renderDevice('host');
     renderDevice('client');
     renderScenarioList();
@@ -588,9 +656,15 @@
     return p;
   }
 
+  function cdParam(p) {
+    var n = parseInt(p.cd, 10);
+    return GAME_COUNTDOWN.digits.indexOf(n) === -1 ? GAME_COUNTDOWN.digits[0] : n;
+  }
+
   function applyHash() {
     var p = parseHash();
     var id = p.s && p.s !== 'free' ? p.s : (p.s === 'free' ? '' : '1');
+    app.cd = cdParam(p);
     selectScenario(id, parseInt(p.step, 10) || 0);
   }
 
@@ -621,6 +695,8 @@
     if (env) { userFire(env.dataset.env); return; }
     var sc = t.closest('[data-scenario]');
     if (sc) { selectScenario(sc.dataset.scenario, 0); return; }
+    var cdBtn = t.closest('#cd-freeze [data-cd]');
+    if (cdBtn) { app.cd = parseInt(cdBtn.dataset.cd, 10); render(); return; }
     var step = t.closest('[data-step]');
     if (step) { stopPlay(); rebuild(parseInt(step.dataset.step, 10)); return; }
     var tab = t.closest('[data-tab]');
@@ -651,6 +727,7 @@
     var cur = app.scenario ? app.scenario.id : '';
     var want = p.s && p.s !== 'free' ? p.s : '';
     if (want !== cur || (parseInt(p.step, 10) || 0) !== app.step) applyHash();
+    else if (cdParam(p) !== app.cd) { app.cd = cdParam(p); render(); }
   });
 
   applyHash();

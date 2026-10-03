@@ -10,7 +10,7 @@
   <header class="topbar">
     <h1>QA² オンライン対戦フロー モック</h1>
     <span class="topbar-sub">qniapp/qa2#1891 ・ ogwssk さんの図 (09-30 / 10-02) と 10-01 の合意事項をもとにしたモック</span>
-    <span class="legend"><span class="legend-auto">⏱ 自動遷移 (点線)</span><span class="legend-user">👆 ユーザー操作 (実線)</span><span class="pill-undecided">未決</span> = 決まっていない点</span>
+    <span class="legend"><span class="legend-auto">⏱ 自動遷移 (点線)</span><span class="legend-user">👆 ユーザー操作 (実線)</span><span class="pill-undecided">未決</span> = 決まっていない点 <span class="pill-decided">決定</span> = 決まった点</span>
   </header>
 
   <main class="layout">
@@ -25,6 +25,10 @@
         <button id="btn-next" type="button" class="primary">▶ 次へ</button>
         <button id="btn-reset" type="button">⟲ 最初から</button>
         <button id="btn-auto" type="button">自動再生</button>
+      </div>
+      <div id="cd-freeze" class="cd-freeze" hidden>
+        <span>ゲーム本体のカウントダウン (手順中は止めて表示):</span>
+        <button type="button" data-cd="3">3</button><button type="button" data-cd="2">2</button><button type="button" data-cd="1">1</button>
       </div>
       <ol id="step-list" class="step-list"></ol>
 
@@ -91,7 +95,7 @@
         </table>
       </div>
       <div class="tab-body" data-tab-body="undecided" hidden>
-        <p class="hint">選択肢があるものはトグルで切り替えられます (既定 = 図の通り、無ければ最も中立な案)。切り替えると遷移表の対応する行が有効になります。</p>
+        <p class="hint">選択肢があるものはトグルで切り替えられます (既定 = 図の通り、無ければ最も中立な案)。切り替えると遷移表の対応する行が有効になります。緑の「決定」は決まった項目です (ID はそのまま残しています)。</p>
         <ol id="undecided-list" class="undecided-list"></ol>
       </div>
       <div class="tab-body" data-tab-body="log" hidden>

@@ -18,6 +18,8 @@
   --host: #2F6FED;
   --client: #F59E0B;
   --undecided: #FACC15;
+  --decided: #34D399;
+  --countdown: #D3F7FB; /* ゲーム本体のカウントダウンの色 (RGBA 0.827, 0.969, 0.984) */
   --jp: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif;
   --game: 'Oxanium', var(--jp);
 }
@@ -86,6 +88,11 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .controls button.playing { background: #4A1D1D; border-color: var(--x); }
 .controls button:disabled { opacity: 0.4; cursor: default; }
 
+.cd-freeze { display: flex; align-items: center; gap: 4px; margin: 0 0 8px; font-size: 12px; color: #A7F3D0; }
+.cd-freeze[hidden] { display: none; }
+.cd-freeze span { flex: 1; }
+.cd-freeze button { width: 28px; padding: 2px 0; border-radius: 4px; border: 1px solid var(--line); background: #141B33; cursor: pointer; }
+.cd-freeze button.active { border-color: var(--decided); background: rgba(52, 211, 153, 0.18); }
 .step-list { margin: 0; padding: 0 0 0 26px; font-size: 12px; }
 .step-list li { padding: 1px 4px; border-radius: 4px; cursor: pointer; color: var(--muted); }
 .step-list li.done { color: #B7BECC; }
@@ -131,7 +138,16 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 }
 .pill-undecided span { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
 .pill-undecided.small { padding: 0 5px; font-size: 10px; margin-right: 2px; }
-.legend .pill-undecided { cursor: default; }
+.pill-decided {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  padding: 1px 7px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--decided); color: #022C1C; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.pill-decided span { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.pill-decided.small { padding: 0 5px; font-size: 10px; margin-right: 2px; }
+.undecided-strip.compact .pill-decided { max-width: calc(50% - 2px); }
+.undecided-strip.dense .pill-decided { max-width: calc(33.33% - 3px); }
+.legend .pill-undecided, .legend .pill-decided { cursor: default; }
 
 .phone {
   width: 380px; height: 760px; padding: 10px; border-radius: 34px;
@@ -200,9 +216,6 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 /* 手順実行中はアニメーションを止める */
 .static .screen *, .static .screen *::before { animation: none !important; }
 .static .vs-bar { display: none; }
-.static .cd-nums { display: flex; width: auto; height: auto; gap: 10px; align-items: center; }
-.static .cd-nums b { position: static; opacity: 1; font-size: 72px; }
-.static .cd-nums b + b::before { content: '·'; color: var(--muted); font-size: 40px; margin-right: 10px; text-shadow: none; }
 
 /* 遷移表に行が無い操作 (押しても何も起きない) */
 .screen [data-norow] { opacity: 0.38; border-style: dashed; cursor: not-allowed; box-shadow: none; }
@@ -261,28 +274,79 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 @keyframes slide-in-r { from { transform: translateX(30px); opacity: 0; } }
 @keyframes grow { from { width: 0; } to { width: 100%; } }
 
-/* カウントダウン */
-.countdown { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; }
-.cd-label { font-size: 16px; color: var(--muted); letter-spacing: 0.1em; text-transform: uppercase; }
-.cd-nums { position: relative; width: 160px; height: 160px; }
-.cd-nums b {
-  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
-  font-size: 120px; color: var(--h); text-shadow: 0 0 30px rgba(95, 201, 250, 0.8); opacity: 0;
-  animation: count 1s ease-out both;
+/* ゲーム画面 (プレースホルダー)。上が相手の小さなフィールド、下が自分のフィールド (実機の VsAI 画面にならう) */
+.game { flex: 1; display: flex; flex-direction: column; min-height: 0; background: radial-gradient(90% 60% at 50% 60%, #1B2440 0%, #0B0F1E 100%); }
+.g-opp { position: relative; flex: none; height: 160px; border-bottom: 2px solid #05070D; background: rgba(0, 0, 0, 0.3); }
+.g-opp .g-score { position: absolute; top: 10px; left: 12px; }
+.g-opp-name { position: absolute; top: 12px; right: 12px; font-size: 11px; color: var(--muted); }
+.g-opp-gauge { position: absolute; left: 50%; bottom: 8px; width: 76px; height: 8px; margin-left: -38px; border: 1px solid #E5534B; border-radius: 3px; background: #1F3A4D; }
+.g-me { position: relative; flex: 1; min-height: 0; }
+.g-hud { position: absolute; top: 8px; left: 0; right: 0; height: 50px; }
+.g-time { position: absolute; left: 50%; transform: translateX(-50%); text-align: center; }
+.g-score { position: absolute; right: 12px; text-align: right; }
+.g-time span, .g-score span { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #E6E6E6; }
+.g-time b { font-size: 22px; color: #9FEAF4; letter-spacing: 0.04em; }
+.g-score b { font-size: 18px; color: #F5A623; }
+.g-score.small { right: auto; text-align: left; }
+.g-score.small b { font-size: 14px; color: #E6E6E6; }
+.g-pause { position: absolute; top: 64px; right: 12px; width: 26px; height: 26px; border: 1.5px solid #E6E6E6; display: flex; justify-content: center; align-items: center; gap: 4px; }
+.g-pause i { width: 2px; height: 11px; background: #E6E6E6; }
+.g-col { display: flex; flex-direction: column-reverse; gap: 2px; }
+.g-field, .g-mini { display: flex; align-items: flex-end; justify-content: center; }
+.g-field { position: absolute; left: 0; right: 0; bottom: 64px; gap: 2px; }
+.g-mini { position: absolute; left: 0; right: 0; top: 0; gap: 1px; transform: scaleY(-1); } /* 相手のフィールドは上下反転 */
+.g-mini .g-col { gap: 1px; }
+.blk {
+  display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 3px;
+  font-style: normal; font-size: 15px; color: #E6E6E6; border: 1px solid rgba(255, 255, 255, 0.35);
 }
-.cd-nums b:nth-child(1) { animation-delay: 0s; }
-.cd-nums b:nth-child(2) { animation-delay: 1s; }
-.cd-nums b:nth-child(3) { animation-delay: 2s; animation-fill-mode: forwards; animation-name: count-last; }
-@keyframes count { 0% { opacity: 1; transform: scale(1.4); } 85% { opacity: 1; transform: scale(1); } 100% { opacity: 0; } }
-@keyframes count-last { 0% { opacity: 1; transform: scale(1.4); } 100% { opacity: 1; transform: scale(1); } }
+.g-mini .blk { width: 15px; height: 15px; font-size: 0; }
+.blk.b-H { background: rgba(95, 201, 250, 0.45); }
+.blk.b-S { background: rgba(122, 92, 214, 0.55); }
+.blk.b-Z { background: rgba(247, 157, 200, 0.45); }
+.blk.b-T { background: rgba(75, 79, 122, 0.7); }
+.blk.b-Y { background: rgba(69, 195, 160, 0.5); }
+.blk.plus { border-radius: 50%; background: rgba(248, 138, 138, 0.75); border-color: rgba(255, 255, 255, 0.5); }
+.g-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: #121A2E; }
+.g-gauge { flex: 1; height: 20px; border: 2px solid #29B6E8; border-radius: 10px; background: #1F3A4D; position: relative; }
+.g-gauge i { position: absolute; right: -4px; top: -6px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #29B6E8; background: #1F3A4D; }
+.g-up { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #29B6E8; background: #0F5E86; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
+.g-mock { position: absolute; top: 62px; left: 14px; right: 50px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+.g-mock span { color: var(--muted); font-size: 12px; }
+.decided-note {
+  position: absolute; top: 62px; left: 12px; right: 12px; padding: 7px 10px; border-radius: 8px; z-index: 2;
+  border: 1px dashed var(--decided); background: rgba(9, 18, 26, 0.92); color: #A7F3D0;
+  font-family: var(--jp); font-size: 11.5px; line-height: 1.55; pointer-events: auto;
+}
 
-/* ゲーム (プレースホルダー) */
-.game { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 24px; }
-.board { display: grid; grid-template-columns: repeat(5, 48px); gap: 6px; padding: 10px; border-radius: 10px; background: rgba(0, 0, 0, 0.45); }
-.board i { width: 48px; height: 48px; border-radius: 6px; background: rgba(255, 255, 255, 0.04); }
-.board i:nth-child(7n + 3) { background: rgba(95, 201, 250, 0.35); }
-.board i:nth-child(11n + 5) { background: rgba(248, 138, 138, 0.35); }
-.game-label { color: var(--muted); }
+/* ゲーム本体の開始カウントダウン (VsAI の CountdownTimer): 1 秒待ってから 3 → 2 → 1 を 0.8 秒ずつ。
+   数字は 0.5 → 0.66 倍に拡大しながら 0.15 秒で現れ、0.55 秒まで少しずつ大きくなり、最後の 0.25 秒で 1.6 倍に広がって消える。
+   リングは同じタイミングで 0.2 → 0.34 → 1.6 倍 */
+.g-cd { position: absolute; left: 0; right: 0; top: 0; bottom: 56px; pointer-events: none; }
+.g-cd-step { position: absolute; left: 50%; top: 250px; width: 0; height: 0; }
+.g-cd-ring, .g-cd-digit { position: absolute; opacity: 0; animation-duration: 0.8s; animation-fill-mode: both; animation-delay: inherit; }
+.g-cd-ring { left: -162px; top: -162px; width: 324px; height: 324px; border-radius: 50%; border: 3px solid var(--countdown); animation-name: cd-ring; }
+.g-cd-digit {
+  left: -100px; top: -80px; width: 200px; height: 160px; display: flex; align-items: center; justify-content: center;
+  font-family: 'Oxanium', sans-serif; font-weight: 400; font-size: 124px; line-height: 1; color: var(--countdown); animation-name: cd-digit;
+}
+@keyframes cd-digit {
+  0% { opacity: 0; transform: scale(0.5); animation-timing-function: cubic-bezier(0.5, 1, 0.89, 1); }
+  18.75% { opacity: 1; }
+  31.25% { transform: scale(0.66); animation-timing-function: linear; }
+  68.75% { opacity: 1; transform: scale(0.7); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+@keyframes cd-ring {
+  0% { opacity: 0; transform: scale(0.2); animation-timing-function: cubic-bezier(0.5, 1, 0.89, 1); }
+  18.75% { opacity: 1; }
+  31.25% { transform: scale(0.34); animation-timing-function: linear; }
+  68.75% { opacity: 1; transform: scale(0.36); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+/* 手順で止めているときは、その数字の「静止」の姿勢 (拡大し終えたところ) */
+.g-cd.frozen .g-cd-digit { opacity: 1; transform: scale(0.68); }
+.g-cd.frozen .g-cd-ring { opacity: 1; transform: scale(0.35); }
 
 /* 対戦後の結果画面 (図なし、仮) */
 .result { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 34px 28px 0; min-height: 0; }
@@ -372,6 +436,8 @@ tbody.fired td.rid { box-shadow: inset 3px 0 0 var(--h); color: #fff; }
 .undecided-list { margin: 0; padding: 0; list-style: none; }
 .undecided-list li { padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 8px; }
 .undecided-list p { margin: 4px 0; font-size: 12px; color: #C9CED8; }
+.undecided-list li.decided { border-color: rgba(52, 211, 153, 0.55); background: rgba(52, 211, 153, 0.06); }
+.undecided-list li.decided small { color: var(--muted); font-weight: 400; }
 .u-head { font-weight: 700; }
 .u-options { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; font-size: 12px; }
 .u-options small { color: var(--muted); }

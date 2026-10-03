@@ -7,7 +7,7 @@
  * 行の形:
  *   { id, from: { host, client, hostDialog?, clientDialog? }, event,
  *     to: { host, client }, dialog?: { host?, client? }, when?: {...},
- *     auto?: ms, note, undecided: ['U1'] }
+ *     auto?: ms, note, undecided: ['U1'], decided: ['U2'] }
  *
  *   from の host/client: '*' = 何でもよい / 文字列 / 文字列の配列
  *   to の host/client:   '*' = 変更なし / '=' = 同じ状態のまま (ダイアログだけ変える)
@@ -60,6 +60,10 @@ var STATE_GROUPS = {
   C_TOP_ANY: C_TOP_ANY, C_TOP_FILLED: C_TOP_FILLED, H_RESULT_ANY: H_RESULT_ANY, C_RESULT_ANY: C_RESULT_ANY,
 };
 
+// ゲーム本体の開始カウントダウン (VsAI の CountdownTimer と同じ): 1 秒待ってから 3 → 2 → 1 を 0.8 秒ずつ
+var GAME_COUNTDOWN = { delay: 1000, digit: 800, digits: [3, 2, 1] };
+var GAME_COUNTDOWN_MS = GAME_COUNTDOWN.delay + GAME_COUNTDOWN.digit * GAME_COUNTDOWN.digits.length;
+
 // ---- 遷移表 ---------------------------------------------------------------
 
 var TRANSITIONS = (function () {
@@ -107,18 +111,19 @@ var TRANSITIONS = (function () {
     to: { host: '*', client: 'C_FRIEND_JOINED' }, note: '図01: 点線 (自動)' });
   T({ from: { host: 'H_FRIEND_JOINED', client: 'C_FRIEND_JOINED' }, event: 'sys.ready', auto: 1500,
     to: { host: 'H_READY', client: 'C_READY' }, note: '図01: 点線 (自動)。何をもって Ready か不明', undecided: ['U4'] });
-  T({ from: { host: 'H_READY', client: '*' }, event: 'host.startMatch', when: { U2: 'both' },
-    to: { host: 'H_STARTING', client: '*' }, note: '先に押した側は相手を待つ', undecided: ['U2'] });
-  T({ from: { host: '*', client: 'C_READY' }, event: 'client.startMatch', when: { U2: 'both' },
-    to: { host: '*', client: 'C_STARTING' }, note: '先に押した側は相手を待つ', undecided: ['U2'] });
-  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'sys.autoStart', when: { U2: 'auto' }, auto: 3000,
-    to: { host: 'H_VS', client: 'C_VS' }, note: 'U2 別案: Ready になったら自動で開始', undecided: ['U2'] });
+  T({ from: { host: 'H_READY', client: '*' }, event: 'host.startMatch', when: { U31: 'both' },
+    to: { host: 'H_STARTING', client: '*' }, note: '先に押した側は相手を待つ', undecided: ['U31'] });
+  T({ from: { host: '*', client: 'C_READY' }, event: 'client.startMatch', when: { U31: 'both' },
+    to: { host: '*', client: 'C_STARTING' }, note: '先に押した側は相手を待つ', undecided: ['U31'] });
+  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'sys.autoStart', when: { U31: 'auto' }, auto: 3000,
+    to: { host: 'H_VS', client: 'C_VS' }, note: 'U31 別案: Ready になったら自動で開始', undecided: ['U31'] });
   T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.bothStarted', auto: 1500,
     to: { host: 'H_VS', client: 'C_VS' }, note: '合意: マッチ成立時に VS 画面を挟む' });
   T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'vs.done', auto: 2500,
-    to: { host: 'H_COUNTDOWN', client: 'C_COUNTDOWN' }, note: '合意: VS 画面は 2〜3 秒' });
-  T({ from: { host: 'H_COUNTDOWN', client: 'C_COUNTDOWN' }, event: 'countdown.done', auto: 3000,
-    to: { host: 'H_GAME', client: 'C_GAME' }, note: '3 · 2 · 1 のあとゲーム開始' });
+    to: { host: 'H_GAME_COUNTDOWN', client: 'C_GAME_COUNTDOWN' },
+    note: '合意: VS 画面は 2〜3 秒。決定 (U2): そのままゲーム画面へ移り、ゲーム本体のカウントダウンが始まる', decided: ['U2'] });
+  T({ from: { host: 'H_GAME_COUNTDOWN', client: 'C_GAME_COUNTDOWN' }, event: 'game.countdownDone', auto: GAME_COUNTDOWN_MS,
+    to: { host: 'H_GAME', client: 'C_GAME' }, note: '決定 (U2): ゲーム本体の 3 → 2 → 1 (1 秒待ち + 0.8 秒 × 3) が終わるとポーズボタンが出てプレイ開始', decided: ['U2'] });
   T({ from: { host: 'H_GAME', client: '*' }, event: 'host.backToOnline', to: { host: 'H_ONLINE', client: '*' }, note: 'モック専用のリセット' });
   T({ from: { host: '*', client: 'C_GAME' }, event: 'client.backToOnline', to: { host: '*', client: 'C_ONLINE' }, note: 'モック専用のリセット' });
 
@@ -316,6 +321,7 @@ var TRANSITIONS = (function () {
   rows.forEach(function (r, i) {
     r.id = 'T' + String(i + 1).padStart(2, '0');
     r.undecided = r.undecided || [];
+    r.decided = r.decided || [];
   });
   return rows;
 })();
@@ -359,13 +365,13 @@ var EVENT_LABELS = {
   'client.dialog.goBack': 'クライアント: ダイアログで Go Back',
   'sys.peerConnected': '自動: クライアントの接続完了',
   'sys.ready': '自動: Ready になる',
-  'sys.autoStart': '自動: 開始 (U2 別案)',
+  'sys.autoStart': '自動: 開始 (U31 別案)',
   'sys.bothStarted': '自動: 両者が開始',
   'sys.startFailed': '環境: 開始時の同期に失敗',
   'sys.resetWaiting': '自動: 待機に戻る',
   'sys.opponentFound': '自動: 対戦相手が見つかる',
   'vs.done': '自動: VS 画面が終わる',
-  'countdown.done': '自動: カウントダウンが終わる',
+  'game.countdownDone': '自動: ゲーム本体のカウントダウンが終わる',
   'net.unstable': '環境: 通信が不安定になる',
   'net.recovered': '環境: 通信が回復する',
   'net.lost': '環境: 通信が回復しない',
@@ -374,7 +380,7 @@ var EVENT_LABELS = {
 };
 
 // ---- 画面の描画仕様 ---------------------------------------------------------
-// view: online | friendTop | lobby | stage | random | vs | countdown | game | result
+// view: online | friendTop | lobby | stage | random | vs | game | result
 // ボタンの event はデバイス名を除いたもの (例: 'startMatch' → 'host.startMatch')
 
 var TOASTS = {
@@ -416,7 +422,7 @@ var SCREENS = (function () {
   S.H_TOP_CONN_FAILED = top({ toast: 'failed', undecided: ['U6'] });
   S.H_WAITING = lobby({ status: 'Waiting for your friend…', buttons: [B.cancel] });
   S.H_FRIEND_JOINED = lobby({ name: 'Client User', status: 'Friend joined!', buttons: [B.cancel], undecided: ['U4'] });
-  S.H_READY = lobby({ name: 'Client User', status: 'Ready', buttons: [B.start, B.cancel], undecided: ['U2'] });
+  S.H_READY = lobby({ name: 'Client User', status: 'Ready', buttons: [B.start, B.cancel], undecided: ['U31'] });
   S.H_STARTING = lobby({ name: 'Client User', status: 'Starting match…', back: 'disabled' });
   S.H_START_FAILED = lobby({ name: 'Client User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
     buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.cancel], undecided: ['U15'] });
@@ -439,7 +445,8 @@ var SCREENS = (function () {
   S.H_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
     buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
   S.H_VS = { view: 'vs', undecided: [] };
-  S.H_COUNTDOWN = { view: 'countdown' };
+  // ゲーム画面: カウントダウン中 (ポーズボタンなし・Win / Lose は押せない) → プレイ中
+  S.H_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'] };
   S.H_GAME = { view: 'game' };
 
   // --- クライアント ---
@@ -453,7 +460,7 @@ var SCREENS = (function () {
   S.C_WAITING = lobby({ status: 'Waiting for your friend…', undecided: ['U9'] });
   S.C_HOST_AWAY = lobby({ name: 'Host User', status: 'Away', buttons: [B.leave] });
   S.C_FRIEND_JOINED = lobby({ name: 'Host User', status: 'Friend joined!', buttons: [B.leave], undecided: ['U4'] });
-  S.C_READY = lobby({ name: 'Host User', status: 'Ready', buttons: [B.start, B.leave], undecided: ['U2'] });
+  S.C_READY = lobby({ name: 'Host User', status: 'Ready', buttons: [B.start, B.leave], undecided: ['U31'] });
   S.C_STARTING = lobby({ name: 'Host User', status: 'Starting match…', back: 'disabled' });
   S.C_START_FAILED = lobby({ name: 'Host User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
     buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.leave], undecided: ['U15'] });
@@ -466,7 +473,7 @@ var SCREENS = (function () {
   S.C_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
     buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
   S.C_VS = { view: 'vs' };
-  S.C_COUNTDOWN = { view: 'countdown' };
+  S.C_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'] };
   S.C_GAME = { view: 'game' };
 
   // --- 対戦後 (両端末共通。図なし) ---
@@ -479,7 +486,10 @@ var SCREENS = (function () {
     });
   });
 
-  Object.keys(S).forEach(function (k) { S[k].undecided = S[k].undecided || []; });
+  Object.keys(S).forEach(function (k) {
+    S[k].undecided = S[k].undecided || [];
+    S[k].decided = S[k].decided || [];
+  });
   return S;
 })();
 
@@ -508,14 +518,19 @@ var PLAYERS = {
 
 // ---- 未決一覧 -----------------------------------------------------------------
 // options があるものは 未決パネルでトグルできる。default は図の通り (無ければ最も中立な案)。
+// decided があるものは決定済み (ID はそのまま残し、画面では緑の「決定」で表示する)。
+
+var GAME_COUNTDOWN_PREMISE = '前提として、ゲーム側で VsPlayer の modeStartAnimationType を None から Countdown に変える（設定 1 行）';
 
 var UNDECIDED = [
   { id: 'U1', title: 'Ready トーストから VS への入り方',
-    desc: '別画面にいるホストが赤い "Ready to start" トーストをタップしたあと、ロビーの Ready 画面に戻って Start Match を押すのか、タップで直接開始するのか。',
+    desc: '別画面にいるホストが赤い "Ready to start" トーストをタップしたあと、ロビーの Ready 画面に戻って Start Match を押すのか、タップで直接開始するのか。' +
+      'VS 画面のあとの流れ (モックの 3·2·1 をやめてゲーム本体のカウントダウン) は U2 で決定済みで、どちらの入り方でも同じ。トーストのタップ後の入り方は決まっていない。',
     options: [{ value: 'lobby', label: 'ロビーの Ready 画面へ (図02)' }, { value: 'direct', label: 'タップで直接開始扱い' }], default: 'lobby' },
-  { id: 'U2', title: '開始は両者の Start Match か、自動カウントダウンか',
-    desc: '図では両者が Start Match を押し、先に押した側は "Starting match…" で相手を待つ。Ready になったら自動で開始する案もありうる。',
-    options: [{ value: 'both', label: '両者が Start Match を押す (図01)' }, { value: 'auto', label: 'Ready 後に自動で開始' }], default: 'both' },
+  { id: 'U2', title: '開始のカウントダウン',
+    desc: '元の論点は「開始は両者の Start Match か、自動カウントダウンか」。このうちカウントダウンの部分が決まった: VS 画面のあと (ランダム対戦・Friend Match・再戦とも) はモック独自の 3·2·1 を出さず、ゲーム画面に移ってゲーム本体のカウントダウン (VsAI と同じ 3 → 2 → 1) を使う。' +
+      '両者が Start Match を押すか、Ready 後に自動で開始するかは決まっていないので U31 に分けた。',
+    decided: { by: '高宮さん', date: '2026-10-03', reason: 'ゲーム本体にゲーム開始時のカウントダウンがあるため、モック側の 3·2·1 は不要', premise: GAME_COUNTDOWN_PREMISE } },
   { id: 'U3', title: 'VS 画面中に相手が切断したときの戻り先',
     desc: '合意済みの VS 画面中に切断した場合の画面は図に無い。',
     options: [{ value: 'lobby', label: 'ロビーで "Connection lost."' }, { value: 'top', label: 'Friend Match トップ' }, { value: 'online', label: 'Online Battle' }], default: 'lobby' },
@@ -576,4 +591,9 @@ var UNDECIDED = [
     desc: 'ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。' },
   { id: 'U30', title: '再戦の申し込みの取り消し・応答待ちのタイムアウト',
     desc: 'モックでは Rematch を押したあと取り消せない (待機中の Rematch は押せない)。相手が応じないときのタイムアウトや、申し込まれた側が断る手段も未定。' },
+  { id: 'U31', title: '開始は両者の Start Match か、Ready 後の自動開始か',
+    desc: 'U2 から分けた残りの論点 (U2 のカウントダウンの部分は決定済み)。図では両者が Start Match を押し、先に押した側は "Starting match…" で相手を待つ。Ready になったら自動で開始する案もありうる。どちらでも、開始後は VS 画面 → ゲーム本体のカウントダウン。',
+    options: [{ value: 'both', label: '両者が Start Match を押す (図01)' }, { value: 'auto', label: 'Ready 後に自動で開始' }], default: 'both' },
+  { id: 'U32', title: 'ゲーム本体のカウントダウン中に相手が切断したとき',
+    desc: 'VS 画面中の切断 (U3) と対戦中の切断 (U28) の間にある、ゲーム画面のカウントダウン (約 3.4 秒) 中に相手が切断した場合の扱いと画面は決まっていない。モックには遷移行が無い。' },
 ];

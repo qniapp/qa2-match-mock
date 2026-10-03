@@ -10,7 +10,7 @@ const ctx = vm.createContext({});
 for (const f of ['transitions.js', 'engine.js', 'scenarios.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 }
-const { TRANSITIONS, SCREENS, DIALOGS, UNDECIDED, SCENARIOS, EVENT_LABELS, TOASTS, GAME_COUNTDOWN_MS, Engine } = ctx;
+const { TRANSITIONS, SCREENS, DIALOGS, UNDECIDED, SCENARIOS, EVENT_LABELS, TOASTS, GAME_COUNTDOWN_MS, PAUSE_BUTTONS, Engine } = ctx;
 const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
 
 const errors = [];
@@ -135,7 +135,8 @@ if (counting) expectFire(counting, 'game.countdownDone', 'H_GAME', 'C_GAME');
 for (const r of TRANSITIONS) {
   for (const [d, vs, cd, game] of [['host', 'H_VS', 'H_GAME_COUNTDOWN', 'H_GAME'], ['client', 'C_VS', 'C_GAME_COUNTDOWN', 'C_GAME']]) {
     if (r.from[d] === vs && r.event === 'vs.done' && r.to[d] !== cd) fail(`${r.id}: VS 画面のあと ${r.to[d]} (期待: ${cd})`);
-    if (r.to[d] === game && r.from[d] !== cd) fail(`${r.id}: ${game} にカウントダウンを経ずに入る`);
+    // H_GAME / C_GAME に入るのはカウントダウンの後か、ポーズからの再開 (CONTINUE) だけ
+    if (r.to[d] === game && r.from[d] !== cd && r.from[d] !== game + '_PAUSED') fail(`${r.id}: ${game} にカウントダウンを経ずに入る`);
   }
 }
 const cdRow = TRANSITIONS.find((r) => r.event === 'game.countdownDone');
@@ -247,6 +248,41 @@ for (const [id, [afterResult, last]] of Object.entries(postMatch)) {
   if (mid !== afterResult) fail(`シナリオ ${id} の勝敗直後の状態 ${mid} (期待: ${afterResult})`);
 }
 console.log('ok  対戦後: Win / Lose・再戦・Back to Friend Match の遷移');
+
+// 対戦中のポーズ: II で開き、CONTINUE で戻り、QUIT で Online Battle へ。相手の端末は変えない (仮、U38)。REMATCH は行なし (U39)
+for (const [dev, game, paused, online, other] of [['host', 'H_GAME', 'H_GAME_PAUSED', 'H_ONLINE', 'C_GAME'], ['client', 'C_GAME', 'C_GAME_PAUSED', 'C_ONLINE', 'H_GAME']]) {
+  const pair2 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
+  const start = dev === 'host' ? at(game, other) : at(other, game);
+  const p = expectFire(start, `${dev}.pause`, ...pair2(paused, other));
+  if (!p) continue;
+  if (Engine.canFire(p, `${dev}.pause`)) fail(`${paused} でもう一度ポーズできる`);
+  if (Engine.canFire(p, `${dev}.pauseRematch`)) fail(`${paused} の REMATCH に行がある (U39 で未決)`);
+  for (const ev of ['win', 'lose']) if (Engine.canFire(p, `${dev}.${ev}`)) fail(`${paused} で ${ev} を押せる`);
+  expectFire(p, `${dev}.continue`, ...pair2(game, other));
+  expectFire(p, `${dev}.quit`, ...pair2(online, other));
+  if (Engine.canFire(at('H_GAME_COUNTDOWN', 'C_GAME_COUNTDOWN'), `${dev}.pause`)) fail(`カウントダウン中に ${dev}.pause の行がある`);
+  const s = SCREENS[paused];
+  if (s.view !== 'game' || !s.paused) fail(`${paused} がポーズポップアップ付きのゲーム画面になっていない`);
+}
+if (!PAUSE_BUTTONS || PAUSE_BUTTONS.map((b) => b.label).join() !== 'CONTINUE,REMATCH,QUIT') fail('ポーズのボタンが CONTINUE / REMATCH / QUIT の順でない');
+for (const id of ['U37', 'U38', 'U39', 'U40', 'U41', 'U42']) if (!openIds.has(id)) fail(`未決 ${id} が無い`);
+// モック専用の Back to Online Battle と "Game in progress (mock)" は無くなった
+for (const r of TRANSITIONS) if (/backToOnline$/.test(r.event)) fail(`${r.id}: モック専用の ${r.event} が残っている`);
+if (/Game in progress|Back to Online Battle/.test(read('js', 'app.js'))) fail('app.js にモック専用のゲーム画面の表示が残っている');
+const pauseEnds = { '16': ['H_GAME_PAUSED / C_GAME_PAUSED', 'H_GAME / C_GAME'], '16b': ['H_ONLINE / C_GAME', 'H_ONLINE / C_ONLINE'] };
+for (const [id, [mid, last]] of Object.entries(pauseEnds)) {
+  const sc = SCENARIOS.find((x) => x.id === id);
+  if (!sc) { fail(`シナリオ ${id} が無い`); continue; }
+  const got = [pair(Engine.replay(sc, 14).state), pair(Engine.replay(sc).state)];
+  if (got.join() !== [mid, last].join()) fail(`シナリオ ${id} の状態 ${got.join(' → ')} (期待: ${mid} → ${last})`);
+}
+console.log('ok  ポーズ: 開く / CONTINUE / QUIT (両端末)、REMATCH は行なし');
+
+// 端末の画面にはゲームが出すものだけ: 決定の注記や「決定」バッジは端末の中にも端末の上にも出さない (右パネルへ)
+const appJs = read('js', 'app.js');
+if (/decided-note|decidedNoteHtml|GAME_COUNTDOWN_PREMISE/.test(appJs)) fail('app.js が端末の画面に決定の注記を出している');
+if (/pillHtml\(id, 'pill-decided'/.test(appJs)) fail('app.js が端末の上に「決定」バッジを出している');
+console.log('ok  端末の画面と端末の上に決定の注記・バッジが無い');
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));
 console.log(`\n遷移表 ${TRANSITIONS.length} 行のうち ${used.size} 行をシナリオで再生 (残り ${unused.length} 行は自由操作で到達)`);

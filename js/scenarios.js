@@ -16,6 +16,8 @@ var SCENARIOS = (function () {
   var clientOnly = 'このシナリオではホストは関与しない';
   var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (12 手順)
   var postMatch = '対戦後の部分は図が無く、画面もボタンもすべて仮 (未決 U20〜U30)。Win / Lose は端末の下のモック操作で、勝敗判定そのものは対象外。';
+  var pause = 'ポーズポップアップは実機の VsAI と同じ見た目 (タイトルなし、CONTINUE / REMATCH / QUIT、確認なし)。ただし実機の VsPlayer (オンライン対戦) ではポーズボタン自体が出ないので、ポーズを出す前提の案 (U37)。' +
+    'REMATCH は行が無く押せない (U39)。ポーズや QUIT をしても相手の端末は変えていない (仮、U38)。';
 
   return [
     { id: '1', title: '通常対戦 (ホストが先に Start Match)', diagram: '01',
@@ -89,5 +91,11 @@ var SCENARIOS = (function () {
     { id: '15c', title: '対戦後に再戦 (仮)', diagram: 'なし (対戦後)',
       desc: 'ホストが勝ったあと、クライアントが Rematch を押すと "Waiting for your friend…"、ホストには "Your friend wants a rematch"。ホストも Rematch を押すと VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (再戦でロビーの Start Match を挟むかは U23 で未決。モックは挟まない)。今度はクライアントが Win を押す。再戦の有無・同意の要否・VS 画面を挟むか・Match Code の再利用はすべて未決 (U23)。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch'], toGame, ['client.win']) },
+    { id: '16', title: '対戦中にポーズ → 再開 (CONTINUE)', diagram: 'なし (実機の VsAI のポーズ)',
+      desc: 'プレイ中にホストが右上のポーズボタン (II) を押すとポーズポップアップが開き、ポーズボタンは消える。クライアントもポーズする。CONTINUE でそれぞれプレイに戻る。' + pause,
+      steps: toMatchEnd.concat(['host.pause', 'client.pause', 'host.continue', 'client.continue']) },
+    { id: '16b', title: '対戦中にポーズ → QUIT', diagram: 'なし (実機の VsAI のポーズ)',
+      desc: 'プレイ中にホストがポーズして QUIT を押すと、確認なしで Online Battle に戻る (実機は AI / SOLO 選択画面へ。行き先と文言は U41、確認は U40)。クライアントはゲーム画面のまま (仮、U38)。続けてクライアントもポーズして QUIT する。' + pause,
+      steps: toMatchEnd.concat(['host.pause', 'host.quit', 'client.pause', 'client.quit']) },
   ];
 })();

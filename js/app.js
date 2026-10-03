@@ -309,23 +309,23 @@
       return '<div class="vs">' + card('host') + '<div class="vs-mark">VS</div>' + card('client') +
         '<div class="vs-bar"><i></i></div></div>';
     },
-    // ゲーム画面のプレースホルダー。HUD とカウントダウンは実機 (VsAI) の画面にならう
+    // ゲーム画面のプレースホルダー。HUD・カウントダウン・ポーズポップアップは実機 (VsAI) の画面にならう。
+    // ポーズボタンはプレイ中だけ出る (カウントダウン中とポーズ中は隠す)
     game: function (dev, s) {
       var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
       var me = '<div class="g-me">' +
         '<div class="g-hud"><div class="g-time"><span>Time</span><b>0:00</b></div>' +
         '<div class="g-score"><span>Score</span><b>0</b></div></div>' +
-        (s.countdown ? '' : '<div class="g-pause" title="ポーズボタン (プレイ開始後に出る)"><i></i><i></i></div>') +
+        (s.countdown || s.paused ? '' : '<button type="button" class="g-pause" aria-label="Pause"' + attrs(dev, 'pause') + '><i></i><i></i></button>') +
         fieldHtml(FIELD, 'g-field') +
-        (s.countdown ? countdownHtml() + decidedNoteHtml('U2', 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。' + GAME_COUNTDOWN_PREMISE)
-          : '<div class="g-mock"><span>Game in progress (mock)</span>' +
-            '<button type="button" class="btn mock-only"' + attrs(dev, 'backToOnline') + '>Back to Online Battle</button></div>') +
+        (s.countdown ? countdownHtml() : '') +
         '<div class="g-bar"><span class="g-gauge"><i></i></span><span class="g-up">︽</span></div>' +
         '</div>';
       return '<div class="game' + (s.countdown ? ' counting' : '') + '">' +
         '<div class="g-opp"><div class="g-score small"><span>Score</span><b>0</b></div>' +
         '<div class="g-opp-name">' + esc(opp.name) + '</div>' +
-        fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>';
+        fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
+        (s.paused ? pauseHtml(dev) : '');
     },
     // 対戦後 (図なし)。値もボタンも仮で、未決の要素にはその場で未決バッジを付ける
     result: function (dev, s) {
@@ -375,9 +375,11 @@
     return '<div class="g-cd">' + GAME_COUNTDOWN.digits.map(step).join('') + '</div>';
   }
 
-  function decidedNoteHtml(id, text) {
-    return '<div class="decided-note"><button type="button" class="pill-decided small" data-undecided="' + id + '">決定 ' + id + '</button> ' +
-      esc(text) + '</div>';
+  // ポーズポップアップ (実機の Menu_Pause): 全面の暗幕、中央の黒いパネル、全幅のボタン 3 つ。タイトル・開閉アニメーションなし
+  function pauseHtml(dev) {
+    return '<div class="p-dim"><div class="p-panel" role="dialog" aria-label="Pause">' + PAUSE_BUTTONS.map(function (b) {
+      return '<button type="button" class="p-btn ' + b.kind + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+    }).join('') + '</div></div>';
   }
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる
@@ -418,24 +420,26 @@
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
 
-    // 未決バッジ: 画面・ダイアログ・直前に発火した行 (この端末に関係するもの) の未決を集める。決定済みの項目は緑の「決定」
-    var ids = spec.undecided.slice();
-    var decided = spec.decided.slice();
-    if (dlg && DIALOGS[dlg].undecided) ids = ids.concat(DIALOGS[dlg].undecided);
-    var r = app.lastRow;
-    if (r && (r.to[dev] !== '*' || (r.dialog && dev in r.dialog))) {
-      ids = ids.concat(r.undecided);
-      decided = decided.concat(r.decided);
-    }
-    var uniq = function (list) { return list.filter(function (id, i) { return list.indexOf(id) === i; }); };
-    ids = uniq(ids);
-    decided = uniq(decided);
-    var n = ids.length + decided.length;
+    // 未決バッジ: 画面・ダイアログ・直前に発火した行 (この端末に関係するもの) の未決を集める。
+    // 決定済みの項目はここには出さず、右パネルの「決定済み」に出す
+    var ids = relevantIds(dev, 'undecided');
+    if (dlg && DIALOGS[dlg].undecided) ids = uniq(ids.concat(DIALOGS[dlg].undecided));
     var strip = $('.undecided-strip', root);
-    strip.classList.toggle('compact', n > 2);
-    strip.classList.toggle('dense', n > 4);
-    strip.innerHTML = ids.map(function (id) { return pillHtml(id, 'pill-undecided', '未決'); }).join('') +
-      decided.map(function (id) { return pillHtml(id, 'pill-decided', '決定'); }).join('');
+    strip.classList.toggle('compact', ids.length > 2);
+    strip.classList.toggle('dense', ids.length > 4);
+    strip.innerHTML = ids.map(function (id) { return pillHtml(id, 'pill-undecided', '未決'); }).join('');
+  }
+
+  function uniq(list) {
+    return list.filter(function (id, i) { return list.indexOf(id) === i; });
+  }
+
+  // この端末の画面と、直前に発火した行 (この端末に関係するもの) の未決 / 決定の ID
+  function relevantIds(dev, key) {
+    var ids = SCREENS[app.state[dev]][key].slice();
+    var r = app.lastRow;
+    if (r && (r.to[dev] !== '*' || (r.dialog && dev in r.dialog))) ids = ids.concat(r[key]);
+    return uniq(ids);
   }
 
   function pillHtml(id, cls, word) {
@@ -572,7 +576,39 @@
     $('#current-state').innerHTML =
       '<div class="cs-line"><span class="role-badge host small">Host</span> <code>' + esc(s.host) + '</code>' + dl('host') +
       ' <span class="sep">/</span> <span class="role-badge client small">Client</span> <code>' + esc(s.client) + '</code>' + dl('client') + '</div>' +
-      '<div class="cs-last">' + (r ? '直前の遷移: <a href="#row-' + r.id + '" data-row="' + r.id + '">' + r.id + '</a> <code>' + esc(r.event) + '</code>' : '直前の遷移: なし (初期状態)') + '</div>';
+      '<div class="cs-last">' + (r ? '直前の遷移: <a href="#row-' + r.id + '" data-row="' + r.id + '">' + r.id + '</a> <code>' + esc(r.event) + '</code>' : '直前の遷移: なし (初期状態)') + '</div>' +
+      contextHtml() + decidedHtml();
+  }
+
+  // 今の画面の説明。端末の画面にはゲームが実際に出すものだけを描き、説明はこちらに出す
+  function contextHtml() {
+    var lines = [];
+    var seen = {};
+    Engine.DEVICES.forEach(function (d) {
+      var text = SCREENS[app.state[d]].context;
+      if (!text) return;
+      if (seen[text]) { seen[text].push(d); return; }
+      seen[text] = [d];
+      lines.push(text);
+    });
+    return lines.map(function (text) {
+      var who = seen[text].map(function (d) {
+        return '<span class="role-badge ' + d + ' small">' + (d === 'host' ? 'Host' : 'Client') + '</span>';
+      }).join(' ');
+      return '<div class="cs-context">' + who + ' ' + esc(text) + '</div>';
+    }).join('');
+  }
+
+  // 決定済みの項目。今の画面や直前の遷移に関係するものを強調する
+  function decidedHtml() {
+    var related = uniq(relevantIds('host', 'decided').concat(relevantIds('client', 'decided')));
+    var items = UNDECIDED.filter(function (u) { return u.decided; }).map(function (u) {
+      var on = related.indexOf(u.id) !== -1;
+      return '<li class="' + (on ? 'related' : '') + '"><button type="button" class="pill-decided small" data-undecided="' + u.id + '">決定 ' + u.id + '</button> ' +
+        esc(u.title) + (on ? ' <small>(今の画面に関係)</small>' : '') +
+        (u.decided.premise ? '<div class="cs-premise">前提: ' + esc(u.decided.premise) + '</div>' : '') + '</li>';
+    }).join('');
+    return '<div class="cs-decided"><span class="cs-label">決定済み</span><ul>' + items + '</ul></div>';
   }
 
   function renderUndecided() {

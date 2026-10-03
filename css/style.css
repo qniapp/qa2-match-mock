@@ -294,7 +294,10 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .g-score b { font-size: 18px; color: #F5A623; }
 .g-score.small { right: auto; text-align: left; }
 .g-score.small b { font-size: 14px; color: #E6E6E6; }
-.g-pause { position: absolute; top: 64px; right: 12px; width: 26px; height: 26px; border: 1.5px solid #E6E6E6; display: flex; justify-content: center; align-items: center; gap: 4px; }
+.g-pause {
+  position: absolute; top: 64px; right: 12px; width: 26px; height: 26px; padding: 0; border: 1.5px solid #E6E6E6; background: none; cursor: pointer;
+  display: flex; justify-content: center; align-items: center; gap: 4px;
+}
 .g-pause i { width: 2px; height: 11px; background: #E6E6E6; }
 .g-col { display: flex; flex-direction: column-reverse; gap: 2px; }
 .g-field, .g-mini { display: flex; align-items: flex-end; justify-content: center; }
@@ -316,13 +319,24 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .g-gauge { flex: 1; height: 20px; border: 2px solid #29B6E8; border-radius: 10px; background: #1F3A4D; position: relative; }
 .g-gauge i { position: absolute; right: -4px; top: -6px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #29B6E8; background: #1F3A4D; }
 .g-up { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #29B6E8; background: #0F5E86; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
-.g-mock { position: absolute; top: 62px; left: 14px; right: 50px; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
-.g-mock span { color: var(--muted); font-size: 12px; }
-.decided-note {
-  position: absolute; top: 62px; left: 12px; right: 12px; padding: 7px 10px; border-radius: 8px; z-index: 2;
-  border: 1px dashed var(--decided); background: rgba(9, 18, 26, 0.92); color: #A7F3D0;
-  font-family: var(--jp); font-size: 11.5px; line-height: 1.55; pointer-events: auto;
+
+/* ポーズポップアップ (実機の Menu_Pause)。参照解像度 1170 幅の値を画面幅 360px に縮める (× 0.3077):
+   パネル 880 x 570 → 271 x 175、ボタン 800 x 130 → 246 x 40、padding 60 → 18.5、spacing 30 → 9.2、文字 54 → 16.6px。
+   文字間隔は TMP の characterSpacing 5 (1/100 em 単位) = 0.05em。暗幕にブラーは無く、開閉アニメーションも無い */
+.p-dim { position: absolute; inset: 0; z-index: 3; background: rgba(0, 0, 0, 0.784); display: flex; align-items: center; justify-content: center; }
+.p-panel {
+  width: 271px; padding: 18.5px 12.3px; display: flex; flex-direction: column; gap: 9.2px;
+  background: rgba(11, 11, 11, 0.9); border: 2px solid #fff; border-radius: 4px;
 }
+.p-btn {
+  height: 40px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.31); cursor: pointer; color: #fff;
+  font-family: 'Oxanium', sans-serif; font-weight: 400; font-size: 16.6px; letter-spacing: 0.05em; text-align: center;
+}
+.p-btn.continue { background: #020202; letter-spacing: 0; }
+/* REMATCH / QUIT は半透明の塗りに、白 α 0.04 の走査線が重なる */
+.p-btn.rematch, .p-btn.quit { background-image: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 2px); }
+.p-btn.rematch { background-color: rgba(99, 102, 241, 0.51); }
+.p-btn.quit { background-color: rgba(239, 43, 43, 0.51); }
 
 /* ゲーム本体の開始カウントダウン (VsAI の CountdownTimer): 1 秒待ってから 3 → 2 → 1 を 0.8 秒ずつ。
    数字は 0.5 → 0.66 倍に拡大しながら 0.15 秒で現れ、0.55 秒まで少しずつ大きくなり、最後の 0.25 秒で 1.6 倍に広がって消える。
@@ -377,7 +391,6 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .r-row .pill-undecided.inline { position: static; }
 
 /* モック専用 (ゲーム内 UI ではない) */
-.mock-only { border: 1px dashed var(--undecided) !important; color: var(--undecided); width: auto; padding: 8px 16px; }
 .mock-note {
   position: absolute; left: 20px; right: 20px; bottom: 90px; padding: 10px 12px; border-radius: 8px;
   border: 1px dashed var(--undecided); background: rgba(9, 18, 26, 0.92); color: var(--undecided);
@@ -401,6 +414,14 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .cs-line .dlg { color: var(--swap); font-size: 12px; }
 .cs-last { color: var(--muted); font-size: 12px; margin-top: 2px; }
 .cs-last a, .u-rows a, .event-log a { color: var(--h); }
+.cs-context { margin-top: 4px; font-size: 12px; color: #C9CED8; }
+.cs-decided { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.cs-decided .cs-label { font-weight: 700; color: #A7F3D0; }
+.cs-decided ul { margin: 2px 0 0; padding: 0; list-style: none; }
+.cs-decided li { padding: 1px 0; }
+.cs-decided li.related { color: var(--text); }
+.cs-decided li.related small { color: #A7F3D0; }
+.cs-premise { margin-left: 52px; font-size: 11px; }
 
 .tabs { flex: none; display: flex; gap: 2px; margin-top: 8px; border-bottom: 1px solid var(--line); }
 .tabs button { padding: 5px 12px; border: 1px solid var(--line); border-bottom: 0; border-radius: 6px 6px 0 0; background: none; cursor: pointer; color: var(--muted); }
@@ -411,18 +432,21 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .filter { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
 .hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
 
-table.transitions { width: 100%; table-layout: fixed; border-collapse: collapse; font-size: 11px; }
-table.transitions th {
-  position: sticky; background: #141B33; font-weight: 600; padding: 3px 4px; border: 1px solid var(--line); z-index: 1;
+/* 罫線はセルの右と下に描く (border-collapse: collapse の罫線は sticky の見出しと一緒に動かず、継ぎ目から下の行が透けるため) */
+table.transitions {
+  width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 11px;
+  border-left: 1px solid var(--line);
 }
-table.transitions thead tr:first-child th { top: 0; }
-table.transitions thead tr:nth-child(2) th { top: 23px; }
-table.transitions thead tr:nth-child(3) th { top: 46px; }
+table.transitions th, table.transitions td { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+/* 見出しは thead ごと固定する */
+table.transitions thead { position: sticky; top: 0; z-index: 1; }
+table.transitions th { background: #141B33; font-weight: 600; padding: 3px 4px; }
+table.transitions thead tr:first-child th { border-top: 1px solid var(--line); }
 table.transitions .memo-head { font-weight: 400; color: var(--muted); text-align: left; }
-table.transitions tbody { border-top: 2px solid var(--line); }
-table.transitions td.memo { border-top: 0; padding-top: 0; font-size: 11px; }
+table.transitions tbody tr:first-child td { border-top: 1px solid var(--line); } /* 前の行の下線と合わせて 2px の区切り */
 table.transitions tbody tr:first-child td:not(.rid) { border-bottom: 0; }
-table.transitions td { padding: 3px 4px; border: 1px solid var(--line); vertical-align: top; overflow-wrap: anywhere; }
+table.transitions td.memo { padding-top: 0; font-size: 11px; }
+table.transitions td { padding: 3px 4px; vertical-align: top; overflow-wrap: anywhere; }
 table.transitions td.rid { color: var(--muted); white-space: nowrap; }
 table.transitions .any { color: var(--muted); }
 table.transitions .group { color: #D7C4FF; border-bottom: 1px dotted; cursor: help; }

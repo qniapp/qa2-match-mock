@@ -132,8 +132,21 @@ var TRANSITIONS = (function () {
     note: '合意: VS 画面は 2〜3 秒。決定 (U2): そのままゲーム画面へ移り、ゲーム本体のカウントダウンが始まる', decided: ['U2'] });
   T({ from: { host: 'H_GAME_COUNTDOWN', client: 'C_GAME_COUNTDOWN' }, event: 'game.countdownDone', auto: GAME_COUNTDOWN_MS,
     to: { host: 'H_GAME', client: 'C_GAME' }, note: '決定 (U2): ゲーム本体の 3 → 2 → 1 (1 秒待ち + 0.8 秒 × 3) が終わるとポーズボタンが出てプレイ開始', decided: ['U2'] });
-  T({ from: { host: 'H_GAME', client: '*' }, event: 'host.backToOnline', to: { host: 'H_ONLINE', client: '*' }, note: 'モック専用のリセット' });
-  T({ from: { host: '*', client: 'C_GAME' }, event: 'client.backToOnline', to: { host: '*', client: 'C_ONLINE' }, note: 'モック専用のリセット' });
+
+  // === 対戦中のポーズ (実機の VsAI のポーズポップアップにならう。オンラインで出すかは未決 U37) ===
+  // 相手の端末は変えない (仮、U38)。2 番目のボタン REMATCH には行が無い (U39)
+  T({ from: { host: 'H_GAME', client: '*' }, event: 'host.pause', to: { host: 'H_GAME_PAUSED', client: '*' },
+    note: '仮: ポーズポップアップを開く (実機の VsPlayer ではポーズボタンが出ない)。相手の端末は変わらない', undecided: ['U37', 'U38'] });
+  T({ from: { host: '*', client: 'C_GAME' }, event: 'client.pause', to: { host: '*', client: 'C_GAME_PAUSED' },
+    note: '仮: ポーズポップアップを開く (実機の VsPlayer ではポーズボタンが出ない)。相手の端末は変わらない', undecided: ['U37', 'U38'] });
+  T({ from: { host: 'H_GAME_PAUSED', client: '*' }, event: 'host.continue', to: { host: 'H_GAME', client: '*' },
+    note: '実機と同じ: CONTINUE でポップアップを閉じてプレイに戻る', undecided: ['U37'] });
+  T({ from: { host: '*', client: 'C_GAME_PAUSED' }, event: 'client.continue', to: { host: '*', client: 'C_GAME' },
+    note: '実機と同じ: CONTINUE でポップアップを閉じてプレイに戻る', undecided: ['U37'] });
+  T({ from: { host: 'H_GAME_PAUSED', client: '*' }, event: 'host.quit', to: { host: 'H_ONLINE', client: '*' },
+    note: '仮: 確認なしで Online Battle へ (実機は AI / SOLO 選択画面へ)。相手の端末は変わらない', undecided: ['U38', 'U40', 'U41'] });
+  T({ from: { host: '*', client: 'C_GAME_PAUSED' }, event: 'client.quit', to: { host: '*', client: 'C_ONLINE' },
+    note: '仮: 確認なしで Online Battle へ (実機は AI / SOLO 選択画面へ)。相手の端末は変わらない', undecided: ['U38', 'U40', 'U41'] });
 
   // === Start Match 直後の同期失敗 (図06) ===
   T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.startFailed',
@@ -356,7 +369,10 @@ var EVENT_LABELS = {
   'host.cancelMatch': 'ホスト: Cancel Match を押す',
   'host.back': 'ホスト: ‹ (戻る / 別画面へ)',
   'host.tapToast': 'ホスト: トーストをタップ',
-  'host.backToOnline': 'ホスト: Back to Online Battle (モック)',
+  'host.pause': 'ホスト: ポーズボタン (II) を押す',
+  'host.continue': 'ホスト: ポーズの CONTINUE を押す',
+  'host.pauseRematch': 'ホスト: ポーズの REMATCH を押す (行なし)',
+  'host.quit': 'ホスト: ポーズの QUIT を押す',
   'host.win': 'ホスト: Win を押す (モック操作)',
   'host.lose': 'ホスト: Lose を押す (モック操作)',
   'host.rematch': 'ホスト: Rematch を押す (仮)',
@@ -375,7 +391,10 @@ var EVENT_LABELS = {
   'client.cancelMatch': 'クライアント: Cancel Match を押す',
   'client.back': 'クライアント: ‹ (戻る / 別画面へ)',
   'client.tapToast': 'クライアント: トーストをタップ',
-  'client.backToOnline': 'クライアント: Back to Online Battle (モック)',
+  'client.pause': 'クライアント: ポーズボタン (II) を押す',
+  'client.continue': 'クライアント: ポーズの CONTINUE を押す',
+  'client.pauseRematch': 'クライアント: ポーズの REMATCH を押す (行なし)',
+  'client.quit': 'クライアント: ポーズの QUIT を押す',
   'client.win': 'クライアント: Win を押す (モック操作)',
   'client.lose': 'クライアント: Lose を押す (モック操作)',
   'client.rematch': 'クライアント: Rematch を押す (仮)',
@@ -410,6 +429,20 @@ var TOASTS = {
   lost: { kind: 'grey', text: 'Connection lost' },
   random: { kind: 'pink', text: 'Waiting for opponent' },
 };
+
+// ポーズポップアップ (実機の Menu_Pause)。ボタンの event はデバイス名を除いたもの。REMATCH には行が無い (U39)
+var PAUSE_BUTTONS = [
+  { label: 'CONTINUE', event: 'continue', kind: 'continue' },
+  { label: 'REMATCH', event: 'pauseRematch', kind: 'rematch' },
+  { label: 'QUIT', event: 'quit', kind: 'quit' },
+];
+var PAUSE_UNDECIDED = ['U37', 'U38', 'U39', 'U40', 'U41', 'U42'];
+
+// 右パネルに出す、その状態の画面の説明 (端末の画面の中には出さない)
+var GAME_COUNTDOWN_CONTEXT = 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。終わるとポーズボタンが出てプレイ開始。';
+var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のポーズボタン (II) でポーズポップアップを開く。勝敗は端末の下のモック操作 Win / Lose。';
+var GAME_PAUSED_CONTEXT = 'ポーズポップアップ (実機の VsAI と同じ見た目)。REMATCH は仮の文言で行なし (U39)、QUIT は Online Battle へ (仮、U41)。' +
+  '相手の端末は変えていない (仮置き、U38)。実機の VsPlayer ではポーズボタン自体が出ない (U37)。';
 
 var SCREENS = (function () {
   var S = {};
@@ -469,9 +502,10 @@ var SCREENS = (function () {
   S.H_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
     buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
   S.H_VS = { view: 'vs', undecided: [] };
-  // ゲーム画面: カウントダウン中 (ポーズボタンなし・Win / Lose は押せない) → プレイ中
-  S.H_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'] };
-  S.H_GAME = { view: 'game' };
+  // ゲーム画面: カウントダウン中 (ポーズボタンなし・Win / Lose は押せない) → プレイ中 → ポーズ中
+  S.H_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
+  S.H_GAME = { view: 'game', context: GAME_CONTEXT };
+  S.H_GAME_PAUSED = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
 
   // --- クライアント ---
   S.C_ONLINE = online('client');
@@ -501,8 +535,9 @@ var SCREENS = (function () {
   S.C_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
     buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
   S.C_VS = { view: 'vs' };
-  S.C_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'] };
-  S.C_GAME = { view: 'game' };
+  S.C_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
+  S.C_GAME = { view: 'game', context: GAME_CONTEXT };
+  S.C_GAME_PAUSED = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
 
   // --- 対戦後 (両端末共通。図なし) ---
   ['H', 'C'].forEach(function (p) {
@@ -546,7 +581,7 @@ var PLAYERS = {
 
 // ---- 未決一覧 -----------------------------------------------------------------
 // options があるものは 未決パネルでトグルできる。default は図の通り (無ければ最も中立な案)。
-// decided があるものは決定済み (ID はそのまま残し、画面では緑の「決定」で表示する)。
+// decided があるものは決定済み (ID はそのまま残す)。端末の画面の中や端末の上には出さず、右パネルの「決定済み」と未決タブに緑で表示する。
 
 var GAME_COUNTDOWN_PREMISE = '前提として、ゲーム側で VsPlayer の modeStartAnimationType を None から Countdown に変える（設定 1 行）';
 
@@ -644,4 +679,19 @@ var UNDECIDED = [
   { id: 'U36', title: '片方が Start Match を押したあとの表示の細部',
     desc: 'U31 で決まったのは「押した側は待機表示、相手側には相手が準備完了であることを表示」まで。モックの文言 (押した側の "Waiting for your friend…"、相手側の名前の下の "Friend is ready!")、' +
       '押した側の Start Match を無効表示にするか隠すか、ホスト・クライアントで同じ表示にするかは仮。' },
+  { id: 'U37', title: 'オンライン対戦でポーズを出すか・ゲームを止めるか',
+    desc: '実ゲームの VsPlayer (オンライン対戦) では、プレイ開始時に HidePause() でポーズボタンを隠している。また VsAI やソロのポーズは Time.timeScale = 0 でゲームを止めるが、オンラインでは相手がいるので同じようには止められない。' +
+      'このモックは「オンラインでもポーズボタンとポーズポップアップを出す」前提の案。ポーズを出すか、出すならポーズ中もゲームが進むのか (両者を止めるのか) は決まっていない。' },
+  { id: 'U38', title: 'ポーズ・QUIT したとき相手側に何が見えるか・どうなるか',
+    desc: 'モックでは、片方がポーズしても QUIT しても相手の端末は変えていない (仮置き)。相手にポーズ中・退出したことをどう伝えるか、QUIT を負け (降参) 扱いにするか、残された側はどの画面へ進むかは決まっていない (対戦中の切断・降参は U28)。' },
+  { id: 'U39', title: 'ポーズの 2 番目のボタン (REMATCH / RETRY) をオンラインで出すか',
+    desc: '実機のポーズポップアップの 2 番目のボタンは、VsAI では REMATCH、ソロでは RETRY (どちらも確認なしでその場でやり直す)。モックでは VsAI の文言 REMATCH を仮に置き、遷移行は作っていない (破線で押せない)。' +
+      'オンラインでこのボタンを出すか、出すなら何をするか (相手の同意が要る再戦の申し込みになるのかなど。対戦後の再戦は U23) は決まっていない。' },
+  { id: 'U40', title: 'QUIT に確認ダイアログを付けるか',
+    desc: '実ゲームのポーズの QUIT は確認なしですぐに抜ける (モックも同じ)。オンラインでは相手がいて、抜けると対戦が終わるので、確認を挟むかは決まっていない。' },
+  { id: 'U41', title: 'QUIT の行き先と表記',
+    desc: '実ゲームの QUIT は VsAI なら AI 選択画面、ソロなら SOLO 選択画面へ戻る。モックではそれにあたる画面として Online Battle に戻している (仮)。' +
+      'Friend Match トップや同じマッチのロビーに戻る案もありうる。ボタンの文言 (QUIT のままか) も未定。' },
+  { id: 'U42', title: 'ポーズ中の BGM ダッキングなどの細部',
+    desc: '実ゲームはポーズ中に BGM を -5dB 下げ (ダッキング)、ボタンを押すとクリック音を鳴らす。オンラインでゲームを止めない場合に同じように BGM を下げるかなど、音や細かい演出は決まっていない (モックには音が無い)。' },
 ];

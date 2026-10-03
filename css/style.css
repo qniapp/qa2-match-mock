@@ -165,7 +165,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .btn.primary { background: rgba(95, 201, 250, 0.16); border-color: var(--h); box-shadow: 0 0 14px rgba(95, 201, 250, 0.3); }
 .btn.danger { border-color: var(--x); color: #FFD3D3; }
 .input {
-  display: block; width: 100%; height: 56px; margin-bottom: 8px; border-radius: 8px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 56px; margin-bottom: 8px; border-radius: 8px; cursor: pointer;
   background: rgba(0, 0, 0, 0.35); border: 1px solid #56607E; text-align: center; font-family: var(--game);
 }
 .input .value { font-size: 24px; letter-spacing: 0.06em; }

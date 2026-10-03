@@ -1,0 +1,81 @@
+/*
+ * シナリオ = 遷移表のイベント列。各手順は TRANSITIONS の 1 行をそのまま再生する。
+ *   opts: このシナリオが前提とする未決トグル (選択時に強制される)
+ *   ctx:  モック設定 (Join Match / Create Match の結果)
+ *   hostNote / clientNote: その端末が関与しないときに端末の上に出す注記
+ */
+
+var SCENARIOS = (function () {
+  var hostCreates = ['host.friendMatch', 'host.createMatch'];
+  var clientJoins = ['client.friendMatch', 'client.enterCode', 'client.joinMatch'];
+  var toReady = hostCreates.concat(clientJoins, ['sys.peerConnected', 'sys.ready']);
+  var bothStart = ['host.startMatch', 'client.startMatch', 'sys.bothStarted'];
+  var toGame = ['vs.done', 'countdown.done'];
+  var both = { U2: 'both' };
+  var clientOnly = 'このシナリオではホストは関与しない';
+
+  return [
+    { id: '1', title: '通常対戦', diagram: '01', opts: both,
+      desc: 'ホストが Create Match、クライアントが Match Code で Join Match。自動で Friend joined! → Ready になり、両者が Start Match を押すと VS 画面 → 3·2·1 → ゲーム開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。',
+      steps: toReady.concat(bothStart, toGame) },
+    { id: '1b', title: '通常対戦 (U2 別案: 自動開始)', diagram: '01', opts: { U2: 'auto' },
+      desc: '未決 U2 の別案。Ready になったら Start Match を押さずに自動で VS 画面へ進む。',
+      steps: toReady.concat(['sys.autoStart'], toGame) },
+    { id: '2a', title: '待機中にホストが別画面へ → 戻って対戦', diagram: '02', opts: { U2: 'both', U14: 'keep', U1: 'lobby' },
+      desc: 'ホストが待機中に ‹ で戻ると、Friend Match トップに青い "Waiting for your friend…" バナー。さらに他の画面 (ステージ選択) へ行っても表示が続く。クライアントが入ると緑 "Friend joined!" → 赤 "Ready to start"。クライアント側は "Host User / Away"。ホストが赤いトーストをタップするとロビーの Ready に戻り、クライアントは Friend joined! → Ready。',
+      steps: hostCreates.concat(['host.back', 'host.back'], clientJoins,
+        ['sys.ready', 'host.tapToast', 'sys.ready'], bothStart, toGame) },
+    { id: '2b', title: '待機中にホストが別画面へ → 放置して期限切れ', diagram: '02', opts: { U14: 'keep' },
+      desc: 'ホストが別画面のまま放置すると Match Code の有効期限が切れ、濃い赤の "Match code expired" トースト。タップすると "Match code expired." のロビー。クライアントは "Match expired."。',
+      steps: hostCreates.concat(['host.back', 'host.back'], clientJoins,
+        ['sys.ready', 'timer.codeExpired', 'host.tapToast']) },
+    { id: '3a', title: 'Ready 後に通信不安定 → 回復', diagram: '03', opts: both,
+      desc: '何らかの理由で通信が不安定になり "Connecting…"。通信が回復すると Ready に戻る。図03 はホスト側のみで、クライアント側は仮表示 (未決 U5)。',
+      steps: toReady.concat(['net.unstable', 'net.recovered'], bothStart, toGame) },
+    { id: '3b', title: 'Ready 後に通信不安定 → 切断 → キャンセル', diagram: '03',
+      desc: '通信が回復しないと "Connection lost."。Cancel Match → "Cancel this match?" → Cancel Match で Friend Match トップへ。しばらく待つかキャンセルのみかは未決 (U5)。',
+      steps: toReady.concat(['net.unstable', 'net.lost', 'host.cancelMatch', 'host.dialog.cancelMatch']) },
+    { id: '3c', title: 'Ready 後に通信不安定 → 切断 → ‹ で戻る', diagram: '03', opts: { U14: 'keep' },
+      desc: '図03 では Connection lost の画面から ‹ で戻ると、青い "Waiting for your friend…" バナー付きの Friend Match トップになる (未決 U19)。',
+      steps: toReady.concat(['net.unstable', 'net.lost', 'host.back']) },
+    { id: '4', title: 'Ready 後にホストがキャンセル', diagram: '04',
+      desc: 'ホストが Cancel Match → "Cancel this match?" → Cancel Match。ホストは Friend Match トップ、クライアントは "Host User / cancelled the match."。クライアントの次の操作は未決 (U8)。',
+      steps: toReady.concat(['host.cancelMatch', 'host.dialog.cancelMatch']) },
+    { id: '4b', title: 'キャンセル確認で Keep Waiting', diagram: '04',
+      desc: '"Cancel this match?" で Keep Waiting を選ぶとロビーに戻る。合意で図の "Go Back" を "Keep Waiting" にした。',
+      steps: toReady.concat(['host.cancelMatch', 'host.dialog.keepWaiting']) },
+    { id: '5', title: 'Ready 後にクライアントが退出', diagram: '05',
+      desc: 'クライアントが Leave Match → "Leave this match?" → Leave Match。クライアントは Match Code が残った Friend Match トップへ。ホストは "Client User / left the match." のあと自動で "Waiting for your friend…" に戻る (同じ Match Code を再利用)。',
+      steps: toReady.concat(['client.leaveMatch', 'client.dialog.leaveMatch', 'sys.resetWaiting']) },
+    { id: '6', title: 'Start Match 直後の切断・同期失敗', diagram: '06', opts: both,
+      desc: '両者が Start Match を押した直後に接続が切れる / 同期に失敗すると "Unable to start the match. Please try again."。Start Match で再試行して VS 画面へ。片方だけ再試行した場合は未決 (U15)。',
+      steps: toReady.concat(['host.startMatch', 'client.startMatch', 'sys.startFailed'], bothStart, toGame) },
+    { id: '7a', title: 'Ready 後にクライアントが別画面へ → 戻って対戦', diagram: '07', opts: both,
+      desc: 'クライアントが他の画面に移ると赤い "Ready to start" トースト、ホストは "Client User / Away"。クライアントがトーストをタップすると両者 Ready に戻る。',
+      steps: toReady.concat(['client.back', 'client.tapToast'], bothStart, toGame) },
+    { id: '7b', title: 'Ready 後にクライアントが別画面へ → 期限切れ', diagram: '07',
+      desc: 'クライアントが戻らないまま有効期限が切れると、ホストは "Match expired." (Start Match / Cancel Match 付き、未決 U10)。クライアント側は図に無い (U18)。',
+      steps: toReady.concat(['client.back', 'timer.codeExpired', 'client.tapToast']) },
+    { id: '8', title: '無効な Match Code', diagram: '08', ctx: { codeResult: 'notFound' }, hostNote: clientOnly,
+      desc: 'Join Match すると赤字で "Match not found. Check the Match Code and try again." を表示し、画面はそのまま。',
+      steps: clientJoins },
+    { id: '9', title: 'Match Code が期限切れ', diagram: '09', ctx: { codeResult: 'expired' }, hostNote: clientOnly,
+      desc: 'Join Match すると赤字で "The match has expired."。',
+      steps: clientJoins },
+    { id: '10', title: 'マッチが満員', diagram: '10', ctx: { codeResult: 'full' }, hostNote: clientOnly,
+      desc: 'Match は存在するが、すでにほかの人が入っている。赤字で "The match is already full."。',
+      steps: clientJoins },
+    { id: '11', title: 'ランダム対戦 (旧案)', diagram: '00',
+      desc: '09-30 の旧案 (図00)。Random Match で "Waiting for opponent…" とピンクのトースト。相手が見つかったら合意どおり VS 画面 → 3·2·1 → ゲーム。10-02 の図に無いので扱いは未決 (U13)。',
+      steps: ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound'].concat(toGame) },
+    { id: '12', title: 'VS 画面中の切断', diagram: 'なし (合意事項)', opts: both,
+      desc: 'VS 画面中に相手が切断した場合の戻り先は未決 (U3)。未決パネルのトグルで戻り先を切り替えられる (既定: ロビーで "Connection lost.")。',
+      steps: toReady.concat(bothStart, ['net.lostDuringVs']) },
+    { id: '13', title: '接続失敗 (仮)', diagram: '00 (トーストのみ)', ctx: { createResult: 'connFailed', codeResult: 'connFailed' },
+      desc: '"Connection failed" トーストは図00 にあるが発生条件が描かれていない (U6)。モックでは Create Match / Join Match の接続失敗として仮に表示する。',
+      steps: hostCreates.concat(clientJoins) },
+    { id: '14', title: '離席中に Create Match を押す', diagram: 'なし (10-01 合意)', opts: { U14: 'keep' },
+      desc: 'ホストが待機中に Friend Match トップへ戻り、もう一度 Create Match を押すと "Create a new match?"。[Keep Current Match] で今のマッチを維持、[Create Match] で作り直す。本文は未決 (U12)。',
+      steps: hostCreates.concat(['host.back', 'host.createMatch', 'host.dialog.keepCurrent', 'host.createMatch', 'host.dialog.createMatch']) },
+  ];
+})();

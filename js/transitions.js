@@ -1,0 +1,498 @@
+/*
+ * QA² Friend Match フロー モック - 唯一の状態遷移表
+ *
+ * 画面の変化はすべてこのファイルの TRANSITIONS で決まる。UI (app.js) は
+ * state.host / state.client を SCREENS に従って描画し、イベントを発火するだけ。
+ *
+ * 行の形:
+ *   { id, from: { host, client, hostDialog?, clientDialog? }, event,
+ *     to: { host, client }, dialog?: { host?, client? }, when?: {...},
+ *     auto?: ms, note, undecided: ['U1'] }
+ *
+ *   from の host/client: '*' = 何でもよい / 文字列 / 文字列の配列
+ *   to の host/client:   '*' = 変更なし / '=' = 同じ状態のまま (ダイアログだけ変える)
+ *   when: 未決トグル (U1 など) か、モック設定 (codeResult, createResult) の条件
+ *   auto: 自由操作中にこの行を自動で発火するまでの ms (点線矢印 = 自動遷移)
+ *
+ * 上から順に評価し、最初に一致した行が使われる。
+ */
+
+// ---- 状態のグループ -------------------------------------------------------
+
+var AWAY_PLACES = ['TOP', 'STAGE']; // ホストが Friend Match トップ / ステージ選択にいる
+var AWAY_STATUSES = ['WAITING', 'JOINED', 'READY'];
+
+var H_AWAY_PENDING = []; // マッチがまだ有効なホスト離席状態
+AWAY_PLACES.forEach(function (p) {
+  AWAY_STATUSES.forEach(function (s) { H_AWAY_PENDING.push('H_AWAY_' + p + '_' + s); });
+});
+
+var H_CANCELABLE = ['H_WAITING', 'H_FRIEND_JOINED', 'H_READY', 'H_CONNECTING', 'H_CONN_LOST',
+  'H_CLIENT_LEFT', 'H_CLIENT_AWAY', 'H_START_FAILED'];
+var H_WITH_CLIENT = ['H_FRIEND_JOINED', 'H_READY', 'H_STARTING', 'H_START_FAILED',
+  'H_CONNECTING', 'H_CONN_LOST', 'H_CLIENT_AWAY'];
+var C_IN_MATCH = ['C_WAITING', 'C_HOST_AWAY', 'C_FRIEND_JOINED', 'C_READY', 'C_STARTING',
+  'C_START_FAILED', 'C_CONNECTING', 'C_CONN_LOST', 'C_AWAY_STAGE_READY'];
+var C_LEAVABLE = ['C_HOST_AWAY', 'C_FRIEND_JOINED', 'C_READY', 'C_START_FAILED',
+  'C_CONNECTING', 'C_CONN_LOST'];
+var C_TOP_ANY = ['C_TOP', 'C_TOP_CODE', 'C_TOP_ERR_NOTFOUND', 'C_TOP_ERR_EXPIRED',
+  'C_TOP_ERR_FULL', 'C_TOP_CONN_FAILED'];
+var C_TOP_FILLED = ['C_TOP_CODE', 'C_TOP_ERR_NOTFOUND', 'C_TOP_ERR_EXPIRED',
+  'C_TOP_ERR_FULL', 'C_TOP_CONN_FAILED'];
+var H_EXPIRED_ANY = ['H_CODE_EXPIRED', 'H_EXPIRED', 'H_AWAY_TOP_EXPIRED', 'H_AWAY_STAGE_EXPIRED'];
+
+// 遷移表の表示で、配列の代わりにグループ名を出すための一覧
+var STATE_GROUPS = {
+  H_AWAY_PENDING: H_AWAY_PENDING, H_CANCELABLE: H_CANCELABLE, H_WITH_CLIENT: H_WITH_CLIENT,
+  H_EXPIRED_ANY: H_EXPIRED_ANY, C_IN_MATCH: C_IN_MATCH, C_LEAVABLE: C_LEAVABLE,
+  C_TOP_ANY: C_TOP_ANY, C_TOP_FILLED: C_TOP_FILLED,
+};
+
+// ---- 遷移表 ---------------------------------------------------------------
+
+var TRANSITIONS = (function () {
+  var rows = [];
+  function T(r) { rows.push(r); }
+  function eachPlace(fn) { AWAY_PLACES.forEach(fn); }
+
+  // === Online Battle / Friend Match トップ ===
+  T({ from: { host: 'H_ONLINE', client: '*' }, event: 'host.friendMatch', to: { host: 'H_TOP', client: '*' } });
+  T({ from: { host: 'H_ONLINE', client: '*' }, event: 'host.randomMatch', to: { host: 'H_RANDOM_WAITING', client: '*' }, undecided: ['U13'] });
+  T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.back', to: { host: 'H_ONLINE', client: '*' } });
+  T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.createMatch', when: { createResult: 'connFailed' },
+    to: { host: 'H_TOP_CONN_FAILED', client: '*' }, note: 'モック設定「Create Match の結果 = 接続失敗」のとき', undecided: ['U6'] });
+  T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.createMatch', to: { host: 'H_WAITING', client: '*' }, note: '図01: Match Code QWERTY123 が発行される' });
+  T({ from: { host: 'H_TOP_CONN_FAILED', client: '*' }, event: 'host.tapToast', to: { host: 'H_TOP', client: '*' }, undecided: ['U6'] });
+
+  T({ from: { host: '*', client: 'C_ONLINE' }, event: 'client.friendMatch', to: { host: '*', client: 'C_TOP' } });
+  T({ from: { host: '*', client: 'C_ONLINE' }, event: 'client.randomMatch', to: { host: '*', client: 'C_RANDOM_WAITING' }, undecided: ['U13'] });
+  T({ from: { host: '*', client: C_TOP_ANY }, event: 'client.back', to: { host: '*', client: 'C_ONLINE' } });
+  T({ from: { host: '*', client: 'C_TOP' }, event: 'client.enterCode', to: { host: '*', client: 'C_TOP_CODE' }, note: 'モックでは入力欄タップで QWERTY123 を入力' });
+  T({ from: { host: '*', client: 'C_TOP_CONN_FAILED' }, event: 'client.tapToast', to: { host: '*', client: 'C_TOP_CODE' }, undecided: ['U6'] });
+
+  // === Join Match の結果 ===
+  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'notFound' },
+    to: { host: '*', client: 'C_TOP_ERR_NOTFOUND' }, note: '図08: 無効な Match Code' });
+  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'expired' },
+    to: { host: '*', client: 'C_TOP_ERR_EXPIRED' }, note: '図09: Match Code が期限切れ' });
+  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'full' },
+    to: { host: '*', client: 'C_TOP_ERR_FULL' }, note: '図10: すでにほかの人が入っている' });
+  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'connFailed' },
+    to: { host: '*', client: 'C_TOP_CONN_FAILED' }, note: '"Connection failed" の発生条件は図に無い', undecided: ['U6'] });
+  T({ from: { host: 'H_WAITING', client: C_TOP_FILLED }, event: 'client.joinMatch',
+    to: { host: 'H_FRIEND_JOINED', client: 'C_WAITING' }, note: '図01: ホストは Friend joined!、クライアントはまず Waiting for your friend…' });
+  eachPlace(function (p) {
+    T({ from: { host: 'H_AWAY_' + p + '_WAITING', client: C_TOP_FILLED }, event: 'client.joinMatch',
+      to: { host: 'H_AWAY_' + p + '_JOINED', client: 'C_WAITING' }, note: '図02: ホストは別画面のまま緑の "Friend joined!" トースト' });
+  });
+  T({ from: { host: H_EXPIRED_ANY, client: C_TOP_FILLED }, event: 'client.joinMatch',
+    to: { host: '*', client: 'C_TOP_ERR_EXPIRED' }, note: 'ホストの Match Code が期限切れ' });
+  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch',
+    to: { host: '*', client: 'C_TOP_ERR_NOTFOUND' }, note: 'ホストが待機中のマッチを持っていないので見つからない' });
+
+  // === 通常対戦 (図01) ===
+  T({ from: { host: 'H_FRIEND_JOINED', client: 'C_WAITING' }, event: 'sys.peerConnected', auto: 800,
+    to: { host: '*', client: 'C_FRIEND_JOINED' }, note: '図01: 点線 (自動)' });
+  T({ from: { host: 'H_FRIEND_JOINED', client: 'C_FRIEND_JOINED' }, event: 'sys.ready', auto: 1500,
+    to: { host: 'H_READY', client: 'C_READY' }, note: '図01: 点線 (自動)。何をもって Ready か不明', undecided: ['U4'] });
+  T({ from: { host: 'H_READY', client: '*' }, event: 'host.startMatch', when: { U2: 'both' },
+    to: { host: 'H_STARTING', client: '*' }, note: '先に押した側は相手を待つ', undecided: ['U2'] });
+  T({ from: { host: '*', client: 'C_READY' }, event: 'client.startMatch', when: { U2: 'both' },
+    to: { host: '*', client: 'C_STARTING' }, note: '先に押した側は相手を待つ', undecided: ['U2'] });
+  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'sys.autoStart', when: { U2: 'auto' }, auto: 3000,
+    to: { host: 'H_VS', client: 'C_VS' }, note: 'U2 別案: Ready になったら自動で開始', undecided: ['U2'] });
+  T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.bothStarted', auto: 1500,
+    to: { host: 'H_VS', client: 'C_VS' }, note: '合意: マッチ成立時に VS 画面を挟む' });
+  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'vs.done', auto: 2500,
+    to: { host: 'H_COUNTDOWN', client: 'C_COUNTDOWN' }, note: '合意: VS 画面は 2〜3 秒' });
+  T({ from: { host: 'H_COUNTDOWN', client: 'C_COUNTDOWN' }, event: 'countdown.done', auto: 3000,
+    to: { host: 'H_GAME', client: 'C_GAME' }, note: '3 · 2 · 1 のあとゲーム開始' });
+  T({ from: { host: 'H_GAME', client: '*' }, event: 'host.backToOnline', to: { host: 'H_ONLINE', client: '*' }, note: 'モック専用のリセット' });
+  T({ from: { host: '*', client: 'C_GAME' }, event: 'client.backToOnline', to: { host: '*', client: 'C_ONLINE' }, note: 'モック専用のリセット' });
+
+  // === Start Match 直後の同期失敗 (図06) ===
+  T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.startFailed',
+    to: { host: 'H_START_FAILED', client: 'C_START_FAILED' }, note: '図06: 接続が切れる / 同期処理の失敗' });
+  T({ from: { host: 'H_START_FAILED', client: '*' }, event: 'host.startMatch',
+    to: { host: 'H_STARTING', client: '*' }, note: '図06: 再試行', undecided: ['U15'] });
+  T({ from: { host: '*', client: 'C_START_FAILED' }, event: 'client.startMatch',
+    to: { host: '*', client: 'C_STARTING' }, note: '図06: 再試行', undecided: ['U15'] });
+
+  // === ホストのキャンセル (図03, 図04) ===
+  T({ from: { host: H_CANCELABLE, client: '*' }, event: 'host.cancelMatch',
+    to: { host: '=', client: '*' }, dialog: { host: 'cancel' }, note: '確認ダイアログ' });
+  T({ from: { host: '*', client: '*', hostDialog: 'cancel' }, event: 'host.dialog.keepWaiting',
+    to: { host: '=', client: '*' }, dialog: { host: null }, note: '合意: 図の "Go Back" → "Keep Waiting"' });
+  T({ from: { host: '*', client: C_IN_MATCH, hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
+    to: { host: 'H_TOP', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '図04: クライアントは "cancelled the match."', undecided: ['U8'] });
+  T({ from: { host: '*', client: '*', hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
+    to: { host: 'H_TOP', client: '*' }, dialog: { host: null }, note: '図03/04: Friend Match トップへ' });
+  T({ from: { host: 'H_EXPIRED', client: '*' }, event: 'host.cancelMatch',
+    to: { host: 'H_TOP', client: '*' }, note: '期限切れなので確認ダイアログなし (モックの仮定)', undecided: ['U10'] });
+  T({ from: { host: 'H_EXPIRED', client: '*' }, event: 'host.back', to: { host: 'H_TOP', client: '*' } });
+
+  // === クライアントの退出 (図05) ===
+  T({ from: { host: '*', client: C_LEAVABLE }, event: 'client.leaveMatch',
+    to: { host: '*', client: '=' }, dialog: { client: 'leave' }, note: '確認ダイアログ', undecided: ['U11'] });
+  T({ from: { host: '*', client: '*', clientDialog: 'leave' }, event: 'client.dialog.goBack',
+    to: { host: '*', client: '=' }, dialog: { client: null }, undecided: ['U11'] });
+  T({ from: { host: H_WITH_CLIENT, client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
+    to: { host: 'H_CLIENT_LEFT', client: 'C_TOP_CODE' }, dialog: { client: null }, note: '図05: クライアントは入力欄に Match Code が残ったトップへ' });
+  eachPlace(function (p) {
+    T({ from: { host: ['H_AWAY_' + p + '_JOINED', 'H_AWAY_' + p + '_READY'], client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
+      to: { host: 'H_AWAY_' + p + '_WAITING', client: 'C_TOP_CODE' }, dialog: { client: null },
+      note: 'ホスト離席中の退出: トーストが青に戻る (図に無い)', undecided: ['U17'] });
+  });
+  T({ from: { host: '*', client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
+    to: { host: '*', client: 'C_TOP_CODE' }, dialog: { client: null } });
+  T({ from: { host: 'H_CLIENT_LEFT', client: '*' }, event: 'sys.resetWaiting', auto: 1500,
+    to: { host: 'H_WAITING', client: '*' }, note: '図05: 点線 (自動)。同じ Match Code で待機に戻る' });
+
+  // クライアント待機中 (C_WAITING) の退出: 図にボタンが無いので ‹ で抜ける仮定
+  T({ from: { host: 'H_FRIEND_JOINED', client: 'C_WAITING' }, event: 'client.back',
+    to: { host: 'H_CLIENT_LEFT', client: 'C_TOP_CODE' }, note: 'C_WAITING には退出ボタンが無い。‹ で抜ける仮定', undecided: ['U9'] });
+  eachPlace(function (p) {
+    T({ from: { host: 'H_AWAY_' + p + '_JOINED', client: 'C_WAITING' }, event: 'client.back',
+      to: { host: 'H_AWAY_' + p + '_WAITING', client: 'C_TOP_CODE' }, note: 'C_WAITING には退出ボタンが無い。‹ で抜ける仮定', undecided: ['U9'] });
+  });
+  T({ from: { host: '*', client: 'C_WAITING' }, event: 'client.back',
+    to: { host: '*', client: 'C_TOP_CODE' }, undecided: ['U9'] });
+
+  // === ホストが別画面へ移る (図02, 図03) ===
+  T({ from: { host: 'H_WAITING', client: '*' }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'H_AWAY_TOP_WAITING', client: '*' }, note: '図02: 別画面に遷移したらバナーで状態を示す', undecided: ['U14'] });
+  T({ from: { host: 'H_FRIEND_JOINED', client: '*' }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'H_AWAY_TOP_JOINED', client: '*' }, undecided: ['U14'] });
+  T({ from: { host: 'H_READY', client: ['C_READY', 'C_FRIEND_JOINED'] }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'H_AWAY_TOP_READY', client: 'C_HOST_AWAY' }, note: '図07 の逆: ホスト離席でクライアントは "Away"', undecided: ['U14'] });
+  T({ from: { host: 'H_CONN_LOST', client: '*' }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'H_AWAY_TOP_WAITING', client: '*' }, note: '図03: Connection lost から ‹ で青いバナー付きトップへ (?)', undecided: ['U19', 'U14'] });
+  T({ from: { host: ['H_WAITING', 'H_FRIEND_JOINED', 'H_READY', 'H_CONN_LOST'], client: '*' }, event: 'host.back', when: { U14: 'confirm' },
+    to: { host: '=', client: '*' }, dialog: { host: 'cancel' }, note: 'U14 別案: ‹ でキャンセル確認を出す', undecided: ['U14'] });
+
+  eachPlace(function (p) {
+    var other = p === 'TOP' ? 'STAGE' : 'TOP';
+    AWAY_STATUSES.concat(['EXPIRED']).forEach(function (s) {
+      T({ from: { host: 'H_AWAY_' + p + '_' + s, client: '*' }, event: 'host.back',
+        to: { host: 'H_AWAY_' + other + '_' + s, client: '*' },
+        note: p === 'TOP' ? '他の画面 (ステージ選択) へ。途中の画面は省略' : 'Friend Match トップへ戻る。途中の画面は省略' });
+    });
+  });
+  eachPlace(function (p) {
+    T({ from: { host: 'H_AWAY_' + p + '_JOINED', client: ['C_WAITING', 'C_FRIEND_JOINED'] }, event: 'sys.ready', auto: 1500,
+      to: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, note: '図02: 緑 → 赤 "Ready to start"、クライアントは "Away"', undecided: ['U4'] });
+  });
+  eachPlace(function (p) {
+    T({ from: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, event: 'host.tapToast', when: { U1: 'lobby' },
+      to: { host: 'H_READY', client: 'C_FRIEND_JOINED' }, note: '図02: Ready to start ボタン押下で遷移', undecided: ['U1', 'U17'] });
+    T({ from: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, event: 'host.tapToast', when: { U1: 'direct' },
+      to: { host: 'H_STARTING', client: 'C_READY' }, note: 'U1 別案: トーストのタップで Start Match 扱い', undecided: ['U1'] });
+    T({ from: { host: 'H_AWAY_' + p + '_WAITING', client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
+      to: { host: 'H_WAITING', client: '*' }, note: 'U16 別案: 青バナーもタップでロビーへ', undecided: ['U16'] });
+    T({ from: { host: 'H_AWAY_' + p + '_JOINED', client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
+      to: { host: 'H_FRIEND_JOINED', client: '*' }, note: 'U16 別案: 緑トーストもタップでロビーへ', undecided: ['U16'] });
+  });
+  T({ from: { host: 'H_READY', client: 'C_FRIEND_JOINED' }, event: 'sys.ready', auto: 1500,
+    to: { host: '*', client: 'C_READY' }, note: '図02: ホストが戻ったあとクライアントも Ready へ', undecided: ['U17'] });
+
+  eachPlace(function (p) {
+    var pending = AWAY_STATUSES.map(function (s) { return 'H_AWAY_' + p + '_' + s; });
+    T({ from: { host: pending, client: ['C_WAITING', 'C_HOST_AWAY'] }, event: 'timer.codeExpired',
+      to: { host: 'H_AWAY_' + p + '_EXPIRED', client: 'C_MATCH_EXPIRED' }, note: '図02: 放置したので Match Code の有効期限が切れた', undecided: ['U7'] });
+    T({ from: { host: pending, client: '*' }, event: 'timer.codeExpired',
+      to: { host: 'H_AWAY_' + p + '_EXPIRED', client: '*' }, undecided: ['U7'] });
+    T({ from: { host: 'H_AWAY_' + p + '_EXPIRED', client: '*' }, event: 'host.tapToast',
+      to: { host: 'H_CODE_EXPIRED', client: '*' }, note: '図02: 期限切れトーストをタップ' });
+  });
+  T({ from: { host: 'H_CODE_EXPIRED', client: '*' }, event: 'host.back', to: { host: 'H_TOP', client: '*' } });
+  T({ from: { host: '*', client: 'C_MATCH_EXPIRED' }, event: 'client.back', to: { host: '*', client: 'C_TOP' } });
+  T({ from: { host: '*', client: 'C_HOST_CANCELLED' }, event: 'client.back',
+    to: { host: '*', client: 'C_TOP' }, note: '図04 にはボタンが無く ‹ のみ', undecided: ['U8'] });
+
+  // 離席中のホストが Friend Match トップで Create / Join を押す (10-01 合意)
+  var awayTopPending = AWAY_STATUSES.map(function (s) { return 'H_AWAY_TOP_' + s; });
+  T({ from: { host: awayTopPending, client: '*' }, event: 'host.createMatch',
+    to: { host: '=', client: '*' }, dialog: { host: 'newMatch' }, note: '合意 (10-01): 確認ダイアログ', undecided: ['U12'] });
+  T({ from: { host: awayTopPending, client: '*' }, event: 'host.joinMatch',
+    to: { host: '=', client: '*' }, dialog: { host: 'joinAnother' }, note: '合意 (10-01): 確認ダイアログ', undecided: ['U12'] });
+  T({ from: { host: '*', client: '*', hostDialog: 'newMatch' }, event: 'host.dialog.keepCurrent',
+    to: { host: '=', client: '*' }, dialog: { host: null } });
+  T({ from: { host: '*', client: '*', hostDialog: 'joinAnother' }, event: 'host.dialog.keepCurrent',
+    to: { host: '=', client: '*' }, dialog: { host: null } });
+  T({ from: { host: '*', client: C_IN_MATCH, hostDialog: 'newMatch' }, event: 'host.dialog.createMatch',
+    to: { host: 'H_WAITING', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '古いマッチにいたクライアントの扱いは図に無い', undecided: ['U12'] });
+  T({ from: { host: '*', client: '*', hostDialog: 'newMatch' }, event: 'host.dialog.createMatch',
+    to: { host: 'H_WAITING', client: '*' }, dialog: { host: null }, note: 'モックでは同じ Match Code を表示' });
+  T({ from: { host: '*', client: C_IN_MATCH, hostDialog: 'joinAnother' }, event: 'host.dialog.joinMatch',
+    to: { host: 'H_TOP', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '別マッチへの参加はモックでは省略', undecided: ['U12'] });
+  T({ from: { host: '*', client: '*', hostDialog: 'joinAnother' }, event: 'host.dialog.joinMatch',
+    to: { host: 'H_TOP', client: '*' }, dialog: { host: null }, note: '別マッチへの参加はモックでは省略', undecided: ['U12'] });
+  T({ from: { host: ['H_AWAY_TOP_EXPIRED'], client: '*' }, event: 'host.createMatch',
+    to: { host: 'H_WAITING', client: '*' }, note: '期限切れなので確認なしで作り直し (モックの仮定)' });
+
+  // === クライアントが別画面へ移る (図07) ===
+  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'client.back',
+    to: { host: 'H_CLIENT_AWAY', client: 'C_AWAY_STAGE_READY' }, note: '図07: クライアントが他の画面に遷移した' });
+  T({ from: { host: '*', client: 'C_READY' }, event: 'client.back',
+    to: { host: '*', client: 'C_AWAY_STAGE_READY' } });
+  T({ from: { host: 'H_CLIENT_AWAY', client: 'C_AWAY_STAGE_READY' }, event: 'client.tapToast',
+    to: { host: 'H_READY', client: 'C_READY' }, note: '図07: Ready to start をタップして戻る' });
+  T({ from: { host: '*', client: 'C_AWAY_STAGE_READY' }, event: 'client.tapToast',
+    to: { host: '*', client: 'C_READY' } });
+  T({ from: { host: 'H_CLIENT_AWAY', client: 'C_AWAY_STAGE_READY' }, event: 'timer.codeExpired',
+    to: { host: 'H_EXPIRED', client: 'C_AWAY_STAGE_EXPIRED' }, note: '図07: クライアントが戻らず期限切れ。クライアント側は図に無い', undecided: ['U10', 'U18', 'U7'] });
+  T({ from: { host: '*', client: 'C_AWAY_STAGE_EXPIRED' }, event: 'client.tapToast',
+    to: { host: '*', client: 'C_MATCH_EXPIRED' }, undecided: ['U18'] });
+
+  // === Ready 後の通信不安定 (図03) ===
+  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'net.unstable',
+    to: { host: 'H_CONNECTING', client: 'C_CONNECTING' }, note: '図03: 何らかの理由により通信が不安定になった。クライアント側は図に無い', undecided: ['U5'] });
+  T({ from: { host: 'H_CONNECTING', client: 'C_CONNECTING' }, event: 'net.recovered',
+    to: { host: 'H_READY', client: 'C_READY' }, note: '図03: 通信が回復' });
+  T({ from: { host: 'H_CONNECTING', client: 'C_CONNECTING' }, event: 'net.lost',
+    to: { host: 'H_CONN_LOST', client: 'C_CONN_LOST' }, note: '図03: 通信が回復しない', undecided: ['U5'] });
+  T({ from: { host: 'H_CONN_LOST', client: 'C_CONN_LOST' }, event: 'net.recovered', when: { U5: 'wait' },
+    to: { host: 'H_READY', client: 'C_READY' }, note: 'U5 別案: しばらく待てば復帰できる', undecided: ['U5'] });
+
+  // === VS 画面中の切断 (合意済みの追加項目、図なし) ===
+  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'net.lostDuringVs', when: { U3: 'lobby' },
+    to: { host: 'H_CONN_LOST', client: 'C_CONN_LOST' }, note: 'U3 既定: ロビーで "Connection lost."', undecided: ['U3'] });
+  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'net.lostDuringVs', when: { U3: 'top' },
+    to: { host: 'H_TOP', client: 'C_TOP_CODE' }, note: 'U3 別案: Friend Match トップへ', undecided: ['U3'] });
+  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'net.lostDuringVs', when: { U3: 'online' },
+    to: { host: 'H_ONLINE', client: 'C_ONLINE' }, note: 'U3 別案: Online Battle へ', undecided: ['U3'] });
+
+  // === ランダム対戦 (図00, 09-30 の旧案) ===
+  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.cancelMatch',
+    to: { host: 'H_ONLINE', client: '*' }, note: '確認ダイアログの有無は不明', undecided: ['U13'] });
+  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.back', to: { host: 'H_ONLINE', client: '*' }, undecided: ['U13'] });
+  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.cancelMatch',
+    to: { host: '*', client: 'C_ONLINE' }, note: '確認ダイアログの有無は不明', undecided: ['U13'] });
+  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.back', to: { host: '*', client: 'C_ONLINE' }, undecided: ['U13'] });
+  T({ from: { host: 'H_RANDOM_WAITING', client: 'C_RANDOM_WAITING' }, event: 'sys.opponentFound', auto: 2500,
+    to: { host: 'H_VS', client: 'C_VS' }, note: '合意: 対戦相手が見つかったら VS 画面', undecided: ['U13'] });
+
+  rows.forEach(function (r, i) {
+    r.id = 'T' + String(i + 1).padStart(2, '0');
+    r.undecided = r.undecided || [];
+  });
+  return rows;
+})();
+
+// ---- イベントの日本語ラベル ---------------------------------------------------
+
+var EVENT_LABELS = {
+  'host.friendMatch': 'ホスト: Friend Match を選ぶ',
+  'host.randomMatch': 'ホスト: Random Match を選ぶ',
+  'host.createMatch': 'ホスト: Create Match を押す',
+  'host.joinMatch': 'ホスト: Join Match を押す',
+  'host.startMatch': 'ホスト: Start Match を押す',
+  'host.cancelMatch': 'ホスト: Cancel Match を押す',
+  'host.back': 'ホスト: ‹ (戻る / 別画面へ)',
+  'host.tapToast': 'ホスト: トーストをタップ',
+  'host.backToOnline': 'ホスト: Back to Online Battle (モック)',
+  'host.dialog.cancelMatch': 'ホスト: ダイアログで Cancel Match',
+  'host.dialog.keepWaiting': 'ホスト: ダイアログで Keep Waiting',
+  'host.dialog.createMatch': 'ホスト: ダイアログで Create Match',
+  'host.dialog.joinMatch': 'ホスト: ダイアログで Join Match',
+  'host.dialog.keepCurrent': 'ホスト: ダイアログで Keep Current Match',
+  'client.friendMatch': 'クライアント: Friend Match を選ぶ',
+  'client.randomMatch': 'クライアント: Random Match を選ぶ',
+  'client.enterCode': 'クライアント: QWERTY123 を入力',
+  'client.joinMatch': 'クライアント: Join Match を押す',
+  'client.startMatch': 'クライアント: Start Match を押す',
+  'client.leaveMatch': 'クライアント: Leave Match を押す',
+  'client.cancelMatch': 'クライアント: Cancel Match を押す',
+  'client.back': 'クライアント: ‹ (戻る / 別画面へ)',
+  'client.tapToast': 'クライアント: トーストをタップ',
+  'client.backToOnline': 'クライアント: Back to Online Battle (モック)',
+  'client.dialog.leaveMatch': 'クライアント: ダイアログで Leave Match',
+  'client.dialog.goBack': 'クライアント: ダイアログで Go Back',
+  'sys.peerConnected': '自動: クライアントの接続完了',
+  'sys.ready': '自動: Ready になる',
+  'sys.autoStart': '自動: 開始 (U2 別案)',
+  'sys.bothStarted': '自動: 両者が開始',
+  'sys.startFailed': '環境: 開始時の同期に失敗',
+  'sys.resetWaiting': '自動: 待機に戻る',
+  'sys.opponentFound': '自動: 対戦相手が見つかる',
+  'vs.done': '自動: VS 画面が終わる',
+  'countdown.done': '自動: カウントダウンが終わる',
+  'net.unstable': '環境: 通信が不安定になる',
+  'net.recovered': '環境: 通信が回復する',
+  'net.lost': '環境: 通信が回復しない',
+  'net.lostDuringVs': '環境: VS 画面中に相手が切断',
+  'timer.codeExpired': '環境: Match Code の有効期限が切れる',
+};
+
+// ---- 画面の描画仕様 ---------------------------------------------------------
+// view: online | friendTop | lobby | stage | random | vs | countdown | game
+// ボタンの event はデバイス名を除いたもの (例: 'startMatch' → 'host.startMatch')
+
+var TOASTS = {
+  waiting: { kind: 'blue', text: 'Waiting for your friend…' },
+  joined: { kind: 'green', text: 'Friend joined!' },
+  ready: { kind: 'red', text: 'Ready to start', tap: 'tapToast' },
+  expired: { kind: 'darkred', text: 'Match code expired', tap: 'tapToast' },
+  failed: { kind: 'grey', text: 'Connection failed', tap: 'tapToast' },
+  lost: { kind: 'grey', text: 'Connection lost' },
+  random: { kind: 'pink', text: 'Waiting for opponent' },
+};
+
+var SCREENS = (function () {
+  var S = {};
+  var B = {
+    start: { label: 'Start Match', event: 'startMatch', primary: true, hideIfNoRow: true },
+    cancel: { label: 'Cancel Match', event: 'cancelMatch' },
+    leave: { label: 'Leave Match', event: 'leaveMatch' },
+  };
+  function online(dev) {
+    return { view: 'online', title: 'ONLINE BATTLE', back: null, items: [
+      { label: 'Random Match', event: 'randomMatch' }, { label: 'Friend Match', event: 'friendMatch' }] };
+  }
+  function top(extra) {
+    return Object.assign({ view: 'friendTop', title: 'Friend Match', back: 'back', input: '' }, extra);
+  }
+  function lobby(extra) {
+    return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [] }, extra);
+  }
+  var errMsg = {
+    NOTFOUND: 'Match not found. Check the Match Code and try again.',
+    EXPIRED: 'The match has expired.',
+    FULL: 'The match is already full.',
+  };
+
+  // --- ホスト ---
+  S.H_ONLINE = online('host');
+  S.H_TOP = top({});
+  S.H_TOP_CONN_FAILED = top({ toast: 'failed', undecided: ['U6'] });
+  S.H_WAITING = lobby({ status: 'Waiting for your friend…', buttons: [B.cancel] });
+  S.H_FRIEND_JOINED = lobby({ name: 'Client User', status: 'Friend joined!', buttons: [B.cancel], undecided: ['U4'] });
+  S.H_READY = lobby({ name: 'Client User', status: 'Ready', buttons: [B.start, B.cancel], undecided: ['U2'] });
+  S.H_STARTING = lobby({ name: 'Client User', status: 'Starting match…', back: 'disabled' });
+  S.H_START_FAILED = lobby({ name: 'Client User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
+    buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.cancel], undecided: ['U15'] });
+  S.H_CONNECTING = lobby({ name: 'Client User', status: 'Connecting…', buttons: [B.cancel] });
+  S.H_CONN_LOST = lobby({ name: 'Client User', status: 'Connection lost.', buttons: [B.cancel], undecided: ['U5'] });
+  S.H_CLIENT_LEFT = lobby({ name: 'Client User', status: 'left the match.', buttons: [B.cancel] });
+  S.H_CLIENT_AWAY = lobby({ name: 'Client User', status: 'Away', buttons: [B.cancel] });
+  S.H_EXPIRED = lobby({ status: 'Match expired.', buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.cancel],
+    undecided: ['U10', 'U7'] });
+  S.H_CODE_EXPIRED = lobby({ status: 'Match code expired.', undecided: ['U7'] });
+  var awayToast = { WAITING: 'waiting', JOINED: 'joined', READY: 'ready', EXPIRED: 'expired' };
+  AWAY_PLACES.forEach(function (p) {
+    Object.keys(awayToast).forEach(function (s) {
+      var u = s === 'READY' ? ['U1'] : s === 'EXPIRED' ? ['U7'] : ['U16'];
+      S['H_AWAY_' + p + '_' + s] = p === 'TOP'
+        ? top({ toast: awayToast[s], undecided: u })
+        : { view: 'stage', back: 'back', toast: awayToast[s], undecided: u };
+    });
+  });
+  S.H_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
+    buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
+  S.H_VS = { view: 'vs', undecided: [] };
+  S.H_COUNTDOWN = { view: 'countdown' };
+  S.H_GAME = { view: 'game' };
+
+  // --- クライアント ---
+  S.C_ONLINE = online('client');
+  S.C_TOP = top({});
+  S.C_TOP_CODE = top({ input: 'QWERTY123' });
+  Object.keys(errMsg).forEach(function (k) {
+    S['C_TOP_ERR_' + k] = top({ input: 'QWERTY123', error: errMsg[k] });
+  });
+  S.C_TOP_CONN_FAILED = top({ input: 'QWERTY123', toast: 'failed', undecided: ['U6'] });
+  S.C_WAITING = lobby({ status: 'Waiting for your friend…', undecided: ['U9'] });
+  S.C_HOST_AWAY = lobby({ name: 'Host User', status: 'Away', buttons: [B.leave] });
+  S.C_FRIEND_JOINED = lobby({ name: 'Host User', status: 'Friend joined!', buttons: [B.leave], undecided: ['U4'] });
+  S.C_READY = lobby({ name: 'Host User', status: 'Ready', buttons: [B.start, B.leave], undecided: ['U2'] });
+  S.C_STARTING = lobby({ name: 'Host User', status: 'Starting match…', back: 'disabled' });
+  S.C_START_FAILED = lobby({ name: 'Host User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
+    buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.leave], undecided: ['U15'] });
+  S.C_CONNECTING = lobby({ name: 'Host User', status: 'Connecting…', buttons: [B.leave], undecided: ['U5'] });
+  S.C_CONN_LOST = lobby({ name: 'Host User', status: 'Connection lost.', buttons: [B.leave], undecided: ['U5'] });
+  S.C_HOST_CANCELLED = lobby({ name: 'Host User', status: 'cancelled the match.', undecided: ['U8'] });
+  S.C_MATCH_EXPIRED = lobby({ status: 'Match expired.', undecided: ['U7'] });
+  S.C_AWAY_STAGE_READY = { view: 'stage', back: 'back', toast: 'ready' };
+  S.C_AWAY_STAGE_EXPIRED = { view: 'stage', back: 'back', toast: 'expired', undecided: ['U18'] };
+  S.C_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
+    buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
+  S.C_VS = { view: 'vs' };
+  S.C_COUNTDOWN = { view: 'countdown' };
+  S.C_GAME = { view: 'game' };
+
+  Object.keys(S).forEach(function (k) { S[k].undecided = S[k].undecided || []; });
+  return S;
+})();
+
+// ---- ダイアログ ---------------------------------------------------------------
+
+var DIALOGS = {
+  cancel: { title: 'Cancel this match?', body: 'Your current Match Code will no longer be valid.',
+    buttons: [{ label: 'Cancel Match', event: 'dialog.cancelMatch', danger: true }, { label: 'Keep Waiting', event: 'dialog.keepWaiting' }] },
+  leave: { title: 'Leave this match?', body: 'You\u2019ll leave the current match.',
+    buttons: [{ label: 'Leave Match', event: 'dialog.leaveMatch', danger: true }, { label: 'Go Back', event: 'dialog.goBack' }],
+    undecided: ['U11'] },
+  newMatch: { title: 'Create a new match?', body: 'Your current Match Code will no longer be valid.',
+    buttons: [{ label: 'Create Match', event: 'dialog.createMatch', danger: true }, { label: 'Keep Current Match', event: 'dialog.keepCurrent' }],
+    undecided: ['U12'] },
+  joinAnother: { title: 'Join another match?', body: 'Your current Match Code will no longer be valid.',
+    buttons: [{ label: 'Join Match', event: 'dialog.joinMatch', danger: true }, { label: 'Keep Current Match', event: 'dialog.keepCurrent' }],
+    undecided: ['U12'] },
+};
+
+// ---- VS 画面のデモデータ (架空) ----------------------------------------------
+
+var PLAYERS = {
+  host: { name: 'Yasuhito', rank: 12, emoji: '👋', greeting: 'Hello!' },
+  client: { name: 'ogwssk', rank: 9, emoji: '😎', greeting: 'Let\u2019s go!' },
+};
+
+// ---- 未決一覧 -----------------------------------------------------------------
+// options があるものは 未決パネルでトグルできる。default は図の通り (無ければ最も中立な案)。
+
+var UNDECIDED = [
+  { id: 'U1', title: 'Ready トーストから VS への入り方',
+    desc: '別画面にいるホストが赤い "Ready to start" トーストをタップしたあと、ロビーの Ready 画面に戻って Start Match を押すのか、タップで直接開始するのか。',
+    options: [{ value: 'lobby', label: 'ロビーの Ready 画面へ (図02)' }, { value: 'direct', label: 'タップで直接開始扱い' }], default: 'lobby' },
+  { id: 'U2', title: '開始は両者の Start Match か、自動カウントダウンか',
+    desc: '図では両者が Start Match を押し、先に押した側は "Starting match…" で相手を待つ。Ready になったら自動で開始する案もありうる。',
+    options: [{ value: 'both', label: '両者が Start Match を押す (図01)' }, { value: 'auto', label: 'Ready 後に自動で開始' }], default: 'both' },
+  { id: 'U3', title: 'VS 画面中に相手が切断したときの戻り先',
+    desc: '合意済みの VS 画面中に切断した場合の画面は図に無い。',
+    options: [{ value: 'lobby', label: 'ロビーで "Connection lost."' }, { value: 'top', label: 'Friend Match トップ' }, { value: 'online', label: 'Online Battle' }], default: 'lobby' },
+  { id: 'U4', title: 'Friend joined! → Ready の条件',
+    desc: '何をもって Ready になるのか (自動遷移の条件・待ち時間) が不明。モックでは 1.5 秒後に自動で Ready にしている。' },
+  { id: 'U5', title: 'Connection lost 時の扱いとクライアント側の表示',
+    desc: '図03 の赤字メモ「しばらく待つか、導線的にキャンセルしかないようにするか」。タイムアウトの長さも未定。クライアント側の画面は図に無く、モックではホストと対称の "Connecting…" / "Connection lost." を仮表示している。',
+    options: [{ value: 'cancel', label: 'キャンセルのみ (図03)' }, { value: 'wait', label: 'しばらく待てば復帰できる' }], default: 'cancel' },
+  { id: 'U6', title: '"Connection failed" トーストの発生条件',
+    desc: '09-30 の図にトーストだけあり、出る場面が描かれていない。モックでは Create Match / Join Match の接続失敗として仮に表示している。' },
+  { id: 'U7', title: 'Match Code の有効期限と文言の差',
+    desc: '有効期限の長さが未定。ホスト側は "Match code expired." / トースト "Match code expired"、クライアント側は "Match expired." と文言が異なる。' },
+  { id: 'U8', title: 'ホストがキャンセルした後のクライアントの出口',
+    desc: '"Host User / cancelled the match." の画面にボタンが無い (‹ のみ)。モックでは ‹ で Friend Match トップに戻る。' },
+  { id: 'U9', title: 'クライアント待機中 (C_WAITING) の退出方法',
+    desc: '"Waiting for your friend…" のクライアント画面にボタンが無い。モックでは ‹ で抜けて Match Code 入力済みのトップへ戻る。' },
+  { id: 'U10', title: 'クライアント離脱で期限切れ後のホスト画面の Start Match',
+    desc: '図07 で "Match expired." の画面に Start Match と Cancel Match がある。期限切れで開始できる意味が不明なため、モックでは Start Match に遷移行を用意していない (押せない)。' },
+  { id: 'U11', title: '"Leave this match?" の "Go Back" の文言',
+    desc: '"Cancel this match?" は合意で "Keep Waiting" にしたが、"Leave this match?" の "Go Back" は合意の対象外。"Stay in Match" などに揃えるか。' },
+  { id: 'U12', title: '"Create a new match?" / "Join another match?" の本文と影響',
+    desc: '10-01 の合意でボタンは [Create Match]/[Join Match] + [Keep Current Match]。本文は残っている図に無いので仮に "Your current Match Code will no longer be valid." を表示。古いマッチに入っていたクライアントの扱いも未定 (モックでは "cancelled the match.")。' },
+  { id: 'U13', title: 'ランダム対戦の待機・離脱・Ready の扱い',
+    desc: 'ランダム対戦は 09-30 の旧案 (図00) のみで、10-02 の図に無い。トースト・離席・Ready / Start Match・キャンセル確認の有無が未定。' },
+  { id: 'U14', title: 'ホストが ‹ で戻ったときにマッチを維持するか',
+    desc: '図02 はバナーを出してマッチを維持する。‹ でキャンセル確認を出す案もありうる。',
+    options: [{ value: 'keep', label: '維持してバナー表示 (図02)' }, { value: 'confirm', label: 'キャンセル確認を出す' }], default: 'keep' },
+  { id: 'U15', title: '同期失敗時に片方だけ再試行した場合',
+    desc: '図06 は両者が Start Match で再試行する。片方だけ再試行した場合や、再試行の回数制限が未定。' },
+  { id: 'U16', title: '青 / 緑のバナーをタップしてロビーに戻れるか',
+    desc: '図02 で "Ready to start" と "Match code expired" はタップで遷移するが、"Waiting for your friend…" と "Friend joined!" のタップは描かれていない。',
+    options: [{ value: 'no', label: 'タップできない (図02)' }, { value: 'yes', label: 'タップでロビーへ' }], default: 'no' },
+  { id: 'U17', title: 'ホストが戻ったときクライアントに "Friend joined!" を再表示するか',
+    desc: '図02 では Away → Friend joined! → Ready の順。すでに一度 Ready だった場合も同じか。ホスト離席中にクライアントが退出した場合のホスト側表示も図に無い。' },
+  { id: 'U18', title: 'クライアントが別画面にいる間に期限切れになったときのクライアント側',
+    desc: '図07 はホスト側のみ。モックではクライアントに "Match code expired" トーストを出し、タップで "Match expired." を表示している。' },
+  { id: 'U19', title: 'Connection lost から ‹ で戻ると青い "Waiting for your friend…" バナー',
+    desc: '図03 では Connection lost の画面から ‹ で戻ると、待機中のバナー付き Friend Match トップになる。相手が切断されたのに待機扱いでよいか。' },
+];

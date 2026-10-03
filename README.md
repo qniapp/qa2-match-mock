@@ -52,7 +52,7 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 
 - `from` / `to` の `host` / `client`: 状態名、状態名の配列 (表ではグループ名で表示)、`'*'` (何でもよい / 変更なし)、`'='` (同じ状態のままダイアログだけ変える)
 - `from.hostDialog` / `dialog: { host: 'cancel' }`: 確認ダイアログの開閉 (ダイアログの文言は `DIALOGS`)
-- `when`: 未決トグル (`{ U31: 'both' }`) やモック設定 (`{ codeResult: 'notFound' }`) の条件
+- `when`: 未決トグル (`{ U14: 'keep' }`) やモック設定 (`{ codeResult: 'notFound' }`) の条件
 - `auto`: 自由操作中に自動で発火するまでのミリ秒 (図の点線矢印)
 - 上から順に評価し、最初に一致した行が使われます。行の ID (T01〜) は並び順から自動で振られます。
 
@@ -67,6 +67,9 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 また、モック独自の 3·2·1 (状態 `H_COUNTDOWN` / `C_COUNTDOWN`、イベント `countdown.done`、その画面) が残っていないこと、
 VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_GAME_COUNTDOWN` / `C_GAME_COUNTDOWN`) になること、
 カウントダウン中は Win / Lose の行が無く、プレイ開始後 (`H_GAME` / `C_GAME`) にはあることも確認します。
+開始 (U31 で決定) については、ホストが先・クライアントが先のどちらでも、1 回目の Start Match で「押した側は待機 / 相手側は "Friend is ready!"」、
+2 回目で "Starting match…"、続く自動遷移で VS 画面になること、Ready のままや片方だけ押した状態から VS 画面へ進む行が無いこと、
+自動開始 (`sys.autoStart`・U31 のトグル・シナリオの別案) が残っていないことを確認します。
 
 ## シナリオ一覧
 
@@ -74,8 +77,8 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_
 
 | ID | シナリオ | 元の図 |
 |---|---|---|
-| 1 | 通常対戦 | 01 |
-| 1b | 通常対戦 (U31 別案: 自動開始) | 01 |
+| 1 | 通常対戦 (ホストが先に Start Match) | 01 |
+| 1b | 通常対戦 (クライアントが先に Start Match) | 01 |
 | 2a | 待機中にホストが別画面へ → 戻って対戦 | 02 |
 | 2b | 待機中にホストが別画面へ → 放置して期限切れ | 02 |
 | 3a | Ready 後に通信不安定 → 回復 | 03 |
@@ -97,6 +100,70 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_
 | 15 | 通常対戦 → 対戦後 (ホスト勝利) | 01 + なし (対戦後) |
 | 15b | 通常対戦 → 対戦後 (ホストが Lose を押す) | 01 + なし (対戦後) |
 | 15c | 対戦後に再戦 (仮) | なし (対戦後) |
+
+## 開始は両者の Start Match (2026-10-03 決定、U31)
+
+高宮さんの決定 (2026-10-03、未決 U31): 両者が Start Match を押したら開始します。Ready になっても自動では開始しません。
+片方が押すと、押した側は待機表示になり、相手側には相手が準備完了であることを表示します。
+
+### モックでの表示
+
+| 段階 | 押した側 | 相手側 |
+|---|---|---|
+| 両者 Ready | "Ready"、[Start Match] (有効) | 同じ |
+| 片方が押した | 相手の名前の下に "Waiting for your friend…"。[Start Match] は無効表示 (半透明・実線。遷移表の「行なし」の破線とは別) | 相手の名前の下に緑の "Friend is ready!"、"Ready"、[Start Match] (有効) |
+| 両者が押した | "Starting match…" (同期中、約 1.5 秒) | 同じ |
+| そのあと | VS 画面 → ゲーム画面でゲーム本体のカウントダウン → プレイ開始 | 同じ |
+
+- 押した側の文言は、合意済みのフレンド待機の文言 "Waiting for your friend…" をそのまま使いました (相手を待つ、同じ状況のため)。
+- もう一方のボタン (ホストの Cancel Match、クライアントの Leave Match) は Ready のときと同じく残しています。
+- 文言・無効表示にするか隠すか・ホストとクライアントで同じ表示にするかはモックの仮で、未決 U36 にしています。
+
+### 状態・イベント
+
+| 変更 | 状態 / イベント |
+|---|---|
+| 追加 | `H_READY_WAITING` / `C_READY_WAITING` (自分が先に押して相手を待つ)、`H_READY_PEER_READY` / `C_READY_PEER_READY` (相手が先に押した。"Friend is ready!")。遷移表ではグループ `H_ONE_PRESSED` / `C_ONE_PRESSED` |
+| 意味を変更 | `H_STARTING` / `C_STARTING` ("Starting match…"): 以前は「自分が押して相手を待つ」状態。今は「両者が押して開始の同期中」と、図06 の再試行で先に押した側の待機 |
+| 削除 | イベント `sys.autoStart` (Ready 後の自動開始)、U31 のトグル、シナリオ 1b の「U31 別案: 自動開始」 |
+| 変更なし | `host.startMatch` / `client.startMatch` / `sys.bothStarted` (ラベルは「自動: 開始の同期が終わる」に変更) |
+
+流れ: `H_READY` / `C_READY` → (先に押した側の `startMatch`) → `H_READY_WAITING` / `C_READY_PEER_READY` (ホストが先) または
+`H_READY_PEER_READY` / `C_READY_WAITING` (クライアントが先) → (もう一方の `startMatch`) → `H_STARTING` / `C_STARTING` → `sys.bothStarted` → `H_VS` / `C_VS`。
+
+"Starting match…" をどこに残すか: 図01 では先に押した側が "Starting match…" で相手を待ちます。決定に合わせて、この待機は "Waiting for your friend…" にしました (「表記の修正」に表記差分として記載)。
+"Starting match…" は、両者が押したあと VS 画面までの短い同期の間 (図06 の同期失敗 `sys.startFailed` はここで起きる) と、図06 の再試行で先に押した側の待機に残しています。
+図06 の再試行を初回の開始と同じ表示 ("Waiting for your friend…" / "Friend is ready!") に揃えるかは決まっていないので、U15 に書き足しました。
+
+手順の数は変わりません (Start Match 2 回と `sys.bothStarted` の 3 手順のまま) ので、既存の `#s=..&step=..` はそのまま使えます。
+
+- `index.html#s=1&step=8` - ホストが先に押した: ホスト "Waiting for your friend…" / クライアント "Friend is ready!"
+- `index.html#s=1b&step=8` - クライアントが先に押した: クライアント "Waiting for your friend…" / ホスト "Friend is ready!"
+- `index.html#s=1&step=9` - 両者が押した: 両者 "Starting match…"
+- `index.html#s=1b&step=10` - 両者が押したあとの VS 画面
+
+### 片方だけ押した状態と、ほかの流れ
+
+片方だけ押した状態は、図にも決定にも無い場面と重なります。新しい挙動は作らず、次のようにしています。
+
+| 場面 | モック | 未決 |
+|---|---|---|
+| 相手が切断した / いつまでも押さない / 押した側が取り消したい | 遷移行なし (環境イベントは出ない。押した側の Start Match は無効表示のまま) | U33 |
+| ホストの Cancel Match / クライアントの Leave Match | Ready からのキャンセル (図04)・退出 (図05) と同じ結果を仮に置く | U34 |
+| どちらかが ‹ で別画面へ移る (離席) | 遷移行なし (‹ は破線で押せない)。そのため、クライアントが押したあとにホストの "Ready to start" トーストが出る場面も無い | U35 |
+| 再戦 (Rematch) | 今までどおり両者の Rematch で VS 画面へ。ロビーの Start Match は挟まない | U23 |
+| ランダム対戦 | 今までどおり相手が見つかると VS 画面へ (旧案のまま) | U13 |
+
+Start Match を押す前 (両者 Ready) の通信不安定 (3a/3b/3c)・キャンセル (4/4b)・退出 (5)・離席 (2a/7a/7b) は今までどおりで、続きは両者の Start Match になります。
+U1 の別案 (トーストのタップで開始扱い) は、「ホストが Start Match を押した扱い」に変えました (ホスト "Waiting for your friend…" / クライアント "Friend is ready!")。
+
+遷移表は 126 行から 131 行になりました (自動開始の 1 行と古い Start Match の 2 行を削除し、Start Match の 4 行と、片方が押したあとのキャンセル・退出の仮の 4 行を追加)。
+
+![ホストが先に Start Match](docs/screenshots/26-u31-host-pressed-first.png)
+
+![クライアントが先に Start Match](docs/screenshots/27-u31-client-pressed-first.png)
+
+![両者が押したあとの VS 画面](docs/screenshots/28-u31-both-pressed-vs.png)
 
 ## ゲーム画面とゲーム本体のカウントダウン (2026-10-03 決定)
 
@@ -126,7 +193,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 | 変更なし | `H_GAME` / `C_GAME` (プレイ中、ポーズボタンあり、Win / Lose を押せる) |
 
 流れ: `H_VS` / `C_VS` → `vs.done` → `H_GAME_COUNTDOWN` / `C_GAME_COUNTDOWN` → `game.countdownDone` → `H_GAME` / `C_GAME`。
-遷移表の行数は 126 行のままです (T27 `vs.done` の行き先を変え、T28 を `countdown.done` から `game.countdownDone` に置き換えた)。
+このときの遷移表の行数は 126 行のままでした (`vs.done` の行き先を変え、`countdown.done` の行を `game.countdownDone` に置き換えた)。
 手順の数も変わらないので、既存の `#s=..&step=..` はそのまま使えます (例: 通常対戦の手順 11 がカウントダウン、手順 12 がプレイ開始)。
 
 ### 手順で止めて見る (`cd`)
@@ -172,6 +239,7 @@ issue の当初のチェックリストにある「ランクアップ　ラン�
 
 - **Back to Friend Match**: 押した端末だけ Friend Match トップへ戻ります (U24)。もう片方は結果画面のままです (U25)。
 - **Rematch**: 押した端末に "Waiting for your friend…"、もう片方に "Your friend wants a rematch" を出し、両者が押したら VS 画面からやり直します (U23)。
+  再戦でもロビーに戻って両者の Start Match (U31) を挟むかは決まっていないので、モックは挟みません (U23)。
   再戦待ちの取り消しは未決 (U30) なので、待機中の Rematch には行が無く押せません。
 
 Rematch を行の無いボタン (破線) にするだけの案も考えましたが、配線することにしました。
@@ -184,7 +252,7 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
   クライアント側も同じく `C_RESULT_*`。遷移表ではグループ `H_RESULT_ANY` / `C_RESULT_ANY` として表示します。
 - イベント: `host.win` / `host.lose` / `client.win` / `client.lose` (モック操作)、`host.rematch` / `client.rematch`、
   `host.backToFriendMatch` / `client.backToFriendMatch`
-- 行: 同じ `TRANSITIONS` の末尾に 16 行 (T111〜T126) を追加しました。既存の行 ID (T01〜T110) は変わっていません。
+- 行: 同じ `TRANSITIONS` の末尾に 16 行を追加しました (追加時は T111〜T126。U31 の行を足したので、今は T116〜T131)。
   「相手は結果画面のまま」の行は `to` を `'='` (同じ状態のまま) で書いており、残された側の端末にも U25 のバッジが出ます。
 
 ### シナリオ
@@ -224,6 +292,7 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
 | Starting match.... (点 4 つ) | Starting match… | 三点リーダーに統一 |
 | Connection Failed (09-30 のトースト) | Connection failed | 合意 2 (sentence case) |
 | Waiting for opponent... | Waiting for opponent… | 三点リーダーに統一 |
+| 図01 で先に Start Match を押した側の "Starting match…" | "Waiting for your friend…" (相手側には "Friend is ready!") | U31 の決定 (押した側は待機表示、相手側には準備完了を表示)。"Starting match…" は両者が押したあとの同期中と図06 の再試行に残した。文言は U36 |
 
 "Leave this match?" の "Go Back" は合意の対象外なので図のまま残し、未決 U11 にしています。
 
@@ -240,7 +309,11 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
   理由: ゲーム本体にゲーム開始時のカウントダウンがあるため、モック側の 3·2·1 は不要。  
   前提として、ゲーム側で VsPlayer の modeStartAnimationType を None から Countdown に変える（設定 1 行）。  
   決定はモックの 3·2·1 をやめることだけで、「両者が Start Match を押すか、Ready 後に自動で開始するか」は決めていません。
-  そこでこの残りの論点 (と、そのトグル) を新しい未決 **U31** に分けました。シナリオ 1b も「U31 別案」になっています。
+  そこでこの残りの論点 (と、そのトグル) を新しい未決 **U31** に分けました。U31 も同じ日に決まりました (下)。
+- **U31 開始は両者が Start Match を押してから** - 決定 (高宮さん 2026-10-03)  
+  両者が Start Match を押したら開始する (Ready 後の自動開始はしない)。片方が押すと、押した側は待機表示、相手側には相手が準備完了であることを表示する。
+  U31 のトグルと、自動開始の別案だったシナリオ 1b は削除し、1b は「クライアントが先に Start Match」にしました。
+  詳しくは「開始は両者の Start Match」を見てください。表示の細部 (U36) と、片方だけ押した状態の扱い (U33〜U35) は未決です。
 
 U1 (Ready トーストから VS への入り方) にも同じ決定を当てはめるか確認しましたが、U1 の論点は「トーストをタップしたあと、ロビーの Ready 画面に戻るか、直接開始するか」で、
 3·2·1 には触れていません。そのため U1 は未決のまま残し、「VS 画面のあとの流れは U2 で決定済み」という一文だけを足しました。
@@ -248,15 +321,17 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
 ### 未決
 
 - **U1 Ready トーストから VS への入り方**  
-  別画面にいるホストが赤い "Ready to start" トーストをタップしたあと、ロビーの Ready 画面に戻って Start Match を押すのか、タップで直接開始するのか。
+  別画面にいるホストが赤い "Ready to start" トーストをタップしたあと、ロビーの Ready 画面に戻って Start Match を押すのか、タップで Start Match を押した扱いにするのか。
+  U31 の決定により、どちらでもクライアントが Start Match を押すまで開始しない (別案ではホストは "Waiting for your friend…"、クライアントには "Friend is ready!")。
   VS 画面のあとの流れ (モックの 3·2·1 をやめてゲーム本体のカウントダウン) は U2 で決定済みで、どちらの入り方でも同じ。トーストのタップ後の入り方は決まっていない。  
-  トグル: ロビーの Ready 画面へ (図02) (既定) / タップで直接開始扱い
-- **U2** - 決定済み (上の「決定済み」を参照)。残りの論点は U31
+  トグル: ロビーの Ready 画面へ (図02) (既定) / タップで Start Match を押した扱い
+- **U2** - 決定済み (上の「決定済み」を参照)。残りの論点だった U31 も決定済み
 - **U3 VS 画面中に相手が切断したときの戻り先**  
   合意済みの VS 画面中に切断した場合の画面は図に無い。  
   トグル: ロビーで "Connection lost." (既定) / Friend Match トップ / Online Battle
 - **U4 Friend joined! → Ready の条件**  
   何をもって Ready になるのか (自動遷移の条件・待ち時間) が不明。モックでは 1.5 秒後に自動で Ready にしている。
+  Ready は Start Match を押せるようになる段階で、Ready になっても自動では開始しない (U31 で決定: 両者が Start Match を押したら開始)。
 - **U5 Connection lost 時の扱いとクライアント側の表示**  
   図03 の赤字メモ「しばらく待つか、導線的にキャンセルしかないようにするか」。タイムアウトの長さも未定。クライアント側の画面は図に無く、モックではホストと対称の "Connecting…" / "Connection lost." を仮表示している。  
   トグル: キャンセルのみ (図03) (既定) / しばらく待てば復帰できる
@@ -276,16 +351,19 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   10-01 の合意でボタンは [Create Match]/[Join Match] + [Keep Current Match]。本文は残っている図に無いので仮に "Your current Match Code will no longer be valid." を表示。古いマッチに入っていたクライアントの扱いも未定 (モックでは "cancelled the match.")。
 - **U13 ランダム対戦の待機・離脱・Ready の扱い**  
   ランダム対戦は 09-30 の旧案 (図00) のみで、10-02 の図に無い。トースト・離席・Ready / Start Match・キャンセル確認の有無が未定。
+  U31 の決定 (両者が Start Match を押したら開始) は Friend Match の図01 についてのもので、ランダム対戦でも両者の Start Match を挟むかは決まっていない。モックでは相手が見つかると Start Match なしで VS 画面へ進む (旧案のまま)。
 - **U14 ホストが ‹ で戻ったときにマッチを維持するか**  
   図02 はバナーを出してマッチを維持する。‹ でキャンセル確認を出す案もありうる。  
   トグル: 維持してバナー表示 (図02) (既定) / キャンセル確認を出す
 - **U15 同期失敗時に片方だけ再試行した場合**  
   図06 は両者が Start Match で再試行する。片方だけ再試行した場合や、再試行の回数制限が未定。
+  再試行で先に押した側は図06 どおり "Starting match…" で相手を待ち、相手側には何も出ない。初回の開始 (U31) の "Waiting for your friend…" / "Friend is ready!" に揃えるかも未定。
 - **U16 青 / 緑のバナーをタップしてロビーに戻れるか**  
   図02 で "Ready to start" と "Match code expired" はタップで遷移するが、"Waiting for your friend…" と "Friend joined!" のタップは描かれていない。  
   トグル: タップできない (図02) (既定) / タップでロビーへ
 - **U17 ホストが戻ったときクライアントに "Friend joined!" を再表示するか**  
   図02 では Away → Friend joined! → Ready の順。すでに一度 Ready だった場合も同じか。ホスト離席中にクライアントが退出した場合のホスト側表示も図に無い。
+  ホストが戻って Ready になったあとも、開始には両者の Start Match が必要 (U31 で決定)。
 - **U18 クライアントが別画面にいる間に期限切れになったときのクライアント側**  
   図07 はホスト側のみ。モックではクライアントに "Match code expired" トーストを出し、タップで "Match expired." を表示している。
 - **U19 Connection lost から ‹ で戻ると青い "Waiting for your friend…" バナー**  
@@ -298,6 +376,7 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   "Rematch" / "Back to Friend Match" は仮。ゲームの UI キットには "REMATCH" ボタンがある。ほかのボタン (Online Battle へ戻るなど) が要るか、文言や大文字・小文字も未定。
 - **U23 再戦の有無と進め方**  
   再戦できるか、両者の同意が必要か、VS 画面を挟むか、同じ Match Code (同じマッチ) を使うか。モックは中立な仮の流れとして、押した側に "Waiting for your friend…"、相手に "Your friend wants a rematch" を出し、両者が押したら VS 画面からやり直す。
+  U31 の決定 (両者が Start Match を押したら開始) は初回の開始についてのもので、再戦でもロビーに戻って両者の Start Match を挟むのか、両者の Rematch だけで開始するのかは決まっていない。
 - **U24 対戦後の戻り先**  
   モックでは "Back to Friend Match" で Friend Match トップ (Match Code 入力欄は空) に戻る。Online Battle や、同じマッチのロビーに戻る案もありうる。
 - **U25 結果画面で相手が先に抜けた・切断したときの表示**  
@@ -312,8 +391,18 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。
 - **U30 再戦の申し込みの取り消し・応答待ちのタイムアウト**  
   モックでは Rematch を押したあと取り消せない (待機中の Rematch は押せない)。相手が応じないときのタイムアウトや、申し込まれた側が断る手段も未定。
-- **U31 開始は両者の Start Match か、Ready 後の自動開始か**  
-  U2 から分けた残りの論点 (U2 のカウントダウンの部分は決定済み)。図では両者が Start Match を押し、先に押した側は "Starting match…" で相手を待つ。Ready になったら自動で開始する案もありうる。どちらでも、開始後は VS 画面 → ゲーム本体のカウントダウン。  
-  トグル: 両者が Start Match を押す (図01) (既定) / Ready 後に自動で開始
+- **U31** - 決定済み (上の「決定済み」を参照)
 - **U32 ゲーム本体のカウントダウン中に相手が切断したとき**  
   VS 画面中の切断 (U3) と対戦中の切断 (U28) の間にある、ゲーム画面のカウントダウン (約 3.4 秒) 中に相手が切断した場合の扱いと画面は決まっていない。モックには遷移行が無い。
+- **U33 片方だけ Start Match を押した状態で、相手が切断した / いつまでも押さないとき**  
+  U31 の決定で、片方が押すと相手が押すまで待つ。その間に相手が切断した場合や、相手がいつまでも押さない場合の扱い (タイムアウトするか、キャンセルになるか、押した側が押したことを取り消せるか) は決まっていない。
+  モックには遷移行が無い (片方が押したあとは「通信が不安定になる」などの環境イベントを出せず、押した側の Start Match は無効表示のまま)。
+- **U34 片方が Start Match を押したあとの Cancel Match / Leave Match**  
+  片方が押して相手を待っている間に、ホストが Cancel Match、またはクライアントが Leave Match を押したときの扱いは図に無い。押した側が自分でキャンセル・退出する場合と、準備完了の相手を残してキャンセル・退出する場合がある。
+  モックでは Ready からのキャンセル (図04: クライアントに "cancelled the match.") ・退出 (図05: ホストに "left the match." → 待機に戻る) と同じ結果を仮に置いている。相手に何を伝えるかは未定。
+- **U35 片方が Start Match を押したあとに別画面へ移る (‹) とき**  
+  押した側、または準備完了の相手を待たせている側が ‹ で別画面へ移ったときの扱いは図に無い。マッチを維持してトーストを出すのか (図02 / 図07 のように)、押したことが取り消されるのかが未定。
+  クライアントが押したあとにホストが離れた場合の "Ready to start" トーストの扱いも未定。モックには遷移行が無い (‹ は押せない)。
+- **U36 片方が Start Match を押したあとの表示の細部**  
+  U31 で決まったのは「押した側は待機表示、相手側には相手が準備完了であることを表示」まで。モックの文言 (押した側の "Waiting for your friend…"、相手側の名前の下の "Friend is ready!")、
+  押した側の Start Match を無効表示にするか隠すか、ホスト・クライアントで同じ表示にするかは仮。

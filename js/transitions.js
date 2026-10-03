@@ -31,7 +31,10 @@ var H_CANCELABLE = ['H_WAITING', 'H_FRIEND_JOINED', 'H_READY', 'H_CONNECTING', '
   'H_CLIENT_LEFT', 'H_CLIENT_AWAY', 'H_START_FAILED'];
 var H_WITH_CLIENT = ['H_FRIEND_JOINED', 'H_READY', 'H_STARTING', 'H_START_FAILED',
   'H_CONNECTING', 'H_CONN_LOST', 'H_CLIENT_AWAY'];
-var C_IN_MATCH = ['C_WAITING', 'C_HOST_AWAY', 'C_FRIEND_JOINED', 'C_READY', 'C_STARTING',
+// 片方だけ Start Match を押した状態 (U31 決定): 押した側は待機 (_WAITING)、相手側には準備完了 (_PEER_READY)
+var H_ONE_PRESSED = ['H_READY_WAITING', 'H_READY_PEER_READY'];
+var C_ONE_PRESSED = ['C_READY_WAITING', 'C_READY_PEER_READY'];
+var C_IN_MATCH = ['C_WAITING', 'C_HOST_AWAY', 'C_FRIEND_JOINED', 'C_READY', 'C_READY_WAITING', 'C_READY_PEER_READY', 'C_STARTING',
   'C_START_FAILED', 'C_CONNECTING', 'C_CONN_LOST', 'C_AWAY_STAGE_READY'];
 var C_LEAVABLE = ['C_HOST_AWAY', 'C_FRIEND_JOINED', 'C_READY', 'C_START_FAILED',
   'C_CONNECTING', 'C_CONN_LOST'];
@@ -56,7 +59,7 @@ OUTCOMES.forEach(function (o) {
 // 遷移表の表示で、配列の代わりにグループ名を出すための一覧
 var STATE_GROUPS = {
   H_AWAY_PENDING: H_AWAY_PENDING, H_CANCELABLE: H_CANCELABLE, H_WITH_CLIENT: H_WITH_CLIENT,
-  H_EXPIRED_ANY: H_EXPIRED_ANY, C_IN_MATCH: C_IN_MATCH, C_LEAVABLE: C_LEAVABLE,
+  H_EXPIRED_ANY: H_EXPIRED_ANY, H_ONE_PRESSED: H_ONE_PRESSED, C_ONE_PRESSED: C_ONE_PRESSED, C_IN_MATCH: C_IN_MATCH, C_LEAVABLE: C_LEAVABLE,
   C_TOP_ANY: C_TOP_ANY, C_TOP_FILLED: C_TOP_FILLED, H_RESULT_ANY: H_RESULT_ANY, C_RESULT_ANY: C_RESULT_ANY,
 };
 
@@ -111,12 +114,17 @@ var TRANSITIONS = (function () {
     to: { host: '*', client: 'C_FRIEND_JOINED' }, note: '図01: 点線 (自動)' });
   T({ from: { host: 'H_FRIEND_JOINED', client: 'C_FRIEND_JOINED' }, event: 'sys.ready', auto: 1500,
     to: { host: 'H_READY', client: 'C_READY' }, note: '図01: 点線 (自動)。何をもって Ready か不明', undecided: ['U4'] });
-  T({ from: { host: 'H_READY', client: '*' }, event: 'host.startMatch', when: { U31: 'both' },
-    to: { host: 'H_STARTING', client: '*' }, note: '先に押した側は相手を待つ', undecided: ['U31'] });
-  T({ from: { host: '*', client: 'C_READY' }, event: 'client.startMatch', when: { U31: 'both' },
-    to: { host: '*', client: 'C_STARTING' }, note: '先に押した側は相手を待つ', undecided: ['U31'] });
-  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'sys.autoStart', when: { U31: 'auto' }, auto: 3000,
-    to: { host: 'H_VS', client: 'C_VS' }, note: 'U31 別案: Ready になったら自動で開始', undecided: ['U31'] });
+  // 決定 (U31): 両者が Start Match を押したら開始。先に押した側は待機、相手側には相手が準備完了であることを表示
+  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'host.startMatch',
+    to: { host: 'H_READY_WAITING', client: 'C_READY_PEER_READY' },
+    note: '決定 (U31): 押した側は "Waiting for your friend…"、相手側には "Friend is ready!" (図01 では押した側は "Starting match…")', decided: ['U31'], undecided: ['U36'] });
+  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'client.startMatch',
+    to: { host: 'H_READY_PEER_READY', client: 'C_READY_WAITING' },
+    note: '決定 (U31): 押した側は "Waiting for your friend…"、相手側には "Friend is ready!" (図01 では押した側は "Starting match…")', decided: ['U31'], undecided: ['U36'] });
+  T({ from: { host: 'H_READY_PEER_READY', client: 'C_READY_WAITING' }, event: 'host.startMatch',
+    to: { host: 'H_STARTING', client: 'C_STARTING' }, note: '決定 (U31): 両者が押したので開始。同期の間は図の "Starting match…"', decided: ['U31'] });
+  T({ from: { host: 'H_READY_WAITING', client: 'C_READY_PEER_READY' }, event: 'client.startMatch',
+    to: { host: 'H_STARTING', client: 'C_STARTING' }, note: '決定 (U31): 両者が押したので開始。同期の間は図の "Starting match…"', decided: ['U31'] });
   T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.bothStarted', auto: 1500,
     to: { host: 'H_VS', client: 'C_VS' }, note: '合意: マッチ成立時に VS 画面を挟む' });
   T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'vs.done', auto: 2500,
@@ -131,11 +139,16 @@ var TRANSITIONS = (function () {
   T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.startFailed',
     to: { host: 'H_START_FAILED', client: 'C_START_FAILED' }, note: '図06: 接続が切れる / 同期処理の失敗' });
   T({ from: { host: 'H_START_FAILED', client: '*' }, event: 'host.startMatch',
-    to: { host: 'H_STARTING', client: '*' }, note: '図06: 再試行', undecided: ['U15'] });
+    to: { host: 'H_STARTING', client: '*' }, note: '図06: 再試行。先に押した側は図どおり "Starting match…" で相手を待つ', undecided: ['U15'] });
   T({ from: { host: '*', client: 'C_START_FAILED' }, event: 'client.startMatch',
-    to: { host: '*', client: 'C_STARTING' }, note: '図06: 再試行', undecided: ['U15'] });
+    to: { host: '*', client: 'C_STARTING' }, note: '図06: 再試行。先に押した側は図どおり "Starting match…" で相手を待つ', undecided: ['U15'] });
 
   // === ホストのキャンセル (図03, 図04) ===
+  // 片方が Start Match を押したあとのキャンセルは図に無い。Ready からのキャンセルと同じ結果を仮に置く
+  T({ from: { host: H_ONE_PRESSED, client: '*' }, event: 'host.cancelMatch',
+    to: { host: '=', client: '*' }, dialog: { host: 'cancel' }, note: '仮: 片方が Start Match を押したあとのキャンセル (図に無い)', undecided: ['U34'] });
+  T({ from: { host: H_ONE_PRESSED, client: C_ONE_PRESSED, hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
+    to: { host: 'H_TOP', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '仮: Ready からのキャンセル (図04) と同じ結果', undecided: ['U34', 'U8'] });
   T({ from: { host: H_CANCELABLE, client: '*' }, event: 'host.cancelMatch',
     to: { host: '=', client: '*' }, dialog: { host: 'cancel' }, note: '確認ダイアログ' });
   T({ from: { host: '*', client: '*', hostDialog: 'cancel' }, event: 'host.dialog.keepWaiting',
@@ -149,6 +162,11 @@ var TRANSITIONS = (function () {
   T({ from: { host: 'H_EXPIRED', client: '*' }, event: 'host.back', to: { host: 'H_TOP', client: '*' } });
 
   // === クライアントの退出 (図05) ===
+  // 片方が Start Match を押したあとの退出は図に無い。Ready からの退出と同じ結果を仮に置く
+  T({ from: { host: '*', client: C_ONE_PRESSED }, event: 'client.leaveMatch',
+    to: { host: '*', client: '=' }, dialog: { client: 'leave' }, note: '仮: 片方が Start Match を押したあとの退出 (図に無い)', undecided: ['U34', 'U11'] });
+  T({ from: { host: H_ONE_PRESSED, client: C_ONE_PRESSED, clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
+    to: { host: 'H_CLIENT_LEFT', client: 'C_TOP_CODE' }, dialog: { client: null }, note: '仮: Ready からの退出 (図05) と同じ結果', undecided: ['U34'] });
   T({ from: { host: '*', client: C_LEAVABLE }, event: 'client.leaveMatch',
     to: { host: '*', client: '=' }, dialog: { client: 'leave' }, note: '確認ダイアログ', undecided: ['U11'] });
   T({ from: { host: '*', client: '*', clientDialog: 'leave' }, event: 'client.dialog.goBack',
@@ -203,7 +221,8 @@ var TRANSITIONS = (function () {
     T({ from: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, event: 'host.tapToast', when: { U1: 'lobby' },
       to: { host: 'H_READY', client: 'C_FRIEND_JOINED' }, note: '図02: Ready to start ボタン押下で遷移', undecided: ['U1', 'U17'] });
     T({ from: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, event: 'host.tapToast', when: { U1: 'direct' },
-      to: { host: 'H_STARTING', client: 'C_READY' }, note: 'U1 別案: トーストのタップで Start Match 扱い', undecided: ['U1'] });
+      to: { host: 'H_READY_WAITING', client: 'C_READY_PEER_READY' },
+      note: 'U1 別案: トーストのタップでホストが Start Match を押した扱い。開始はクライアントも押してから (U31 決定)', undecided: ['U1'], decided: ['U31'] });
     T({ from: { host: 'H_AWAY_' + p + '_WAITING', client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
       to: { host: 'H_WAITING', client: '*' }, note: 'U16 別案: 青バナーもタップでロビーへ', undecided: ['U16'] });
     T({ from: { host: 'H_AWAY_' + p + '_JOINED', client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
@@ -365,8 +384,7 @@ var EVENT_LABELS = {
   'client.dialog.goBack': 'クライアント: ダイアログで Go Back',
   'sys.peerConnected': '自動: クライアントの接続完了',
   'sys.ready': '自動: Ready になる',
-  'sys.autoStart': '自動: 開始 (U31 別案)',
-  'sys.bothStarted': '自動: 両者が開始',
+  'sys.bothStarted': '自動: 開始の同期が終わる',
   'sys.startFailed': '環境: 開始時の同期に失敗',
   'sys.resetWaiting': '自動: 待機に戻る',
   'sys.opponentFound': '自動: 対戦相手が見つかる',
@@ -397,6 +415,8 @@ var SCREENS = (function () {
   var S = {};
   var B = {
     start: { label: 'Start Match', event: 'startMatch', primary: true, hideIfNoRow: true },
+    // 押したあとの Start Match: 無効表示 (遷移表の「行なし」の破線とは別の、ゲーム内の見た目)
+    pressed: { label: 'Start Match', primary: true, disabled: true },
     cancel: { label: 'Cancel Match', event: 'cancelMatch' },
     leave: { label: 'Leave Match', event: 'leaveMatch' },
   };
@@ -422,7 +442,11 @@ var SCREENS = (function () {
   S.H_TOP_CONN_FAILED = top({ toast: 'failed', undecided: ['U6'] });
   S.H_WAITING = lobby({ status: 'Waiting for your friend…', buttons: [B.cancel] });
   S.H_FRIEND_JOINED = lobby({ name: 'Client User', status: 'Friend joined!', buttons: [B.cancel], undecided: ['U4'] });
-  S.H_READY = lobby({ name: 'Client User', status: 'Ready', buttons: [B.start, B.cancel], undecided: ['U31'] });
+  S.H_READY = lobby({ name: 'Client User', status: 'Ready', buttons: [B.start, B.cancel], decided: ['U31'] });
+  S.H_READY_WAITING = lobby({ name: 'Client User', status: 'Waiting for your friend…', buttons: [B.pressed, B.cancel],
+    decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
+  S.H_READY_PEER_READY = lobby({ name: 'Client User', peerReady: true, status: 'Ready', buttons: [B.start, B.cancel],
+    decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
   S.H_STARTING = lobby({ name: 'Client User', status: 'Starting match…', back: 'disabled' });
   S.H_START_FAILED = lobby({ name: 'Client User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
     buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.cancel], undecided: ['U15'] });
@@ -460,7 +484,11 @@ var SCREENS = (function () {
   S.C_WAITING = lobby({ status: 'Waiting for your friend…', undecided: ['U9'] });
   S.C_HOST_AWAY = lobby({ name: 'Host User', status: 'Away', buttons: [B.leave] });
   S.C_FRIEND_JOINED = lobby({ name: 'Host User', status: 'Friend joined!', buttons: [B.leave], undecided: ['U4'] });
-  S.C_READY = lobby({ name: 'Host User', status: 'Ready', buttons: [B.start, B.leave], undecided: ['U31'] });
+  S.C_READY = lobby({ name: 'Host User', status: 'Ready', buttons: [B.start, B.leave], decided: ['U31'] });
+  S.C_READY_WAITING = lobby({ name: 'Host User', status: 'Waiting for your friend…', buttons: [B.pressed, B.leave],
+    decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
+  S.C_READY_PEER_READY = lobby({ name: 'Host User', peerReady: true, status: 'Ready', buttons: [B.start, B.leave],
+    decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
   S.C_STARTING = lobby({ name: 'Host User', status: 'Starting match…', back: 'disabled' });
   S.C_START_FAILED = lobby({ name: 'Host User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
     buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.leave], undecided: ['U15'] });
@@ -524,18 +552,20 @@ var GAME_COUNTDOWN_PREMISE = '前提として、ゲーム側で VsPlayer の mod
 
 var UNDECIDED = [
   { id: 'U1', title: 'Ready トーストから VS への入り方',
-    desc: '別画面にいるホストが赤い "Ready to start" トーストをタップしたあと、ロビーの Ready 画面に戻って Start Match を押すのか、タップで直接開始するのか。' +
+    desc: '別画面にいるホストが赤い "Ready to start" トーストをタップしたあと、ロビーの Ready 画面に戻って Start Match を押すのか、タップで Start Match を押した扱いにするのか。' +
+      'U31 の決定により、どちらでもクライアントが Start Match を押すまで開始しない (別案ではホストは "Waiting for your friend…"、クライアントには "Friend is ready!")。' +
       'VS 画面のあとの流れ (モックの 3·2·1 をやめてゲーム本体のカウントダウン) は U2 で決定済みで、どちらの入り方でも同じ。トーストのタップ後の入り方は決まっていない。',
-    options: [{ value: 'lobby', label: 'ロビーの Ready 画面へ (図02)' }, { value: 'direct', label: 'タップで直接開始扱い' }], default: 'lobby' },
+    options: [{ value: 'lobby', label: 'ロビーの Ready 画面へ (図02)' }, { value: 'direct', label: 'タップで Start Match を押した扱い' }], default: 'lobby' },
   { id: 'U2', title: '開始のカウントダウン',
     desc: '元の論点は「開始は両者の Start Match か、自動カウントダウンか」。このうちカウントダウンの部分が決まった: VS 画面のあと (ランダム対戦・Friend Match・再戦とも) はモック独自の 3·2·1 を出さず、ゲーム画面に移ってゲーム本体のカウントダウン (VsAI と同じ 3 → 2 → 1) を使う。' +
-      '両者が Start Match を押すか、Ready 後に自動で開始するかは決まっていないので U31 に分けた。',
+      '両者が Start Match を押すか、Ready 後に自動で開始するかはこの決定に含まれないので U31 に分けた (U31 も 2026-10-03 に決定: 両者が Start Match を押したら開始)。',
     decided: { by: '高宮さん', date: '2026-10-03', reason: 'ゲーム本体にゲーム開始時のカウントダウンがあるため、モック側の 3·2·1 は不要', premise: GAME_COUNTDOWN_PREMISE } },
   { id: 'U3', title: 'VS 画面中に相手が切断したときの戻り先',
     desc: '合意済みの VS 画面中に切断した場合の画面は図に無い。',
     options: [{ value: 'lobby', label: 'ロビーで "Connection lost."' }, { value: 'top', label: 'Friend Match トップ' }, { value: 'online', label: 'Online Battle' }], default: 'lobby' },
   { id: 'U4', title: 'Friend joined! → Ready の条件',
-    desc: '何をもって Ready になるのか (自動遷移の条件・待ち時間) が不明。モックでは 1.5 秒後に自動で Ready にしている。' },
+    desc: '何をもって Ready になるのか (自動遷移の条件・待ち時間) が不明。モックでは 1.5 秒後に自動で Ready にしている。' +
+      'Ready は Start Match を押せるようになる段階で、Ready になっても自動では開始しない (U31 で決定: 両者が Start Match を押したら開始)。' },
   { id: 'U5', title: 'Connection lost 時の扱いとクライアント側の表示',
     desc: '図03 の赤字メモ「しばらく待つか、導線的にキャンセルしかないようにするか」。タイムアウトの長さも未定。クライアント側の画面は図に無く、モックではホストと対称の "Connecting…" / "Connection lost." を仮表示している。',
     options: [{ value: 'cancel', label: 'キャンセルのみ (図03)' }, { value: 'wait', label: 'しばらく待てば復帰できる' }], default: 'cancel' },
@@ -554,17 +584,20 @@ var UNDECIDED = [
   { id: 'U12', title: '"Create a new match?" / "Join another match?" の本文と影響',
     desc: '10-01 の合意でボタンは [Create Match]/[Join Match] + [Keep Current Match]。本文は残っている図に無いので仮に "Your current Match Code will no longer be valid." を表示。古いマッチに入っていたクライアントの扱いも未定 (モックでは "cancelled the match.")。' },
   { id: 'U13', title: 'ランダム対戦の待機・離脱・Ready の扱い',
-    desc: 'ランダム対戦は 09-30 の旧案 (図00) のみで、10-02 の図に無い。トースト・離席・Ready / Start Match・キャンセル確認の有無が未定。' },
+    desc: 'ランダム対戦は 09-30 の旧案 (図00) のみで、10-02 の図に無い。トースト・離席・Ready / Start Match・キャンセル確認の有無が未定。' +
+      'U31 の決定 (両者が Start Match を押したら開始) は Friend Match の図01 についてのもので、ランダム対戦でも両者の Start Match を挟むかは決まっていない。モックでは相手が見つかると Start Match なしで VS 画面へ進む (旧案のまま)。' },
   { id: 'U14', title: 'ホストが ‹ で戻ったときにマッチを維持するか',
     desc: '図02 はバナーを出してマッチを維持する。‹ でキャンセル確認を出す案もありうる。',
     options: [{ value: 'keep', label: '維持してバナー表示 (図02)' }, { value: 'confirm', label: 'キャンセル確認を出す' }], default: 'keep' },
   { id: 'U15', title: '同期失敗時に片方だけ再試行した場合',
-    desc: '図06 は両者が Start Match で再試行する。片方だけ再試行した場合や、再試行の回数制限が未定。' },
+    desc: '図06 は両者が Start Match で再試行する。片方だけ再試行した場合や、再試行の回数制限が未定。' +
+      '再試行で先に押した側は図06 どおり "Starting match…" で相手を待ち、相手側には何も出ない。初回の開始 (U31) の "Waiting for your friend…" / "Friend is ready!" に揃えるかも未定。' },
   { id: 'U16', title: '青 / 緑のバナーをタップしてロビーに戻れるか',
     desc: '図02 で "Ready to start" と "Match code expired" はタップで遷移するが、"Waiting for your friend…" と "Friend joined!" のタップは描かれていない。',
     options: [{ value: 'no', label: 'タップできない (図02)' }, { value: 'yes', label: 'タップでロビーへ' }], default: 'no' },
   { id: 'U17', title: 'ホストが戻ったときクライアントに "Friend joined!" を再表示するか',
-    desc: '図02 では Away → Friend joined! → Ready の順。すでに一度 Ready だった場合も同じか。ホスト離席中にクライアントが退出した場合のホスト側表示も図に無い。' },
+    desc: '図02 では Away → Friend joined! → Ready の順。すでに一度 Ready だった場合も同じか。ホスト離席中にクライアントが退出した場合のホスト側表示も図に無い。' +
+      'ホストが戻って Ready になったあとも、開始には両者の Start Match が必要 (U31 で決定)。' },
   { id: 'U18', title: 'クライアントが別画面にいる間に期限切れになったときのクライアント側',
     desc: '図07 はホスト側のみ。モックではクライアントに "Match code expired" トーストを出し、タップで "Match expired." を表示している。' },
   { id: 'U19', title: 'Connection lost から ‹ で戻ると青い "Waiting for your friend…" バナー',
@@ -576,7 +609,8 @@ var UNDECIDED = [
   { id: 'U22', title: '対戦後のボタン構成と文言',
     desc: '"Rematch" / "Back to Friend Match" は仮。ゲームの UI キットには "REMATCH" ボタンがある。ほかのボタン (Online Battle へ戻るなど) が要るか、文言や大文字・小文字も未定。' },
   { id: 'U23', title: '再戦の有無と進め方',
-    desc: '再戦できるか、両者の同意が必要か、VS 画面を挟むか、同じ Match Code (同じマッチ) を使うか。モックは中立な仮の流れとして、押した側に "Waiting for your friend…"、相手に "Your friend wants a rematch" を出し、両者が押したら VS 画面からやり直す。' },
+    desc: '再戦できるか、両者の同意が必要か、VS 画面を挟むか、同じ Match Code (同じマッチ) を使うか。モックは中立な仮の流れとして、押した側に "Waiting for your friend…"、相手に "Your friend wants a rematch" を出し、両者が押したら VS 画面からやり直す。' +
+      'U31 の決定 (両者が Start Match を押したら開始) は初回の開始についてのもので、再戦でもロビーに戻って両者の Start Match を挟むのか、両者の Rematch だけで開始するのかは決まっていない。' },
   { id: 'U24', title: '対戦後の戻り先',
     desc: 'モックでは "Back to Friend Match" で Friend Match トップ (Match Code 入力欄は空) に戻る。Online Battle や、同じマッチのロビーに戻る案もありうる。' },
   { id: 'U25', title: '結果画面で相手が先に抜けた・切断したときの表示',
@@ -591,9 +625,23 @@ var UNDECIDED = [
     desc: 'ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。' },
   { id: 'U30', title: '再戦の申し込みの取り消し・応答待ちのタイムアウト',
     desc: 'モックでは Rematch を押したあと取り消せない (待機中の Rematch は押せない)。相手が応じないときのタイムアウトや、申し込まれた側が断る手段も未定。' },
-  { id: 'U31', title: '開始は両者の Start Match か、Ready 後の自動開始か',
-    desc: 'U2 から分けた残りの論点 (U2 のカウントダウンの部分は決定済み)。図では両者が Start Match を押し、先に押した側は "Starting match…" で相手を待つ。Ready になったら自動で開始する案もありうる。どちらでも、開始後は VS 画面 → ゲーム本体のカウントダウン。',
-    options: [{ value: 'both', label: '両者が Start Match を押す (図01)' }, { value: 'auto', label: 'Ready 後に自動で開始' }], default: 'both' },
+  { id: 'U31', title: '開始は両者が Start Match を押してから',
+    desc: 'U2 から分けた残りの論点。両者が Start Match を押したら開始する (Ready 後の自動開始はしない)。片方が押すと、押した側は待機表示 ("Waiting for your friend…"、Start Match は無効表示)、' +
+      '相手側には相手が準備完了であること ("Friend is ready!") を表示する。両者が押すと "Starting match…" (同期) → VS 画面 → ゲーム本体のカウントダウン。' +
+      '図01 では先に押した側は "Starting match…" で相手を待つが、モックでは決定に合わせて "Waiting for your friend…" にした (表記差分)。表示の細部は U36、片方だけ押した状態での切断・放置は U33、キャンセル・退出は U34、離席は U35。',
+    decided: { by: '高宮さん', date: '2026-10-03' } },
   { id: 'U32', title: 'ゲーム本体のカウントダウン中に相手が切断したとき',
     desc: 'VS 画面中の切断 (U3) と対戦中の切断 (U28) の間にある、ゲーム画面のカウントダウン (約 3.4 秒) 中に相手が切断した場合の扱いと画面は決まっていない。モックには遷移行が無い。' },
+  { id: 'U33', title: '片方だけ Start Match を押した状態で、相手が切断した / いつまでも押さないとき',
+    desc: 'U31 の決定で、片方が押すと相手が押すまで待つ。その間に相手が切断した場合や、相手がいつまでも押さない場合の扱い (タイムアウトするか、キャンセルになるか、押した側が押したことを取り消せるか) は決まっていない。' +
+      'モックには遷移行が無い (片方が押したあとは「通信が不安定になる」などの環境イベントを出せず、押した側の Start Match は無効表示のまま)。' },
+  { id: 'U34', title: '片方が Start Match を押したあとの Cancel Match / Leave Match',
+    desc: '片方が押して相手を待っている間に、ホストが Cancel Match、またはクライアントが Leave Match を押したときの扱いは図に無い。押した側が自分でキャンセル・退出する場合と、準備完了の相手を残してキャンセル・退出する場合がある。' +
+      'モックでは Ready からのキャンセル (図04: クライアントに "cancelled the match.") ・退出 (図05: ホストに "left the match." → 待機に戻る) と同じ結果を仮に置いている。相手に何を伝えるかは未定。' },
+  { id: 'U35', title: '片方が Start Match を押したあとに別画面へ移る (‹) とき',
+    desc: '押した側、または準備完了の相手を待たせている側が ‹ で別画面へ移ったときの扱いは図に無い。マッチを維持してトーストを出すのか (図02 / 図07 のように)、押したことが取り消されるのかが未定。' +
+      'クライアントが押したあとにホストが離れた場合の "Ready to start" トーストの扱いも未定。モックには遷移行が無い (‹ は押せない)。' },
+  { id: 'U36', title: '片方が Start Match を押したあとの表示の細部',
+    desc: 'U31 で決まったのは「押した側は待機表示、相手側には相手が準備完了であることを表示」まで。モックの文言 (押した側の "Waiting for your friend…"、相手側の名前の下の "Friend is ready!")、' +
+      '押した側の Start Match を無効表示にするか隠すか、ホスト・クライアントで同じ表示にするかは仮。' },
 ];

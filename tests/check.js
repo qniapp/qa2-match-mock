@@ -42,11 +42,13 @@ for (const [name, d] of Object.entries(DIALOGS)) {
   for (const u of d.undecided || []) if (!undecidedIds.has(u)) fail(`dialog ${name}: 未定義の未決 ${u}`);
 }
 
-// 決定済みの項目: 理由と前提があり、トグル (options) は残っていない
+// 決定済みの項目: 誰がいつ決めたかがあり、トグル (options) は残っていない。理由と前提は決定にあれば書く
 for (const u of UNDECIDED.filter((x) => x.decided)) {
-  for (const k of ['by', 'date', 'reason', 'premise']) if (!u.decided[k]) fail(`${u.id}: 決定の ${k} が無い`);
+  for (const k of ['by', 'date']) if (!u.decided[k]) fail(`${u.id}: 決定の ${k} が無い`);
   if (u.options) fail(`${u.id}: 決定済みなのにトグルが残っている`);
 }
+const u2 = UNDECIDED.find((u) => u.id === 'U2');
+if (!u2 || !u2.decided || !u2.decided.reason || !u2.decided.premise) fail('U2 の決定に理由と前提が無い');
 for (const u of UNDECIDED) {
   if (UNDECIDED.filter((x) => x.id === u.id).length > 1) fail(`未決 ${u.id} が重複`);
 }
@@ -93,6 +95,32 @@ for (const sc of SCENARIOS) {
   }
 }
 
+// 決定 (U31): 開始は両者の Start Match だけ。Ready 後の自動開始 (sys.autoStart・U31 トグル・シナリオ 1b の別案) は残っていない
+const u31 = UNDECIDED.find((u) => u.id === 'U31');
+if (!u31 || !u31.decided) fail('U31 が決定済みになっていない');
+for (const id of ['U33', 'U34', 'U35', 'U36']) if (!openIds.has(id)) fail(`未決 ${id} が無い`);
+if (EVENT_LABELS['sys.autoStart']) fail('sys.autoStart のラベルが残っている');
+for (const r of TRANSITIONS) {
+  if (r.event === 'sys.autoStart') fail(`${r.id}: 自動開始の sys.autoStart が残っている`);
+  if (r.when && 'U31' in r.when) fail(`${r.id}: U31 のトグル条件が残っている`);
+  if (r.event === 'sys.bothStarted' && (r.from.host !== 'H_STARTING' || r.from.client !== 'C_STARTING')) fail(`${r.id}: 両者が押す前に開始する`);
+}
+for (const sc of SCENARIOS) {
+  if (sc.opts && 'U31' in sc.opts) fail(`シナリオ ${sc.id} が U31 のトグルを前提にしている`);
+  if (sc.steps.some((st) => Engine.stepEvent(st) === 'sys.autoStart')) fail(`シナリオ ${sc.id} に sys.autoStart が残っている`);
+  if (/自動開始|自動で開始/.test(sc.title)) fail(`シナリオ ${sc.id} が自動開始の別案のまま`);
+}
+// Ready のまま、または片方だけ押した状態からは、自動遷移でも環境イベントでも VS 画面に進まない
+const toVs = (r) => r.to.host === 'H_VS' || r.to.client === 'C_VS';
+for (const h of ['H_READY', 'H_READY_WAITING', 'H_READY_PEER_READY']) {
+  for (const c of ['C_READY', 'C_READY_WAITING', 'C_READY_PEER_READY']) {
+    for (const r of TRANSITIONS) {
+      const st = Object.assign(Engine.initialState(), { host: h, client: c });
+      if (toVs(r) && Engine.findRow(st, r.event) === r) fail(`${h} / ${c} から ${r.id} (${r.event}) で VS 画面へ進む`);
+    }
+  }
+}
+
 const at = (host, client) => Object.assign(Engine.initialState(), { host, client });
 const expectFire = (from, event, host, client) => {
   const res = Engine.fire(from, event);
@@ -121,6 +149,46 @@ for (const sc of SCENARIOS) {
   });
 }
 console.log('ok  VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (両端末)');
+
+// 決定 (U31): どちらが先に押しても、1 回目で「押した側は待機 / 相手側は Friend is ready!」、2 回目で開始 → VS 画面
+const startOrders = [
+  ['host', 'client', 'H_READY_WAITING', 'C_READY_PEER_READY'],
+  ['client', 'host', 'H_READY_PEER_READY', 'C_READY_WAITING'],
+];
+for (const [first, second, h1, c1] of startOrders) {
+  const s1 = expectFire(at('H_READY', 'C_READY'), `${first}.startMatch`, h1, c1);
+  if (!s1) continue;
+  if (Engine.canFire(s1, `${first}.startMatch`)) fail(`${first} が押したあとも Start Match を押せる`);
+  for (const ev of ['net.unstable', 'host.back', 'client.back', 'timer.codeExpired']) {
+    if (Engine.canFire(s1, ev)) fail(`片方だけ押した状態 ${h1} / ${c1} で ${ev} の行がある (U33 / U35 で未決)`);
+  }
+  const s2 = expectFire(s1, `${second}.startMatch`, 'H_STARTING', 'C_STARTING');
+  if (s2) expectFire(s2, 'sys.bothStarted', 'H_VS', 'C_VS');
+}
+const presserScreens = { H_READY_WAITING: 'host', C_READY_WAITING: 'client' };
+for (const [name, dev] of Object.entries(presserScreens)) {
+  const s = SCREENS[name];
+  if (s.status !== 'Waiting for your friend…') fail(`${name} の表示が "Waiting for your friend…" でない`);
+  const startBtn = s.buttons.find((b) => b.label === 'Start Match');
+  if (!startBtn || !startBtn.disabled || startBtn.event) fail(`${name} の Start Match が無効表示になっていない`);
+  if (!s.buttons.some((b) => b.label === (dev === 'host' ? 'Cancel Match' : 'Leave Match'))) fail(`${name} にキャンセル / 退出のボタンが無い`);
+}
+for (const name of ['H_READY_PEER_READY', 'C_READY_PEER_READY']) {
+  const s = SCREENS[name];
+  if (!s.peerReady) fail(`${name} に "Friend is ready!" の表示が無い`);
+  if (!s.buttons.some((b) => b.event === 'startMatch' && !b.disabled)) fail(`${name} で Start Match を押せない`);
+}
+if (!/Friend is ready!/.test(read('js', 'app.js'))) fail('app.js に "Friend is ready!" の描画が無い');
+// シナリオ 1 (ホストが先) と 1b (クライアントが先): 1 回目・2 回目の押下と VS 画面
+for (const [id, afterFirst] of [['1', 'H_READY_WAITING / C_READY_PEER_READY'], ['1b', 'H_READY_PEER_READY / C_READY_WAITING']]) {
+  const sc = SCENARIOS.find((x) => x.id === id);
+  if (!sc) { fail(`シナリオ ${id} が無い`); continue; }
+  const i = sc.steps.findIndex((st) => /\.startMatch$/.test(Engine.stepEvent(st)));
+  const got = [i + 1, i + 2, i + 3].map((n) => { const st = Engine.replay(sc, n).state; return `${st.host} / ${st.client}`; });
+  const want = [afterFirst, 'H_STARTING / C_STARTING', 'H_VS / C_VS'];
+  if (got.join() !== want.join()) fail(`シナリオ ${id} の開始の流れ ${got.join(' → ')} (期待: ${want.join(' → ')})`);
+}
+console.log('ok  U31: 両者の Start Match で開始 (ホストが先 / クライアントが先)、自動開始なし');
 
 // 対戦後 (Win / Lose) の遷移
 const inGame = at('H_GAME', 'C_GAME');

@@ -234,6 +234,8 @@
     var html = (buttons || []).filter(function (b) {
       return !(b.hideIfNoRow && !Engine.canFire(app.state, dev + '.' + b.event));
     }).map(function (b) {
+      // disabled はゲーム内の無効表示 (押したあとの Start Match)。遷移表に行が無いときの破線とは別
+      if (b.disabled) return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + ' is-disabled" disabled>' + esc(b.label) + '</button>';
       return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
     }).join('');
     return html ? '<div class="actions">' + html + '</div>' : '';
@@ -278,6 +280,7 @@
         '<div class="code">' + MATCH_CODE + '</div>' +
         '<div class="status-block">' +
         (s.name ? '<div class="peer">' + esc(s.name) + '</div>' : '') +
+        (s.peerReady ? '<div class="peer-ready">Friend is ready!</div>' : '') +
         '<div class="status' + (s.name ? '' : ' solo') + '">' + esc(s.status).replace(/\n/g, '<br>') + '</div>' +
         '</div></div>' + buttonsHtml(dev, s.buttons);
     },
@@ -580,7 +583,8 @@
         var d = u.decided;
         return '<li id="u-' + u.id + '" class="decided"><div class="u-head"><span class="pill-decided">決定 ' + u.id + '</span> ' + esc(u.title) +
           ' <small>(' + esc(d.by) + ' ' + esc(d.date) + ')</small></div><p>' + esc(u.desc) + '</p>' +
-          '<p><b>理由:</b> ' + esc(d.reason) + '</p><p><b>前提:</b> ' + esc(d.premise) + '</p></li>';
+          (d.reason ? '<p><b>理由:</b> ' + esc(d.reason) + '</p>' : '') +
+          (d.premise ? '<p><b>前提:</b> ' + esc(d.premise) + '</p>' : '') + '</li>';
       }
       var opts = u.options ? '<div class="u-options">' + u.options.map(function (o) {
         var checked = app.opts[u.id] === o.value ? ' checked' : '';

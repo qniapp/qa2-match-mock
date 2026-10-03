@@ -278,6 +278,39 @@ for (const [id, [mid, last]] of Object.entries(pauseEnds)) {
 }
 console.log('ok  ポーズ: 開く / CONTINUE / QUIT (両端末)、REMATCH は行なし');
 
+// 決定 (U13a): ランダム対戦は相手が見つかり次第 VS 画面へ。Ready / Start Match / Starting match… を挟まない (U31 は Friend Match だけ)。
+// 相手を探す画面は "Searching for an opponent…" と大きな Cancel で、Cancel は Online Battle へ戻る
+const u13a = UNDECIDED.find((u) => u.id === 'U13a');
+if (!u13a || !u13a.decided) fail('U13a が決定済みになっていない');
+if (!openIds.has('U13')) fail('U13 (ランダム対戦の残り) が未決として残っていない');
+if (!/Friend Match/.test(u31.title)) fail('U31 の題名が Friend Match だけの決定になっていない');
+expectFire(at('H_RANDOM_WAITING', 'C_RANDOM_WAITING'), 'sys.opponentFound', 'H_VS', 'C_VS');
+expectFire(at('H_RANDOM_WAITING', 'C_ONLINE'), 'host.cancelSearch', 'H_ONLINE', 'C_ONLINE');
+expectFire(at('H_ONLINE', 'C_RANDOM_WAITING'), 'client.cancelSearch', 'H_ONLINE', 'C_ONLINE');
+const randomStates = ['H_RANDOM_WAITING', 'C_RANDOM_WAITING'];
+const friendStart = /READY|STARTING|START_FAILED/;
+for (const r of TRANSITIONS) {
+  const fromRandom = Engine.DEVICES.some((d) => states(r.from[d]).some((s) => randomStates.includes(s)));
+  if (fromRandom && Engine.DEVICES.some((d) => friendStart.test(r.to[d]))) fail(`${r.id}: ランダム対戦から ${r.to.host} / ${r.to.client} (Ready / Start Match) へ進む`);
+  if (r.event === 'sys.opponentFound' && !r.decided.includes('U13a')) fail(`${r.id}: 相手が見つかる行に決定 U13a が無い`);
+  if (r.decided.includes('U31') && Engine.DEVICES.some((d) => states(r.from[d]).some((s) => randomStates.includes(s)))) fail(`${r.id}: ランダム対戦の行に U31 が付いている`);
+}
+for (const name of randomStates) {
+  const s = SCREENS[name];
+  if (s.status !== 'Searching for an opponent…') fail(`${name} の表示が "Searching for an opponent…" でない`);
+  if (s.toast) fail(`${name} にトーストが残っている`);
+  const labels = s.buttons.map((b) => b.label).join();
+  if (labels !== 'Cancel' || !s.buttons[0].big || s.buttons[0].event !== 'cancelSearch') fail(`${name} のボタンが大きな Cancel だけでない (${labels})`);
+}
+const sc11 = SCENARIOS.find((x) => x.id === '11');
+const got11 = sc11 ? [2, 3, 4, 5].map((n) => pair(Engine.replay(sc11, n).state)).join(' → ') : 'なし';
+const want11 = 'H_RANDOM_WAITING / C_RANDOM_WAITING → H_VS / C_VS → H_GAME_COUNTDOWN / C_GAME_COUNTDOWN → H_GAME / C_GAME';
+if (got11 !== want11) fail(`シナリオ 11 の流れ ${got11} (期待: ${want11})`);
+const sc11b = SCENARIOS.find((x) => x.id === '11b');
+const got11b = sc11b ? [1, 2].map((n) => pair(Engine.replay(sc11b, n).state)).join(' → ') : 'なし';
+if (got11b !== 'H_RANDOM_WAITING / C_ONLINE → H_ONLINE / C_ONLINE') fail(`シナリオ 11b の流れ ${got11b}`);
+console.log('ok  U13a: ランダム対戦は相手が見つかり次第 VS 画面、Searching + Cancel、Cancel で Online Battle');
+
 // 端末の画面にはゲームが出すものだけ: 決定の注記や「決定」バッジは端末の中にも端末の上にも出さない (右パネルへ)
 const appJs = read('js', 'app.js');
 if (/decided-note|decidedNoteHtml|GAME_COUNTDOWN_PREMISE/.test(appJs)) fail('app.js が端末の画面に決定の注記を出している');

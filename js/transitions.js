@@ -76,7 +76,8 @@ var TRANSITIONS = (function () {
 
   // === Online Battle / Friend Match トップ ===
   T({ from: { host: 'H_ONLINE', client: '*' }, event: 'host.friendMatch', to: { host: 'H_TOP', client: '*' } });
-  T({ from: { host: 'H_ONLINE', client: '*' }, event: 'host.randomMatch', to: { host: 'H_RANDOM_WAITING', client: '*' }, undecided: ['U13'] });
+  T({ from: { host: 'H_ONLINE', client: '*' }, event: 'host.randomMatch', to: { host: 'H_RANDOM_WAITING', client: '*' },
+    note: '決定 (U13a): 相手を探す画面 ("Searching for an opponent…" と Cancel)', decided: ['U13a'] });
   T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.back', to: { host: 'H_ONLINE', client: '*' } });
   T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.createMatch', when: { createResult: 'connFailed' },
     to: { host: 'H_TOP_CONN_FAILED', client: '*' }, note: 'モック設定「Create Match の結果 = 接続失敗」のとき', undecided: ['U6'] });
@@ -84,7 +85,8 @@ var TRANSITIONS = (function () {
   T({ from: { host: 'H_TOP_CONN_FAILED', client: '*' }, event: 'host.tapToast', to: { host: 'H_TOP', client: '*' }, undecided: ['U6'] });
 
   T({ from: { host: '*', client: 'C_ONLINE' }, event: 'client.friendMatch', to: { host: '*', client: 'C_TOP' } });
-  T({ from: { host: '*', client: 'C_ONLINE' }, event: 'client.randomMatch', to: { host: '*', client: 'C_RANDOM_WAITING' }, undecided: ['U13'] });
+  T({ from: { host: '*', client: 'C_ONLINE' }, event: 'client.randomMatch', to: { host: '*', client: 'C_RANDOM_WAITING' },
+    note: '決定 (U13a): 相手を探す画面 ("Searching for an opponent…" と Cancel)', decided: ['U13a'] });
   T({ from: { host: '*', client: C_TOP_ANY }, event: 'client.back', to: { host: '*', client: 'C_ONLINE' } });
   T({ from: { host: '*', client: 'C_TOP' }, event: 'client.enterCode', to: { host: '*', client: 'C_TOP_CODE' }, note: 'モックでは入力欄タップで QWERTY123 を入力' });
   T({ from: { host: '*', client: 'C_TOP_CONN_FAILED' }, event: 'client.tapToast', to: { host: '*', client: 'C_TOP_CODE' }, undecided: ['U6'] });
@@ -311,15 +313,17 @@ var TRANSITIONS = (function () {
   T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'net.lostDuringVs', when: { U3: 'online' },
     to: { host: 'H_ONLINE', client: 'C_ONLINE' }, note: 'U3 別案: Online Battle へ', undecided: ['U3'] });
 
-  // === ランダム対戦 (図00, 09-30 の旧案) ===
-  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.cancelMatch',
-    to: { host: 'H_ONLINE', client: '*' }, note: '確認ダイアログの有無は不明', undecided: ['U13'] });
-  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.back', to: { host: 'H_ONLINE', client: '*' }, undecided: ['U13'] });
-  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.cancelMatch',
-    to: { host: '*', client: 'C_ONLINE' }, note: '確認ダイアログの有無は不明', undecided: ['U13'] });
-  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.back', to: { host: '*', client: 'C_ONLINE' }, undecided: ['U13'] });
+  // === ランダム対戦 (決定 U13a: 相手が見つかり次第 VS 画面へ。Ready / Start Match は挟まない。U31 は Friend Match だけ) ===
   T({ from: { host: 'H_RANDOM_WAITING', client: 'C_RANDOM_WAITING' }, event: 'sys.opponentFound', auto: 2500,
-    to: { host: 'H_VS', client: 'C_VS' }, note: '合意: 対戦相手が見つかったら VS 画面', undecided: ['U13'] });
+    to: { host: 'H_VS', client: 'C_VS' }, note: '決定 (U13a): 相手が見つかり次第 VS 画面へ。Ready / Start Match は無い (U31 は Friend Match だけ)', decided: ['U13a'] });
+  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.cancelSearch',
+    to: { host: 'H_ONLINE', client: '*' }, note: '決定 (U13a): Cancel で Online Battle へ。確認を挟むかは未決 (モックは確認なし)', decided: ['U13a'], undecided: ['U13'] });
+  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.cancelSearch',
+    to: { host: '*', client: 'C_ONLINE' }, note: '決定 (U13a): Cancel で Online Battle へ。確認を挟むかは未決 (モックは確認なし)', decided: ['U13a'], undecided: ['U13'] });
+  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.back', to: { host: 'H_ONLINE', client: '*' },
+    note: '仮: ‹ も Cancel と同じく Online Battle へ', undecided: ['U13'] });
+  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.back', to: { host: '*', client: 'C_ONLINE' },
+    note: '仮: ‹ も Cancel と同じく Online Battle へ', undecided: ['U13'] });
 
   // === 対戦後 (図なし、すべて未決) ===
   // Win / Lose は端末の下のモック操作。勝敗判定そのものはモックの対象外
@@ -367,6 +371,7 @@ var EVENT_LABELS = {
   'host.joinMatch': 'ホスト: Join Match を押す',
   'host.startMatch': 'ホスト: Start Match を押す',
   'host.cancelMatch': 'ホスト: Cancel Match を押す',
+  'host.cancelSearch': 'ホスト: 相手を探している間に Cancel を押す',
   'host.back': 'ホスト: ‹ (戻る / 別画面へ)',
   'host.tapToast': 'ホスト: トーストをタップ',
   'host.pause': 'ホスト: ポーズボタン (II) を押す',
@@ -388,7 +393,7 @@ var EVENT_LABELS = {
   'client.joinMatch': 'クライアント: Join Match を押す',
   'client.startMatch': 'クライアント: Start Match を押す',
   'client.leaveMatch': 'クライアント: Leave Match を押す',
-  'client.cancelMatch': 'クライアント: Cancel Match を押す',
+  'client.cancelSearch': 'クライアント: 相手を探している間に Cancel を押す',
   'client.back': 'クライアント: ‹ (戻る / 別画面へ)',
   'client.tapToast': 'クライアント: トーストをタップ',
   'client.pause': 'クライアント: ポーズボタン (II) を押す',
@@ -427,7 +432,6 @@ var TOASTS = {
   expired: { kind: 'darkred', text: 'Match code expired', tap: 'tapToast' },
   failed: { kind: 'grey', text: 'Connection failed', tap: 'tapToast' },
   lost: { kind: 'grey', text: 'Connection lost' },
-  random: { kind: 'pink', text: 'Waiting for opponent' },
 };
 
 // ポーズポップアップ (実機の Menu_Pause)。ボタンの event はデバイス名を除いたもの。REMATCH には行が無い (U39)
@@ -444,6 +448,8 @@ var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。
 // 結果画面の仮の点。端末の画面には出さず (未決は端末の上の帯)、右パネルの説明に出す
 var RESULT_CONTEXT = '結果画面 (図なしの仮の画面、U20)。Rank の変化と Score はどちらも仮の表示で、Score の ---- は値が決まっていないため (U21)。Rematch の扱いは U23、Back to Friend Match の戻り先は U24。';
 var RESULT_WAIT_CONTEXT = [RESULT_CONTEXT, '自分が申し込んで待っている間の Rematch (取り消し) は U30 で、行が無く押せない。'];
+var MATCHMAKE_CONTEXT = 'ランダム対戦で相手を探している画面 (決定 U13a)。相手が見つかり次第 VS 画面へ進む (Start Match は無い)。' +
+  'Cancel で Online Battle へ戻る (確認を挟むかは未決 U13、モックは確認なし)。席を外したとき・タイムアウトの扱いも未決 (U13)。';
 var GAME_PAUSED_CONTEXT = 'ポーズポップアップ (実機の VsAI と同じ見た目)。REMATCH は仮の文言で行なし (U39)、QUIT は Online Battle へ (仮、U41)。' +
   '相手の端末は変えていない (仮置き、U38)。実機の VsPlayer ではポーズボタン自体が出ない (U37)。';
 
@@ -455,7 +461,13 @@ var SCREENS = (function () {
     pressed: { label: 'Start Match', primary: true, disabled: true },
     cancel: { label: 'Cancel Match', event: 'cancelMatch' },
     leave: { label: 'Leave Match', event: 'leaveMatch' },
+    // ランダム対戦で相手を探している間の Cancel (決定 U13a)。席を外す人のために大きく出す
+    search: { label: 'Cancel', event: 'cancelSearch', big: true },
   };
+  function matchmake() {
+    return { view: 'random', title: 'Random Match', back: 'back', status: 'Searching for an opponent…',
+      buttons: [B.search], decided: ['U13a'], undecided: ['U13'], context: MATCHMAKE_CONTEXT };
+  }
   function online(dev) {
     return { view: 'online', title: 'ONLINE BATTLE', back: null, items: [
       { label: 'Random Match', event: 'randomMatch' }, { label: 'Friend Match', event: 'friendMatch' }] };
@@ -502,8 +514,7 @@ var SCREENS = (function () {
         : { view: 'stage', back: 'back', toast: awayToast[s], undecided: u };
     });
   });
-  S.H_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
-    buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
+  S.H_RANDOM_WAITING = matchmake();
   S.H_VS = { view: 'vs', undecided: [] };
   // ゲーム画面: カウントダウン中 (ポーズボタンなし・Win / Lose は押せない) → プレイ中 → ポーズ中
   S.H_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
@@ -535,8 +546,7 @@ var SCREENS = (function () {
   S.C_MATCH_EXPIRED = lobby({ status: 'Match expired.', undecided: ['U7'] });
   S.C_AWAY_STAGE_READY = { view: 'stage', back: 'back', toast: 'ready' };
   S.C_AWAY_STAGE_EXPIRED = { view: 'stage', back: 'back', toast: 'expired', undecided: ['U18'] };
-  S.C_RANDOM_WAITING = { view: 'random', title: 'Random Match', back: 'back', status: 'Waiting for opponent…',
-    buttons: [B.cancel], toast: 'random', undecided: ['U13'] };
+  S.C_RANDOM_WAITING = matchmake();
   S.C_VS = { view: 'vs' };
   S.C_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
   S.C_GAME = { view: 'game', context: GAME_CONTEXT };
@@ -623,9 +633,15 @@ var UNDECIDED = [
     desc: '"Cancel this match?" は合意で "Keep Waiting" にしたが、"Leave this match?" の "Go Back" は合意の対象外。"Stay in Match" などに揃えるか。' },
   { id: 'U12', title: '"Create a new match?" / "Join another match?" の本文と影響',
     desc: '10-01 の合意でボタンは [Create Match]/[Join Match] + [Keep Current Match]。本文は残っている図に無いので仮に "Your current Match Code will no longer be valid." を表示。古いマッチに入っていたクライアントの扱いも未定 (モックでは "cancelled the match.")。' },
-  { id: 'U13', title: 'ランダム対戦の待機・離脱・Ready の扱い',
-    desc: 'ランダム対戦は 09-30 の旧案 (図00) のみで、10-02 の図に無い。トースト・離席・Ready / Start Match・キャンセル確認の有無が未定。' +
-      'U31 の決定 (両者が Start Match を押したら開始) は Friend Match の図01 についてのもので、ランダム対戦でも両者の Start Match を挟むかは決まっていない。モックでは相手が見つかると Start Match なしで VS 画面へ進む (旧案のまま)。' },
+  { id: 'U13', title: 'ランダム対戦の待機中の離席・Cancel の確認・タイムアウト',
+    desc: '相手が見つかり次第 VS 画面へ進むこと、相手を探す画面に "Searching for an opponent…" と Cancel を出すことは U13a で決定済み。' +
+      '残りは決まっていない: 相手を探している間に席を外したとき (別画面へ移る・アプリを離れる) の扱い、Cancel に確認ダイアログを挟むか (モックは確認なしで Online Battle へ)、' +
+      '‹ でも抜けられるか (モックは Cancel と同じく Online Battle へ)、相手が見つからないときのタイムアウトとその表示。' },
+  { id: 'U13a', title: 'ランダム対戦は相手が見つかり次第 VS 画面へ (Start Match なし)',
+    desc: 'U13 から分けた決定。ランダム対戦では、相手が見つかったらすぐ VS 画面へ進む (Ready・Start Match・"Starting match…" は挟まない)。' +
+      '両者が Start Match を押す U31 は Friend Match だけ。相手を探している画面には "Searching for an opponent…" (点が順に光る) と、席を外す人のための大きな Cancel を出す。' +
+      'Cancel を押すと Online Battle の画面に戻る。Cancel に確認を挟むか、離席・タイムアウトの扱いは未決 (U13)。',
+    decided: { by: '高宮さん', date: '2026-10-03' } },
   { id: 'U14', title: 'ホストが ‹ で戻ったときにマッチを維持するか',
     desc: '図02 はバナーを出してマッチを維持する。‹ でキャンセル確認を出す案もありうる。',
     options: [{ value: 'keep', label: '維持してバナー表示 (図02)' }, { value: 'confirm', label: 'キャンセル確認を出す' }], default: 'keep' },
@@ -665,8 +681,8 @@ var UNDECIDED = [
     desc: 'ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。' },
   { id: 'U30', title: '再戦の申し込みの取り消し・応答待ちのタイムアウト',
     desc: 'モックでは Rematch を押したあと取り消せない (待機中の Rematch は押せない)。相手が応じないときのタイムアウトや、申し込まれた側が断る手段も未定。' },
-  { id: 'U31', title: '開始は両者が Start Match を押してから',
-    desc: 'U2 から分けた残りの論点。両者が Start Match を押したら開始する (Ready 後の自動開始はしない)。片方が押すと、押した側は待機表示 ("Waiting for your friend…"、Start Match は無効表示)、' +
+  { id: 'U31', title: 'Friend Match の開始は両者が Start Match を押してから',
+    desc: 'U2 から分けた残りの論点。Friend Match では、両者が Start Match を押したら開始する (Ready 後の自動開始はしない)。ランダム対戦には Start Match が無く、相手が見つかり次第 VS 画面へ進む (U13a)。片方が押すと、押した側は待機表示 ("Waiting for your friend…"、Start Match は無効表示)、' +
       '相手側には相手が準備完了であること ("Friend is ready!") を表示する。両者が押すと "Starting match…" (同期) → VS 画面 → ゲーム本体のカウントダウン。' +
       '図01 では先に押した側は "Starting match…" で相手を待つが、モックでは決定に合わせて "Waiting for your friend…" にした (表記差分)。表示の細部は U36、片方だけ押した状態での切断・放置は U33、キャンセル・退出は U34、離席は U35。',
     decided: { by: '高宮さん', date: '2026-10-03' } },

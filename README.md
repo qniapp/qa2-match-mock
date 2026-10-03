@@ -73,6 +73,8 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_
 開始 (U31 で決定) については、ホストが先・クライアントが先のどちらでも、1 回目の Start Match で「押した側は待機 / 相手側は "Friend is ready!"」、
 2 回目で "Starting match…"、続く自動遷移で VS 画面になること、Ready のままや片方だけ押した状態から VS 画面へ進む行が無いこと、
 自動開始 (`sys.autoStart`・U31 のトグル・シナリオの別案) が残っていないことを確認します。
+ランダム対戦 (U13a で決定) については、相手が見つかると両端末とも直接 VS 画面になること、ランダム対戦の状態から Ready / Start Match / "Starting match…" へ進む行が無いこと、
+相手を探す画面が "Searching for an opponent…" と大きな Cancel だけ (トーストなし) であること、Cancel で Online Battle に戻ること、シナリオ 11 / 11b の流れを確認します。
 ポーズについては、両端末とも II でポーズ (`H_GAME_PAUSED` / `C_GAME_PAUSED`)、CONTINUE でプレイに戻り、QUIT で Online Battle に戻ること、
 相手の端末が変わらないこと、REMATCH・二重のポーズ・ポーズ中の Win / Lose・カウントダウン中のポーズに行が無いこと、
 モック専用の "Back to Online Battle" と "Game in progress (mock)" が残っていないことを確認します。
@@ -107,7 +109,8 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_
 | 8 | 無効な Match Code | 08 |
 | 9 | Match Code が期限切れ | 09 |
 | 10 | マッチが満員 | 10 |
-| 11 | ランダム対戦 (旧案) | 00 |
+| 11 | ランダム対戦 (相手が見つかり次第 VS) | 00 + 10-03 の決定 (U13a) |
+| 11b | ランダム対戦 → Cancel で Online Battle へ | 10-03 の決定 (U13a) |
 | 12 | VS 画面中の切断 | なし (合意事項) |
 | 13 | 接続失敗 (仮) | 00 (トーストのみ) |
 | 14 | 離席中に Create Match を押す | なし (10-01 合意) |
@@ -117,9 +120,10 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_
 | 16 | 対戦中にポーズ → 再開 (CONTINUE) | なし (実機の VsAI のポーズ) |
 | 16b | 対戦中にポーズ → QUIT | なし (実機の VsAI のポーズ) |
 
-## 開始は両者の Start Match (2026-10-03 決定、U31)
+## 開始は両者の Start Match (2026-10-03 決定、U31、Friend Match だけ)
 
-高宮さんの決定 (2026-10-03、未決 U31): 両者が Start Match を押したら開始します。Ready になっても自動では開始しません。
+高宮さんの決定 (2026-10-03、未決 U31): Friend Match では、両者が Start Match を押したら開始します。Ready になっても自動では開始しません。
+ランダム対戦には Start Match が無く、相手が見つかり次第 VS 画面へ進みます (U13a、「ランダム対戦は相手が見つかり次第 VS へ」を参照)。
 片方が押すと、押した側は待機表示になり、相手側には相手が準備完了であることを表示します。
 
 ### モックでの表示
@@ -168,7 +172,7 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_
 | ホストの Cancel Match / クライアントの Leave Match | Ready からのキャンセル (図04)・退出 (図05) と同じ結果を仮に置く | U34 |
 | どちらかが ‹ で別画面へ移る (離席) | 遷移行なし (‹ は破線で押せない)。そのため、クライアントが押したあとにホストの "Ready to start" トーストが出る場面も無い | U35 |
 | 再戦 (Rematch) | 今までどおり両者の Rematch で VS 画面へ。ロビーの Start Match は挟まない | U23 |
-| ランダム対戦 | 今までどおり相手が見つかると VS 画面へ (旧案のまま) | U13 |
+| ランダム対戦 | 相手が見つかり次第 VS 画面へ。Start Match は無い (2026-10-03 決定) | U13a (決定) |
 
 Start Match を押す前 (両者 Ready) の通信不安定 (3a/3b/3c)・キャンセル (4/4b)・退出 (5)・離席 (2a/7a/7b) は今までどおりで、続きは両者の Start Match になります。
 U1 の別案 (トーストのタップで開始扱い) は、「ホストが Start Match を押した扱い」に変えました (ホスト "Waiting for your friend…" / クライアント "Friend is ready!")。
@@ -309,6 +313,53 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 | すべての状態 | 遷移表に行が無いボタンの破線・半透明 (例: ポーズの REMATCH、片方だけ押したあとの ‹) | `css/style.css` `.screen [data-norow]` |
 | `H_GAME*` / `C_GAME*`、`H_AWAY_STAGE_*` / `C_AWAY_STAGE_*` | ゲーム画面 (フィールド・HUD) とステージ選択の画面そのものがプレースホルダー | `js/app.js` `VIEWS.game` / `VIEWS.stage` |
 
+## ランダム対戦は相手が見つかり次第 VS へ (2026-10-03 決定、U13a)
+
+高宮さんの決定 (2026-10-03、U13 の一部を U13a として分けた): ランダム対戦では、相手が見つかり次第 VS 画面へ進みます。
+Ready・Start Match・"Starting match…" は挟みません。両者が Start Match を押す U31 は Friend Match だけの決定です。
+相手を探している画面には、相手を探していることが分かる表示と、席を外す人のための目立つ Cancel を出します。
+
+### モックでの表示
+
+| 段階 | 端末の画面 |
+|---|---|
+| Random Match を選ぶ | 見出し "Random Match"、中央に "Searching for an opponent…" と順に光る 3 つの点、下に大きな [Cancel] |
+| 相手が見つかる (自動、約 2.5 秒) | すぐ VS 画面 → ゲーム画面でゲーム本体のカウントダウン → プレイ開始 (Friend Match と同じ) |
+| Cancel を押す | 確認なしで Online Battle の画面 (Random Match / Friend Match を選ぶ画面) に戻る |
+
+- 09-30 の旧案 (図00) にあったピンクのトースト "Waiting for opponent" と、待機画面の "Waiting for opponent…" はやめ、"Searching for an opponent…" にしました (「表記の修正」)。
+- 端末の画面には決定の印を出さず、右パネルの「決定済み」に `決定 U13a` を出します。画面の説明も右パネルの現在の状態の下に出します。
+
+### U13 の分け方
+
+| ID | 状態 | 内容 |
+|---|---|---|
+| U13a | 決定 (高宮さん 2026-10-03) | ランダム対戦は相手が見つかり次第 VS 画面へ (Start Match なし)。相手を探す画面に "Searching for an opponent…" と Cancel。Cancel で Online Battle へ |
+| U13 | 未決 (残り) | 相手を探している間に席を外したとき (別画面へ移る・アプリを離れる) の扱い、Cancel に確認ダイアログを挟むか (モックは確認なし)、‹ でも抜けられるか (モックは Cancel と同じく Online Battle へ)、相手が見つからないときのタイムアウトとその表示 |
+
+### 状態・イベント
+
+| 変更 | 状態 / イベント |
+|---|---|
+| 追加 | イベント `host.cancelSearch` / `client.cancelSearch` (相手を探している間の Cancel → Online Battle、決定 U13a、確認の有無は U13) |
+| 削除 | イベント `client.cancelMatch` (ランダム対戦でだけ使っていた)、トースト `random` (ピンクの "Waiting for opponent") |
+| 意味を明確化 | `sys.opponentFound` (相手を探す 2 端末 → VS 画面) に決定 U13a を付けた。ランダム対戦の状態から Ready / Start Match / "Starting match…" へ進む行は無い (`tests/check.js` で確認) |
+
+遷移表は 135 行のままです (ランダム対戦の 5 行を、相手が見つかる 1 行・Cancel の 2 行・‹ の 2 行に書き直した)。
+シナリオ 11 を「ランダム対戦 (相手が見つかり次第 VS)」に書き直し、11b「ランダム対戦 → Cancel で Online Battle へ」を追加しました。
+11 の手順の数は変わらない (5 手順) ので、既存の `#s=11&step=..` はそのまま使えます。
+
+- `index.html#s=11&step=2` - 両者が相手を探している ("Searching for an opponent…" と Cancel)
+- `index.html#s=11&step=3` - 相手が見つかり、すぐ VS 画面
+- `index.html#s=11b&step=1` - ホストだけ相手を探している
+- `index.html#s=11b&step=2` - ホストが Cancel で Online Battle に戻った
+
+![ランダム対戦: 相手を探している (Cancel 付き)](docs/screenshots/33-random-searching.png)
+
+![ランダム対戦: 相手が見つかり、すぐ VS 画面](docs/screenshots/34-random-matched-vs.png)
+
+![ランダム対戦: Cancel で Online Battle へ](docs/screenshots/35-random-cancel-online.png)
+
 ## 対戦後 (Win / Lose)
 
 ogwssk さんの図は「カウントダウン & ゲーム開始」で終わっていて、対戦後の画面はありません。
@@ -387,7 +438,7 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
 | "Cancel this match?" の Go Back | Keep Waiting | 合意 3 (10-02 の図は Go Back のまま。未決ではなく表記差分) |
 | Starting match.... (点 4 つ) | Starting match… | 三点リーダーに統一 |
 | Connection Failed (09-30 のトースト) | Connection failed | 合意 2 (sentence case) |
-| Waiting for opponent... | Waiting for opponent… | 三点リーダーに統一 |
+| Waiting for opponent... (09-30 の旧案のピンクのトーストと待機画面) | "Searching for an opponent…" (待機画面の文言、トーストは無し) | U13a の決定 (相手を探す画面に Searching と Cancel を出す)。三点リーダー |
 | 図01 で先に Start Match を押した側の "Starting match…" | "Waiting for your friend…" (相手側には "Friend is ready!") | U31 の決定 (押した側は待機表示、相手側には準備完了を表示)。"Starting match…" は両者が押したあとの同期中と図06 の再試行に残した。文言は U36 |
 
 "Leave this match?" の "Go Back" は合意の対象外なので図のまま残し、未決 U11 にしています。
@@ -406,10 +457,14 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
   前提として、ゲーム側で VsPlayer の modeStartAnimationType を None から Countdown に変える（設定 1 行）。  
   決定はモックの 3·2·1 をやめることだけで、「両者が Start Match を押すか、Ready 後に自動で開始するか」は決めていません。
   そこでこの残りの論点 (と、そのトグル) を新しい未決 **U31** に分けました。U31 も同じ日に決まりました (下)。
-- **U31 開始は両者が Start Match を押してから** - 決定 (高宮さん 2026-10-03)  
-  両者が Start Match を押したら開始する (Ready 後の自動開始はしない)。片方が押すと、押した側は待機表示、相手側には相手が準備完了であることを表示する。
+- **U31 Friend Match の開始は両者が Start Match を押してから** - 決定 (高宮さん 2026-10-03)  
+  Friend Match では、両者が Start Match を押したら開始する (Ready 後の自動開始はしない)。ランダム対戦には Start Match が無い (U13a)。片方が押すと、押した側は待機表示、相手側には相手が準備完了であることを表示する。
   U31 のトグルと、自動開始の別案だったシナリオ 1b は削除し、1b は「クライアントが先に Start Match」にしました。
   詳しくは「開始は両者の Start Match」を見てください。表示の細部 (U36) と、片方だけ押した状態の扱い (U33〜U35) は未決です。
+- **U13a ランダム対戦は相手が見つかり次第 VS 画面へ (Start Match なし)** - 決定 (高宮さん 2026-10-03、U13 の一部)  
+  相手が見つかったらすぐ VS 画面へ進む (Ready・Start Match・"Starting match…" は挟まない)。両者が Start Match を押す U31 は Friend Match だけ。
+  相手を探している画面には "Searching for an opponent…" (点が順に光る) と、席を外す人のための大きな Cancel を出す。Cancel を押すと Online Battle の画面に戻る。
+  Cancel に確認を挟むか、離席・タイムアウトの扱いは未決のまま U13 に残しました。詳しくは「ランダム対戦は相手が見つかり次第 VS へ」を見てください。
 
 U1 (Ready トーストから VS への入り方) にも同じ決定を当てはめるか確認しましたが、U1 の論点は「トーストをタップしたあと、ロビーの Ready 画面に戻るか、直接開始するか」で、
 3·2·1 には触れていません。そのため U1 は未決のまま残し、「VS 画面のあとの流れは U2 で決定済み」という一文だけを足しました。
@@ -445,9 +500,10 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   "Cancel this match?" は合意で "Keep Waiting" にしたが、"Leave this match?" の "Go Back" は合意の対象外。"Stay in Match" などに揃えるか。
 - **U12 "Create a new match?" / "Join another match?" の本文と影響**  
   10-01 の合意でボタンは [Create Match]/[Join Match] + [Keep Current Match]。本文は残っている図に無いので仮に "Your current Match Code will no longer be valid." を表示。古いマッチに入っていたクライアントの扱いも未定 (モックでは "cancelled the match.")。
-- **U13 ランダム対戦の待機・離脱・Ready の扱い**  
-  ランダム対戦は 09-30 の旧案 (図00) のみで、10-02 の図に無い。トースト・離席・Ready / Start Match・キャンセル確認の有無が未定。
-  U31 の決定 (両者が Start Match を押したら開始) は Friend Match の図01 についてのもので、ランダム対戦でも両者の Start Match を挟むかは決まっていない。モックでは相手が見つかると Start Match なしで VS 画面へ進む (旧案のまま)。
+- **U13 ランダム対戦の待機中の離席・Cancel の確認・タイムアウト**  
+  相手が見つかり次第 VS 画面へ進むこと、相手を探す画面に "Searching for an opponent…" と Cancel を出すことは U13a で決定済み。
+  残りは決まっていない: 相手を探している間に席を外したとき (別画面へ移る・アプリを離れる) の扱い、Cancel に確認ダイアログを挟むか (モックは確認なしで Online Battle へ)、
+  ‹ でも抜けられるか (モックは Cancel と同じく Online Battle へ)、相手が見つからないときのタイムアウトとその表示。
 - **U14 ホストが ‹ で戻ったときにマッチを維持するか**  
   図02 はバナーを出してマッチを維持する。‹ でキャンセル確認を出す案もありうる。  
   トグル: 維持してバナー表示 (図02) (既定) / キャンセル確認を出す
@@ -487,6 +543,7 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。
 - **U30 再戦の申し込みの取り消し・応答待ちのタイムアウト**  
   モックでは Rematch を押したあと取り消せない (待機中の Rematch は押せない)。相手が応じないときのタイムアウトや、申し込まれた側が断る手段も未定。
+- **U13a** - 決定済み (上の「決定済み」を参照)。U13 の残りは上の U13
 - **U31** - 決定済み (上の「決定済み」を参照)
 - **U32 ゲーム本体のカウントダウン中に相手が切断したとき**  
   VS 画面中の切断 (U3) と対戦中の切断 (U28) の間にある、ゲーム画面のカウントダウン (約 3.4 秒) 中に相手が切断した場合の扱いと画面は決まっていない。モックには遷移行が無い。

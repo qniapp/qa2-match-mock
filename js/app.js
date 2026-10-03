@@ -236,7 +236,7 @@
     }).map(function (b) {
       // disabled はゲーム内の無効表示 (押したあとの Start Match)。遷移表に行が無いときの破線とは別
       if (b.disabled) return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + ' is-disabled" disabled>' + esc(b.label) + '</button>';
-      return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+      return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + (b.big ? ' big' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
     }).join('');
     return html ? '<div class="actions">' + html + '</div>' : '';
   }

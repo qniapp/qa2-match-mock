@@ -14,6 +14,7 @@ var SCENARIOS = (function () {
   var clientFirst = ['client.startMatch', 'host.startMatch', 'sys.bothStarted']; // クライアントが先
   var toGame = ['vs.done', 'game.countdownDone']; // VS 画面 → ゲーム本体のカウントダウン → プレイ開始
   var clientOnly = 'このシナリオではホストは関与しない (ホストの端末は Online Battle のまま)';
+  var hostOnly = 'このシナリオではクライアントは関与しない (クライアントの端末は Online Battle のまま)';
   var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (12 手順)
   var postMatch = '対戦後の部分は図が無く、画面もボタンもすべて仮 (未決 U20〜U30)。Win / Lose は端末の下のモック操作で、勝敗判定そのものは対象外。';
   var pause = 'ポーズポップアップは実機の VsAI と同じ見た目 (タイトルなし、CONTINUE / REMATCH / QUIT、確認なし)。ただし実機の VsPlayer (オンライン対戦) ではポーズボタン自体が出ないので、ポーズを出す前提の案 (U37)。' +
@@ -70,9 +71,13 @@ var SCENARIOS = (function () {
     { id: '10', title: 'マッチが満員', diagram: '10', ctx: { codeResult: 'full' }, hostNote: clientOnly,
       desc: 'Match は存在するが、すでにほかの人が入っている。赤字で "The match is already full."。',
       steps: clientJoins },
-    { id: '11', title: 'ランダム対戦 (旧案)', diagram: '00',
-      desc: '09-30 の旧案 (図00)。Random Match で "Waiting for opponent…" とピンクのトースト。相手が見つかったら合意どおり VS 画面 → ゲーム本体のカウントダウン → プレイ開始。10-02 の図に無いので扱いは未決 (U13)。',
+    { id: '11', title: 'ランダム対戦 (相手が見つかり次第 VS)', diagram: '00 + 10-03 の決定 (U13a)',
+      desc: '両者が Random Match を選ぶと、相手を探す画面 ("Searching for an opponent…" と大きな Cancel)。相手が見つかったらすぐ VS 画面へ進み (Ready・Start Match は無い、U13a で決定)、ゲーム本体のカウントダウン → プレイ開始。' +
+        '両者が Start Match を押す U31 は Friend Match だけ。席を外したとき・タイムアウト・Cancel の確認は未決 (U13)。',
       steps: ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound'].concat(toGame) },
+    { id: '11b', title: 'ランダム対戦 → Cancel で Online Battle へ', diagram: '10-03 の決定 (U13a)', clientNote: hostOnly,
+      desc: 'ホストが Random Match を選び、相手を探している間に Cancel を押すと Online Battle の画面に戻る (U13a で決定)。Cancel に確認を挟むかは未決で、モックは確認なし (U13)。',
+      steps: ['host.randomMatch', 'host.cancelSearch'] },
     { id: '12', title: 'VS 画面中の切断', diagram: 'なし (合意事項)',
       desc: 'VS 画面中に相手が切断した場合の戻り先は未決 (U3)。未決パネルのトグルで戻り先を切り替えられる (既定: ロビーで "Connection lost.")。',
       steps: toReady.concat(bothStart, ['net.lostDuringVs']) },

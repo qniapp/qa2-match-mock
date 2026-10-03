@@ -241,7 +241,6 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .toast.red { background: #E5352B; box-shadow: 0 0 18px rgba(229, 53, 43, 0.55); }
 .toast.darkred { background: #5E0B0B; }
 .toast.grey { background: #3A3F4B; }
-.toast.pink { background: #D987B5; }
 
 /* ステージ選択 (別画面の例) */
 .stage-label { padding: 0 24px 10px; font-size: 13px; color: var(--muted); }
@@ -254,7 +253,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .tile .glyph i { display: block; width: 22px; height: 22px; border-radius: 4px; background: var(--c); box-shadow: 0 0 10px var(--c); opacity: 0.85; }
 .tile span { font-size: 13px; min-height: 1.2em; }
 
-/* ランダム対戦の待機アニメーション */
+/* ランダム対戦で相手を探している間の点 (順に光る) */
 .dots { display: flex; gap: 10px; margin-top: 18px; }
 .dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--z); animation: pulse 1.2s infinite ease-in-out; }
 .dots i:nth-child(2) { animation-delay: 0.2s; }

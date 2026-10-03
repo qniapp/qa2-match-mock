@@ -441,6 +441,9 @@ var PAUSE_UNDECIDED = ['U37', 'U38', 'U39', 'U40', 'U41', 'U42'];
 // 右パネルに出す、その状態の画面の説明 (端末の画面の中には出さない)
 var GAME_COUNTDOWN_CONTEXT = 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。終わるとポーズボタンが出てプレイ開始。';
 var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のポーズボタン (II) でポーズポップアップを開く。勝敗は端末の下のモック操作 Win / Lose。';
+// 結果画面の仮の点。端末の画面には出さず (未決は端末の上の帯)、右パネルの説明に出す
+var RESULT_CONTEXT = '結果画面 (図なしの仮の画面、U20)。Rank の変化と Score はどちらも仮の表示で、Score の ---- は値が決まっていないため (U21)。Rematch の扱いは U23、Back to Friend Match の戻り先は U24。';
+var RESULT_WAIT_CONTEXT = [RESULT_CONTEXT, '自分が申し込んで待っている間の Rematch (取り消し) は U30 で、行が無く押せない。'];
 var GAME_PAUSED_CONTEXT = 'ポーズポップアップ (実機の VsAI と同じ見た目)。REMATCH は仮の文言で行なし (U39)、QUIT は Online Battle へ (仮、U41)。' +
   '相手の端末は変えていない (仮置き、U38)。実機の VsPlayer ではポーズボタン自体が出ない (U37)。';
 
@@ -543,8 +546,10 @@ var SCREENS = (function () {
   ['H', 'C'].forEach(function (p) {
     OUTCOMES.forEach(function (o) {
       Object.keys(RESULT_PHASES).forEach(function (ph) {
+        var wait = RESULT_PHASES[ph] === 'wait';
         S[p + '_RESULT_' + o + ph] = { view: 'result', title: 'RESULT', back: null, outcome: o, rematch: RESULT_PHASES[ph],
-          undecided: ['U20', 'U22', 'U26', 'U27'] };
+          undecided: ['U20', 'U21', 'U22', 'U23', 'U24', 'U26', 'U27'].concat(wait ? ['U30'] : []),
+          context: wait ? RESULT_WAIT_CONTEXT : RESULT_CONTEXT };
       });
     });
   });

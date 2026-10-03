@@ -2,7 +2,7 @@
  * シナリオ = 遷移表のイベント列。各手順は TRANSITIONS の 1 行をそのまま再生する。
  *   opts: このシナリオが前提とする未決トグル (選択時に強制される)
  *   ctx:  モック設定 (Join Match / Create Match の結果)
- *   hostNote / clientNote: その端末が関与しないときに端末の上に出す注記
+ *   hostNote / clientNote: その端末が関与しないときに右パネル (現在の状態の下) に出す注記。端末の画面には出さない
  */
 
 var SCENARIOS = (function () {
@@ -13,7 +13,7 @@ var SCENARIOS = (function () {
   var bothStart = ['host.startMatch', 'client.startMatch', 'sys.bothStarted']; // ホストが先
   var clientFirst = ['client.startMatch', 'host.startMatch', 'sys.bothStarted']; // クライアントが先
   var toGame = ['vs.done', 'game.countdownDone']; // VS 画面 → ゲーム本体のカウントダウン → プレイ開始
-  var clientOnly = 'このシナリオではホストは関与しない';
+  var clientOnly = 'このシナリオではホストは関与しない (ホストの端末は Online Battle のまま)';
   var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (12 手順)
   var postMatch = '対戦後の部分は図が無く、画面もボタンもすべて仮 (未決 U20〜U30)。Win / Lose は端末の下のモック操作で、勝敗判定そのものは対象外。';
   var pause = 'ポーズポップアップは実機の VsAI と同じ見た目 (タイトルなし、CONTINUE / REMATCH / QUIT、確認なし)。ただし実機の VsPlayer (オンライン対戦) ではポーズボタン自体が出ないので、ポーズを出す前提の案 (U37)。' +

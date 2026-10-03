@@ -327,31 +327,26 @@
         fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
         (s.paused ? pauseHtml(dev) : '');
     },
-    // 対戦後 (図なし)。値もボタンも仮で、未決の要素にはその場で未決バッジを付ける
+    // 対戦後 (図なし)。値もボタンも仮だが、仮・未決の印は端末の上の帯と右パネルに出す (SCREENS の undecided / context)
     result: function (dev, s) {
       var me = PLAYERS[dev];
       var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
       var win = s.outcome === 'WIN';
       var status = { wait: 'Waiting for your friend…', asked: 'Your friend wants a rematch' }[s.rematch];
-      var pill = function (id) {
-        return '<button type="button" class="pill-undecided small inline" data-undecided="' + id + '" title="' +
-          esc(undecidedById(id).title) + '">未決 ' + id + '</button>';
-      };
-      var btn = function (b, u) {
-        return '<div class="btn-wrap"><button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' +
-          esc(b.label) + '</button>' + pill(u) + '</div>';
+      var btn = function (b) {
+        return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
       };
       return header(dev, s, s.title) + '<div class="result">' +
         '<div class="r-outcome ' + (win ? 'win' : 'lose') + '">' + (win ? 'WIN!' : 'LOSE') + '</div>' +
         '<div class="r-opp">vs ' + esc(opp.name) + '</div>' +
         '<div class="r-stats">' +
-        '<div class="r-row"><span>Rank</span><b>' + me.rank + ' → ' + (me.rank + (win ? 1 : 0)) + '</b><span class="tmp">仮</span>' + pill('U21') + '</div>' +
-        '<div class="r-row"><span>Score</span><b class="dim-value">----</b><span class="tmp">仮</span></div>' +
+        '<div class="r-row"><span>Rank</span><b>' + me.rank + ' → ' + (me.rank + (win ? 1 : 0)) + '</b></div>' +
+        '<div class="r-row"><span>Score</span><b class="dim-value">----</b></div>' +
         '</div>' +
         '<div class="r-status ' + (s.rematch || '') + '">' + (status ? esc(status) : '') + '</div>' +
         '</div><div class="actions">' +
-        btn({ label: 'Rematch', event: 'rematch', primary: true }, s.rematch === 'wait' ? 'U30' : 'U23') +
-        btn({ label: 'Back to Friend Match', event: 'backToFriendMatch' }, 'U24') +
+        btn({ label: 'Rematch', event: 'rematch', primary: true }) +
+        btn({ label: 'Back to Friend Match', event: 'backToFriendMatch' }) +
         '</div>';
     },
   };
@@ -406,12 +401,8 @@
     var dlg = app.state[dev + 'Dialog'];
     $('.state-name', root).textContent = name + (dlg ? ' + 🗨 ' + dlg : '');
 
-    var note = '';
-    var noteText = app.scenario && !app.detached && app.scenario[dev + 'Note'];
-    if (noteText) note = '<div class="mock-note">' + esc(noteText) + '</div>';
-
     var screen = $('.screen', root);
-    var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + dialogHtml(dev, dlg) + note;
+    var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + dialogHtml(dev, dlg);
     // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを最初からやり直させない)
     if (screen.dataset.html !== html) {
       screen.className = 'screen view-' + spec.view;
@@ -426,7 +417,8 @@
     if (dlg && DIALOGS[dlg].undecided) ids = uniq(ids.concat(DIALOGS[dlg].undecided));
     var strip = $('.undecided-strip', root);
     strip.classList.toggle('compact', ids.length > 2);
-    strip.classList.toggle('dense', ids.length > 4);
+    strip.classList.toggle('dense', ids.length > 4 && ids.length <= 6);
+    strip.classList.toggle('packed', ids.length > 6);
     strip.innerHTML = ids.map(function (id) { return pillHtml(id, 'pill-undecided', '未決'); }).join('');
   }
 
@@ -580,16 +572,21 @@
       contextHtml() + decidedHtml();
   }
 
-  // 今の画面の説明。端末の画面にはゲームが実際に出すものだけを描き、説明はこちらに出す
+  // 今の画面の説明 (SCREENS の context。文字列か、行ごとの配列) とシナリオの端末ごとの注記 (hostNote / clientNote)。
+  // 端末の画面にはゲームが実際に出すものだけを描き、説明はこちらに出す。両端末で同じ行は 1 行にまとめる
   function contextHtml() {
     var lines = [];
     var seen = {};
-    Engine.DEVICES.forEach(function (d) {
-      var text = SCREENS[app.state[d]].context;
+    var sc = app.scenario && !app.detached ? app.scenario : null;
+    var add = function (d, text) {
       if (!text) return;
       if (seen[text]) { seen[text].push(d); return; }
       seen[text] = [d];
       lines.push(text);
+    };
+    Engine.DEVICES.forEach(function (d) {
+      add(d, sc && sc[d + 'Note']);
+      [].concat(SCREENS[app.state[d]].context).forEach(function (text) { add(d, text); });
     });
     return lines.map(function (text) {
       var who = seen[text].map(function (d) {

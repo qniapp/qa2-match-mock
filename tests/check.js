@@ -284,6 +284,17 @@ if (/decided-note|decidedNoteHtml|GAME_COUNTDOWN_PREMISE/.test(appJs)) fail('app
 if (/pillHtml\(id, 'pill-decided'/.test(appJs)) fail('app.js が端末の上に「決定」バッジを出している');
 console.log('ok  端末の画面と端末の上に決定の注記・バッジが無い');
 
+// 端末の画面には仮・未決の印やモックの注記も出さない (未決は端末の上の帯、説明は右パネル)。
+// 実際の描画は tests/scan-screens.mjs が全シナリオの全手順で確かめる
+if (/mock-note|class="tmp"|pill-undecided small inline|btn-wrap/.test(appJs)) fail('app.js が端末の画面に仮・未決の印やモックの注記を出している');
+for (const [name, s] of Object.entries(SCREENS)) {
+  if (s.view !== 'result') continue;
+  const want = ['U21', 'U23', 'U24'].concat(s.rematch === 'wait' ? ['U30'] : []);
+  for (const id of want) if (!s.undecided.includes(id)) fail(`${name}: 端末の上の帯に未決 ${id} が無い`);
+  if (!/仮の表示/.test([].concat(s.context).join())) fail(`${name}: 右パネルに Rank / Score が仮の表示だという説明が無い`);
+}
+console.log('ok  結果画面の仮・未決の印は端末の上の帯と右パネルに出す');
+
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));
 console.log(`\n遷移表 ${TRANSITIONS.length} 行のうち ${used.size} 行をシナリオで再生 (残り ${unused.length} 行は自由操作で到達)`);
 

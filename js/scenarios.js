@@ -13,6 +13,8 @@ var SCENARIOS = (function () {
   var toGame = ['vs.done', 'countdown.done'];
   var both = { U2: 'both' };
   var clientOnly = 'このシナリオではホストは関与しない';
+  var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でゲーム中まで (12 手順)
+  var postMatch = '対戦後の部分は図が無く、画面もボタンもすべて仮 (未決 U20〜U30)。Win / Lose は端末の下のモック操作で、勝敗判定そのものは対象外。';
 
   return [
     { id: '1', title: '通常対戦', diagram: '01', opts: both,
@@ -77,5 +79,14 @@ var SCENARIOS = (function () {
     { id: '14', title: '離席中に Create Match を押す', diagram: 'なし (10-01 合意)', opts: { U14: 'keep' },
       desc: 'ホストが待機中に Friend Match トップへ戻り、もう一度 Create Match を押すと "Create a new match?"。[Keep Current Match] で今のマッチを維持、[Create Match] で作り直す。本文は未決 (U12)。',
       steps: hostCreates.concat(['host.back', 'host.createMatch', 'host.dialog.keepCurrent', 'host.createMatch', 'host.dialog.createMatch']) },
+    { id: '15', title: '通常対戦 → 対戦後 (ホスト勝利)', diagram: '01 + なし (対戦後)', opts: both,
+      desc: '通常対戦でゲームまで進み、ホストの下の Win を押すと、ホストは "WIN!"、クライアントは自動で "LOSE" の結果画面。ホストが Back to Friend Match で先に抜けてもクライアントは結果画面のまま (U25)。続けてクライアントも抜ける。' + postMatch,
+      steps: toMatchEnd.concat(['host.win', 'host.backToFriendMatch', 'client.backToFriendMatch']) },
+    { id: '15b', title: '通常対戦 → 対戦後 (ホストが Lose を押す)', diagram: '01 + なし (対戦後)', opts: both,
+      desc: 'ホストの下の Lose を押すと、ホストは "LOSE"、クライアントは自動で "WIN!"。今度はクライアントが先に Back to Friend Match で抜ける。' + postMatch,
+      steps: toMatchEnd.concat(['host.lose', 'client.backToFriendMatch']) },
+    { id: '15c', title: '対戦後に再戦 (仮)', diagram: 'なし (対戦後)', opts: both,
+      desc: 'ホストが勝ったあと、クライアントが Rematch を押すと "Waiting for your friend…"、ホストには "Your friend wants a rematch"。ホストも Rematch を押すと VS 画面 → 3·2·1 → ゲーム。今度はクライアントが Win を押す。再戦の有無・同意の要否・VS 画面を挟むか・Match Code の再利用はすべて未決 (U23)。' + postMatch,
+      steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch'], toGame, ['client.win']) },
   ];
 })();

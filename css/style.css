@@ -112,6 +112,17 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .role-badge.small { padding: 0 6px; font-size: 11px; }
 .undecided-strip { display: flex; flex-wrap: wrap; align-content: flex-start; gap: 4px; height: 50px; overflow: hidden; padding: 4px 0 0; }
 .undecided-strip.compact .pill-undecided { max-width: calc(50% - 2px); }
+.undecided-strip.dense .pill-undecided { max-width: calc(33.33% - 3px); }
+
+/* 端末の下のモック操作 (Win / Lose) */
+.mock-controls { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin-top: 8px; }
+.mc-label { color: var(--muted); font-size: 12px; }
+.mc-btn {
+  min-width: 64px; padding: 3px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;
+  background: #141B33; border: 1px solid var(--undecided); color: var(--undecided);
+}
+.mc-btn:hover:not([data-norow]) { background: rgba(250, 204, 21, 0.12); }
+.mc-btn[data-norow] { opacity: 0.38; border-style: dashed; cursor: not-allowed; }
 
 .pill-undecided {
   display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
@@ -272,6 +283,29 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .board i:nth-child(7n + 3) { background: rgba(95, 201, 250, 0.35); }
 .board i:nth-child(11n + 5) { background: rgba(248, 138, 138, 0.35); }
 .game-label { color: var(--muted); }
+
+/* 対戦後の結果画面 (図なし、仮) */
+.result { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 34px 28px 0; min-height: 0; }
+.r-outcome { font-size: 72px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.1; }
+.r-outcome.win { color: var(--h); text-shadow: 0 0 28px rgba(95, 201, 250, 0.8); }
+.r-outcome.lose { color: var(--x); text-shadow: 0 0 22px rgba(248, 138, 138, 0.45); }
+.r-opp { margin-top: 6px; font-size: 16px; color: #C9CED8; }
+.r-stats {
+  align-self: stretch; margin-top: 30px; padding: 6px 16px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.r-row { display: flex; align-items: center; gap: 8px; padding: 10px 0; font-size: 15px; }
+.r-row + .r-row { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.r-row > span:first-child { flex: 1; color: var(--muted); }
+.r-row b { font-size: 18px; letter-spacing: 0.04em; }
+.r-row .dim-value { color: #4D566F; }
+.tmp { padding: 0 5px; border: 1px dashed var(--undecided); border-radius: 4px; color: var(--undecided); font-family: var(--jp); font-size: 10px; }
+.r-status { margin-top: auto; padding-bottom: 18px; min-height: 2.5em; font-size: 15px; text-align: center; }
+.r-status.wait { color: var(--h); }
+.r-status.asked { color: var(--y); }
+.btn-wrap { position: relative; }
+.pill-undecided.inline { position: absolute; top: -8px; right: -8px; }
+.r-row .pill-undecided.inline { position: static; }
 
 /* モック専用 (ゲーム内 UI ではない) */
 .mock-only { border: 1px dashed var(--undecided) !important; color: var(--undecided); width: auto; padding: 8px 16px; }

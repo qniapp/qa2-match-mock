@@ -303,7 +303,41 @@
         '<div class="game-label">Game in progress (mock)</div>' +
         '<button type="button" class="btn mock-only"' + attrs(dev, 'backToOnline') + '>Back to Online Battle</button></div>';
     },
+    // 対戦後 (図なし)。値もボタンも仮で、未決の要素にはその場で未決バッジを付ける
+    result: function (dev, s) {
+      var me = PLAYERS[dev];
+      var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
+      var win = s.outcome === 'WIN';
+      var status = { wait: 'Waiting for your friend…', asked: 'Your friend wants a rematch' }[s.rematch];
+      var pill = function (id) {
+        return '<button type="button" class="pill-undecided small inline" data-undecided="' + id + '" title="' +
+          esc(undecidedById(id).title) + '">未決 ' + id + '</button>';
+      };
+      var btn = function (b, u) {
+        return '<div class="btn-wrap"><button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' +
+          esc(b.label) + '</button>' + pill(u) + '</div>';
+      };
+      return header(dev, s, s.title) + '<div class="result">' +
+        '<div class="r-outcome ' + (win ? 'win' : 'lose') + '">' + (win ? 'WIN!' : 'LOSE') + '</div>' +
+        '<div class="r-opp">vs ' + esc(opp.name) + '</div>' +
+        '<div class="r-stats">' +
+        '<div class="r-row"><span>Rank</span><b>' + me.rank + ' → ' + (me.rank + (win ? 1 : 0)) + '</b><span class="tmp">仮</span>' + pill('U21') + '</div>' +
+        '<div class="r-row"><span>Score</span><b class="dim-value">----</b><span class="tmp">仮</span></div>' +
+        '</div>' +
+        '<div class="r-status ' + (s.rematch || '') + '">' + (status ? esc(status) : '') + '</div>' +
+        '</div><div class="actions">' +
+        btn({ label: 'Rematch', event: 'rematch', primary: true }, s.rematch === 'wait' ? 'U30' : 'U23') +
+        btn({ label: 'Back to Friend Match', event: 'backToFriendMatch' }, 'U24') +
+        '</div>';
+    },
   };
+
+  // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる
+  function mockControlsHtml(dev) {
+    return '<span class="mc-label">モック操作 (勝敗):</span>' +
+      '<button type="button" class="mc-btn"' + attrs(dev, 'win') + '>Win</button>' +
+      '<button type="button" class="mc-btn"' + attrs(dev, 'lose') + '>Lose</button>';
+  }
 
   function dialogHtml(dev, key) {
     if (!key) return '';
@@ -334,6 +368,7 @@
       screen.innerHTML = html;
       screen.dataset.html = html;
     }
+    $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
 
     // 未決バッジ: 画面・ダイアログ・直前に発火した行 (この端末に関係するもの) の未決を集める
     var ids = spec.undecided.slice();
@@ -343,6 +378,7 @@
     ids = ids.filter(function (id, i) { return ids.indexOf(id) === i; });
     var strip = $('.undecided-strip', root);
     strip.classList.toggle('compact', ids.length > 2);
+    strip.classList.toggle('dense', ids.length > 4);
     strip.innerHTML = ids.map(function (id) {
       var u = undecidedById(id);
       return '<button type="button" class="pill-undecided" data-undecided="' + id + '" title="' + esc(u.title + ' - ' + u.desc) + '">' +

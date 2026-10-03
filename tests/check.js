@@ -65,6 +65,66 @@ for (const sc of SCENARIOS) {
   }
 }
 
+// 対戦後 (Win / Lose) の遷移
+const at = (host, client) => Object.assign(Engine.initialState(), { host, client });
+const expectFire = (from, event, host, client) => {
+  const res = Engine.fire(from, event);
+  const got = res ? `${res.state.host} / ${res.state.client}` : '行なし';
+  if (got !== `${host} / ${client}`) fail(`${from.host} / ${from.client} で ${event} → ${got} (期待: ${host} / ${client})`);
+  return res && res.state;
+};
+const inGame = at('H_GAME', 'C_GAME');
+expectFire(inGame, 'host.win', 'H_RESULT_WIN', 'C_RESULT_LOSE');
+expectFire(inGame, 'host.lose', 'H_RESULT_LOSE', 'C_RESULT_WIN');
+expectFire(inGame, 'client.win', 'H_RESULT_LOSE', 'C_RESULT_WIN');
+expectFire(inGame, 'client.lose', 'H_RESULT_WIN', 'C_RESULT_LOSE');
+
+// Win / Lose は両端末が対戦中 (H_GAME / C_GAME) のときだけ行がある
+const hostStates = Object.keys(SCREENS).filter((k) => k.startsWith('H_'));
+const clientStates = Object.keys(SCREENS).filter((k) => k.startsWith('C_'));
+for (const h of hostStates) {
+  for (const c of clientStates) {
+    for (const ev of ['host.win', 'host.lose', 'client.win', 'client.lose']) {
+      const want = h === 'H_GAME' && c === 'C_GAME';
+      if (Engine.canFire(at(h, c), ev) !== want) fail(`${h} / ${c} で ${ev} の行が${want ? '無い' : 'ある'}`);
+    }
+  }
+}
+
+// 再戦 (仮): どちらが先に押しても、両者が押したら VS 画面
+for (const [first, second] of [['host', 'client'], ['client', 'host']]) {
+  const asked = first === 'host' ? ['H_RESULT_WIN_REMATCH_WAIT', 'C_RESULT_LOSE_REMATCH_ASKED'] : ['H_RESULT_WIN_REMATCH_ASKED', 'C_RESULT_LOSE_REMATCH_WAIT'];
+  const s1 = expectFire(at('H_RESULT_WIN', 'C_RESULT_LOSE'), `${first}.rematch`, ...asked);
+  if (s1) {
+    if (Engine.canFire(s1, `${first}.rematch`)) fail(`${first} が再戦待ちのまま Rematch を押せる`);
+    expectFire(s1, `${second}.rematch`, 'H_VS', 'C_VS');
+  }
+}
+// Back to Friend Match (仮): 押した側だけ Friend Match トップ、相手は結果画面のまま
+expectFire(at('H_RESULT_LOSE_REMATCH_ASKED', 'C_RESULT_WIN_REMATCH_WAIT'), 'host.backToFriendMatch', 'H_TOP', 'C_RESULT_WIN_REMATCH_WAIT');
+expectFire(at('H_RESULT_WIN', 'C_RESULT_LOSE'), 'client.backToFriendMatch', 'H_RESULT_WIN', 'C_TOP');
+expectFire(at('H_TOP', 'C_RESULT_LOSE'), 'client.backToFriendMatch', 'H_TOP', 'C_TOP');
+if (Engine.canFire(at('H_TOP', 'C_RESULT_LOSE_REMATCH_ASKED'), 'client.rematch')) fail('相手が抜けたあとも Rematch を押せる');
+
+// 対戦後のシナリオの最終状態
+// [勝敗直後, 最後] の状態
+const postMatch = {
+  '15': ['H_RESULT_WIN / C_RESULT_LOSE', 'H_TOP / C_TOP'],
+  '15b': ['H_RESULT_LOSE / C_RESULT_WIN', 'H_RESULT_LOSE / C_TOP'],
+  '15c': ['H_RESULT_WIN / C_RESULT_LOSE', 'H_RESULT_LOSE / C_RESULT_WIN'],
+};
+const pair = (st) => `${st.host} / ${st.client}`;
+for (const [id, [afterResult, last]] of Object.entries(postMatch)) {
+  const sc = SCENARIOS.find((x) => x.id === id);
+  if (!sc) { fail(`シナリオ ${id} が無い`); continue; }
+  const end = pair(Engine.replay(sc).state);
+  if (end !== last) fail(`シナリオ ${id} の最後の状態 ${end} (期待: ${last})`);
+  const first = sc.steps.findIndex((st) => /\.(win|lose)$/.test(Engine.stepEvent(st)));
+  const mid = pair(Engine.replay(sc, first + 1).state);
+  if (mid !== afterResult) fail(`シナリオ ${id} の勝敗直後の状態 ${mid} (期待: ${afterResult})`);
+}
+console.log('ok  対戦後: Win / Lose・再戦・Back to Friend Match の遷移');
+
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));
 console.log(`\n遷移表 ${TRANSITIONS.length} 行のうち ${used.size} 行をシナリオで再生 (残り ${unused.length} 行は自由操作で到達)`);
 

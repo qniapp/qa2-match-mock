@@ -41,11 +41,23 @@ var C_TOP_FILLED = ['C_TOP_CODE', 'C_TOP_ERR_NOTFOUND', 'C_TOP_ERR_EXPIRED',
   'C_TOP_ERR_FULL', 'C_TOP_CONN_FAILED'];
 var H_EXPIRED_ANY = ['H_CODE_EXPIRED', 'H_EXPIRED', 'H_AWAY_TOP_EXPIRED', 'H_AWAY_STAGE_EXPIRED'];
 
+// 対戦後の結果画面: 勝ち負け × 再戦の段階 (なし / 自分が申し込んで待機中 / 相手から申し込まれた)
+var OUTCOMES = ['WIN', 'LOSE'];
+var RESULT_PHASES = { '': null, _REMATCH_WAIT: 'wait', _REMATCH_ASKED: 'asked' };
+var H_RESULT_ANY = [];
+var C_RESULT_ANY = [];
+OUTCOMES.forEach(function (o) {
+  Object.keys(RESULT_PHASES).forEach(function (ph) {
+    H_RESULT_ANY.push('H_RESULT_' + o + ph);
+    C_RESULT_ANY.push('C_RESULT_' + o + ph);
+  });
+});
+
 // 遷移表の表示で、配列の代わりにグループ名を出すための一覧
 var STATE_GROUPS = {
   H_AWAY_PENDING: H_AWAY_PENDING, H_CANCELABLE: H_CANCELABLE, H_WITH_CLIENT: H_WITH_CLIENT,
   H_EXPIRED_ANY: H_EXPIRED_ANY, C_IN_MATCH: C_IN_MATCH, C_LEAVABLE: C_LEAVABLE,
-  C_TOP_ANY: C_TOP_ANY, C_TOP_FILLED: C_TOP_FILLED,
+  C_TOP_ANY: C_TOP_ANY, C_TOP_FILLED: C_TOP_FILLED, H_RESULT_ANY: H_RESULT_ANY, C_RESULT_ANY: C_RESULT_ANY,
 };
 
 // ---- 遷移表 ---------------------------------------------------------------
@@ -272,6 +284,35 @@ var TRANSITIONS = (function () {
   T({ from: { host: 'H_RANDOM_WAITING', client: 'C_RANDOM_WAITING' }, event: 'sys.opponentFound', auto: 2500,
     to: { host: 'H_VS', client: 'C_VS' }, note: '合意: 対戦相手が見つかったら VS 画面', undecided: ['U13'] });
 
+  // === 対戦後 (図なし、すべて未決) ===
+  // Win / Lose は端末の下のモック操作。勝敗判定そのものはモックの対象外
+  var opposite = { WIN: 'LOSE', LOSE: 'WIN' };
+  [['host.win', 'WIN'], ['host.lose', 'LOSE'], ['client.win', 'LOSE'], ['client.lose', 'WIN']].forEach(function (p) {
+    T({ from: { host: 'H_GAME', client: 'C_GAME' }, event: p[0],
+      to: { host: 'H_RESULT_' + p[1], client: 'C_RESULT_' + opposite[p[1]] },
+      note: 'モック操作: 押した側が' + (/win$/.test(p[0]) ? '勝ち' : '負け') + '、相手は自動で逆の結果。対戦後の画面は図に無い', undecided: ['U28'] });
+  });
+  OUTCOMES.forEach(function (o) {
+    var h = 'H_RESULT_' + o;
+    var c = 'C_RESULT_' + opposite[o];
+    T({ from: { host: h, client: c }, event: 'host.rematch', to: { host: h + '_REMATCH_WAIT', client: c + '_REMATCH_ASKED' },
+      note: '仮: 押した側は相手を待ち、相手には再戦の希望を表示', undecided: ['U23'] });
+    T({ from: { host: h, client: c }, event: 'client.rematch', to: { host: h + '_REMATCH_ASKED', client: c + '_REMATCH_WAIT' },
+      note: '仮: 押した側は相手を待ち、相手には再戦の希望を表示', undecided: ['U23'] });
+    T({ from: { host: h + '_REMATCH_ASKED', client: c + '_REMATCH_WAIT' }, event: 'host.rematch', to: { host: 'H_VS', client: 'C_VS' },
+      note: '仮: 両者が押したら VS 画面からやり直す。同じ Match Code を使うかは未決', undecided: ['U23'] });
+    T({ from: { host: h + '_REMATCH_WAIT', client: c + '_REMATCH_ASKED' }, event: 'client.rematch', to: { host: 'H_VS', client: 'C_VS' },
+      note: '仮: 両者が押したら VS 画面からやり直す。同じ Match Code を使うかは未決', undecided: ['U23'] });
+  });
+  T({ from: { host: H_RESULT_ANY, client: C_RESULT_ANY }, event: 'host.backToFriendMatch', to: { host: 'H_TOP', client: '=' },
+    note: '仮: 押した側だけ Friend Match トップへ。相手は結果画面のまま', undecided: ['U24', 'U25'] });
+  T({ from: { host: H_RESULT_ANY, client: '*' }, event: 'host.backToFriendMatch', to: { host: 'H_TOP', client: '*' },
+    note: '仮: 相手はすでに結果画面を抜けている', undecided: ['U24'] });
+  T({ from: { host: H_RESULT_ANY, client: C_RESULT_ANY }, event: 'client.backToFriendMatch', to: { host: '=', client: 'C_TOP' },
+    note: '仮: 押した側だけ Friend Match トップへ。相手は結果画面のまま', undecided: ['U24', 'U25'] });
+  T({ from: { host: '*', client: C_RESULT_ANY }, event: 'client.backToFriendMatch', to: { host: '*', client: 'C_TOP' },
+    note: '仮: 相手はすでに結果画面を抜けている', undecided: ['U24'] });
+
   rows.forEach(function (r, i) {
     r.id = 'T' + String(i + 1).padStart(2, '0');
     r.undecided = r.undecided || [];
@@ -291,6 +332,10 @@ var EVENT_LABELS = {
   'host.back': 'ホスト: ‹ (戻る / 別画面へ)',
   'host.tapToast': 'ホスト: トーストをタップ',
   'host.backToOnline': 'ホスト: Back to Online Battle (モック)',
+  'host.win': 'ホスト: Win を押す (モック操作)',
+  'host.lose': 'ホスト: Lose を押す (モック操作)',
+  'host.rematch': 'ホスト: Rematch を押す (仮)',
+  'host.backToFriendMatch': 'ホスト: Back to Friend Match を押す (仮)',
   'host.dialog.cancelMatch': 'ホスト: ダイアログで Cancel Match',
   'host.dialog.keepWaiting': 'ホスト: ダイアログで Keep Waiting',
   'host.dialog.createMatch': 'ホスト: ダイアログで Create Match',
@@ -306,6 +351,10 @@ var EVENT_LABELS = {
   'client.back': 'クライアント: ‹ (戻る / 別画面へ)',
   'client.tapToast': 'クライアント: トーストをタップ',
   'client.backToOnline': 'クライアント: Back to Online Battle (モック)',
+  'client.win': 'クライアント: Win を押す (モック操作)',
+  'client.lose': 'クライアント: Lose を押す (モック操作)',
+  'client.rematch': 'クライアント: Rematch を押す (仮)',
+  'client.backToFriendMatch': 'クライアント: Back to Friend Match を押す (仮)',
   'client.dialog.leaveMatch': 'クライアント: ダイアログで Leave Match',
   'client.dialog.goBack': 'クライアント: ダイアログで Go Back',
   'sys.peerConnected': '自動: クライアントの接続完了',
@@ -325,7 +374,7 @@ var EVENT_LABELS = {
 };
 
 // ---- 画面の描画仕様 ---------------------------------------------------------
-// view: online | friendTop | lobby | stage | random | vs | countdown | game
+// view: online | friendTop | lobby | stage | random | vs | countdown | game | result
 // ボタンの event はデバイス名を除いたもの (例: 'startMatch' → 'host.startMatch')
 
 var TOASTS = {
@@ -420,6 +469,16 @@ var SCREENS = (function () {
   S.C_COUNTDOWN = { view: 'countdown' };
   S.C_GAME = { view: 'game' };
 
+  // --- 対戦後 (両端末共通。図なし) ---
+  ['H', 'C'].forEach(function (p) {
+    OUTCOMES.forEach(function (o) {
+      Object.keys(RESULT_PHASES).forEach(function (ph) {
+        S[p + '_RESULT_' + o + ph] = { view: 'result', title: 'RESULT', back: null, outcome: o, rematch: RESULT_PHASES[ph],
+          undecided: ['U20', 'U22', 'U26', 'U27'] };
+      });
+    });
+  });
+
   Object.keys(S).forEach(function (k) { S[k].undecided = S[k].undecided || []; });
   return S;
 })();
@@ -495,4 +554,26 @@ var UNDECIDED = [
     desc: '図07 はホスト側のみ。モックではクライアントに "Match code expired" トーストを出し、タップで "Match expired." を表示している。' },
   { id: 'U19', title: 'Connection lost から ‹ で戻ると青い "Waiting for your friend…" バナー',
     desc: '図03 では Connection lost の画面から ‹ で戻ると、待機中のバナー付き Friend Match トップになる。相手が切断されたのに待機扱いでよいか。' },
+  { id: 'U20', title: '対戦後の画面の内容',
+    desc: 'ogwssk さんの図は「カウントダウン & ゲーム開始」で終わり、対戦後の画面は無い。モックは QA² の既存の 1 人用リザルト画面 ("RESULT" の見出しと大きな "WIN!" / "LOSE") にならった仮の画面。WIN! / LOSE の見せ方、スコアや対戦の詳細を出すかは未定。' },
+  { id: 'U21', title: 'ランク変動の表示と計算',
+    desc: 'issue の当初のチェックリストにある「ランクアップ　ランクダウン」。モックの "Rank 12 → 13" (勝つと +1、負けると変わらない) は仮の値。Friend Match でランクが変わるのか、負けたら下がるのか、ランクアップ・ランクダウンの見せ方も未定。' },
+  { id: 'U22', title: '対戦後のボタン構成と文言',
+    desc: '"Rematch" / "Back to Friend Match" は仮。ゲームの UI キットには "REMATCH" ボタンがある。ほかのボタン (Online Battle へ戻るなど) が要るか、文言や大文字・小文字も未定。' },
+  { id: 'U23', title: '再戦の有無と進め方',
+    desc: '再戦できるか、両者の同意が必要か、VS 画面を挟むか、同じ Match Code (同じマッチ) を使うか。モックは中立な仮の流れとして、押した側に "Waiting for your friend…"、相手に "Your friend wants a rematch" を出し、両者が押したら VS 画面からやり直す。' },
+  { id: 'U24', title: '対戦後の戻り先',
+    desc: 'モックでは "Back to Friend Match" で Friend Match トップ (Match Code 入力欄は空) に戻る。Online Battle や、同じマッチのロビーに戻る案もありうる。' },
+  { id: 'U25', title: '結果画面で相手が先に抜けた・切断したときの表示',
+    desc: 'モックでは相手が "Back to Friend Match" で抜けても、自分の結果画面は変わらない (再戦待ちの "Waiting for your friend…" や "Your friend wants a rematch" もそのまま残る)。相手が抜けた・切断したことをどう伝えるかは未定。' },
+  { id: 'U26', title: '結果画面から自動で次へ進むか',
+    desc: 'タイムアウトで自動的に次の画面へ進むのか、ボタンを押すまで結果画面に留まるのか。両者の操作が必要か。モックには自動遷移が無い。' },
+  { id: 'U27', title: '結果画面であいさつ絵文字を送れるか',
+    desc: 'issue の「あいさつ＋絵文字」はモックでは VS 画面に表示している。対戦後にもあいさつや絵文字を送れるか。' },
+  { id: 'U28', title: '勝敗が決まらない場合 (引き分け・対戦中の切断・降参)',
+    desc: '端末の下の Win / Lose ボタンはモック操作で、勝敗の判定そのものと、両端末に同じ結果を出す同期は対象外。引き分け、対戦中の切断、降参したときの扱いと画面は未定。' },
+  { id: 'U29', title: 'ランダム対戦の対戦後',
+    desc: 'ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。' },
+  { id: 'U30', title: '再戦の申し込みの取り消し・応答待ちのタイムアウト',
+    desc: 'モックでは Rematch を押したあと取り消せない (待機中の Rematch は押せない)。相手が応じないときのタイムアウトや、申し込まれた側が断る手段も未定。' },
 ];

@@ -114,6 +114,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .device-head { display: flex; align-items: center; gap: 8px; height: 30px; }
 /* 状態名 (Host.FriendMatch.Lobby.Ready.WaitingForFriend など) は . の後ろで折り返し、2 行まで */
 .state-name { color: var(--muted); font-size: 11px; line-height: 1.25; }
+.sn { display: inline-block; }
 .role-badge { flex: none; white-space: nowrap; display: inline-block; padding: 1px 10px; border-radius: 4px; font-weight: 700; color: #fff; font-size: 13px; }
 .role-badge.host { background: var(--host); }
 .role-badge.client { background: var(--client); }

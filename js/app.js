@@ -506,9 +506,13 @@
     $('#ctx-createResult').value = app.ctx.createResult;
   }
 
-  // 状態名 (Host.FriendMatch.Lobby.Ready など) は . の後ろで折り返す
+  // 状態名 (Host.FriendMatch.Lobby.Ready.WaitingForFriend など) は . の後ろで折り返す。
+  // . で区切った部分ごとに inline-block にし、1 つの部分が幅に収まらないときだけ CamelCase の切れ目で折る
   function stateName(name) {
-    return esc(name).replace(/\./g, '.<wbr>');
+    var parts = name.split('.');
+    return parts.map(function (p, i) {
+      return '<span class="sn">' + esc(p).replace(/([a-z])([A-Z])/g, '$1<wbr>$2') + (i < parts.length - 1 ? '.' : '') + '</span>';
+    }).join('');
   }
 
   function groupName(list) {
@@ -768,4 +772,6 @@
   });
 
   applyHash();
+  // Web フォント (Oxanium) が読み込まれると行の高さが変わるので、描画し直して直前の行と手順を見える位置へスクロールし直す
+  if (document.fonts) document.fonts.ready.then(render);
 })();

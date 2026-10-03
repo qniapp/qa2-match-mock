@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QA² Friend Match フロー モック</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>QA² オンライン対戦フロー モック</h1>
+    <span class="topbar-sub">qniapp/qa2#1891 ・ ogwssk さんの図 (09-30 / 10-02) と 10-01 の合意事項をもとにしたモック</span>
+    <span class="legend"><span class="legend-auto">⏱ 自動遷移 (点線)</span><span class="legend-user">👆 ユーザー操作 (実線)</span><span class="pill-undecided">未決</span> = 決まっていない点</span>
+  </header>
+
+  <main class="layout">
+    <aside class="panel scenario-panel" aria-label="シナリオ">
+      <h2>シナリオ</h2>
+      <ul id="scenario-list" class="scenario-list"></ul>
+
+      <div id="scenario-detail" class="scenario-detail"></div>
+
+      <div class="controls">
+        <button id="btn-prev" type="button">◀ 戻る</button>
+        <button id="btn-next" type="button" class="primary">▶ 次へ</button>
+        <button id="btn-reset" type="button">⟲ 最初から</button>
+        <button id="btn-auto" type="button">自動再生</button>
+      </div>
+      <ol id="step-list" class="step-list"></ol>
+
+      <section class="free-play">
+        <h3>環境イベント <small>(電話のボタン以外の外部要因)</small></h3>
+        <div id="env-events" class="env-events"></div>
+        <p id="auto-next" class="auto-next"></p>
+        <h3>モック設定</h3>
+        <label>Join Match の結果
+          <select id="ctx-codeResult">
+            <option value="auto">自動 (ホストの状態に従う)</option>
+            <option value="notFound">Match not found</option>
+            <option value="expired">期限切れ</option>
+            <option value="full">満員</option>
+            <option value="connFailed">接続失敗 (仮)</option>
+          </select>
+        </label>
+        <label>Create Match の結果
+          <select id="ctx-createResult">
+            <option value="ok">成功</option>
+            <option value="connFailed">接続失敗 (仮)</option>
+          </select>
+        </label>
+      </section>
+    </aside>
+
+    <section class="devices" aria-label="端末">
+      <div class="device" data-dev="host">
+        <div class="device-head">
+          <span class="role-badge host">ホスト</span>
+          <code class="state-name"></code>
+        </div>
+        <div class="undecided-strip"></div>
+        <div class="phone"><div class="screen"></div></div>
+      </div>
+      <div class="device" data-dev="client">
+        <div class="device-head">
+          <span class="role-badge client">クライアント</span>
+          <code class="state-name"></code>
+        </div>
+        <div class="undecided-strip"></div>
+        <div class="phone"><div class="screen"></div></div>
+      </div>
+    </section>
+
+    <aside class="panel table-panel" aria-label="状態遷移表">
+      <div id="current-state" class="current-state"></div>
+      <nav class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="table" class="active">状態遷移表</button>
+        <button type="button" role="tab" data-tab="undecided">未決 <span id="undecided-count"></span></button>
+        <button type="button" role="tab" data-tab="log">ログ</button>
+      </nav>
+      <div class="tab-body" data-tab-body="table">
+        <label class="filter"><input type="checkbox" id="filter-available"> 今の状態から発火できる行だけ表示</label>
+        <table class="transitions">
+          <colgroup><col style="width: 34px"><col><col><col style="width: 26%"><col><col></colgroup>
+          <thead>
+            <tr><th rowspan="2">#</th><th colspan="2">現在の状態</th><th rowspan="2">イベント</th><th colspan="2">次の状態</th></tr>
+            <tr><th>Host</th><th>Client</th><th>Host</th><th>Client</th></tr>
+            <tr><th colspan="6" class="memo-head">メモ・未決 (各行の 2 段目)</th></tr>
+          </thead>
+        </table>
+      </div>
+      <div class="tab-body" data-tab-body="undecided" hidden>
+        <p class="hint">選択肢があるものはトグルで切り替えられます (既定 = 図の通り、無ければ最も中立な案)。切り替えると遷移表の対応する行が有効になります。</p>
+        <ol id="undecided-list" class="undecided-list"></ol>
+      </div>
+      <div class="tab-body" data-tab-body="log" hidden>
+        <ol id="event-log" class="event-log"></ol>
+      </div>
+    </aside>
+  </main>
+
+  <script src="js/transitions.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/scenarios.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>

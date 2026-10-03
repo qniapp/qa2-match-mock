@@ -26,7 +26,18 @@ const url = `http://127.0.0.1:${server.address().port}/index.html`;
 const profile = mkdtempSync(join(tmpdir(), 'qa2-scan-'));
 const chrome = spawn(process.env.CHROMIUM || 'chromium', ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`,
   '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' });
-const cleanup = () => { chrome.kill(); server.close(); rmSync(profile, { recursive: true, force: true }); };
+const exited = new Promise((r) => chrome.once('exit', r));
+let send = null;
+// Browser.close で子プロセス (ネットワークなど) ごと閉じ、終わってからプロファイルを消す
+// (kill だけだと、残った子プロセスが消したあとのプロファイルに書き込む)
+const cleanup = async () => {
+  if (send) send('Browser.close'); else chrome.kill();
+  const timer = setTimeout(() => chrome.kill('SIGKILL'), 5000);
+  await exited;
+  clearTimeout(timer);
+  server.close();
+  rmSync(profile, { recursive: true, force: true });
+};
 
 try {
   const portFile = join(profile, 'DevToolsActivePort');
@@ -42,7 +53,7 @@ try {
     const msg = JSON.parse(m.data);
     if (msg.id && pending.has(msg.id)) { pending.get(msg.id)(msg); pending.delete(msg.id); } else events.push(msg);
   };
-  const send = (method, params = {}) => new Promise((r) => { const id = ++seq; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
+  send = (method, params = {}) => new Promise((r) => { const id = ++seq; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
 
   await send('Page.enable');
   // ノート PC くらいの縦に狭い画面で確かめる (端末の上の帯が縮んでバッジが隠れないか)
@@ -68,7 +79,7 @@ try {
     console.log('ok  端末の上の帯は未決バッジだけで、すべて帯の中に見えています');
   }
 } finally {
-  cleanup();
+  await cleanup();
 }
 
 // ページの中で実行する。シナリオ一覧・手順一覧のボタンは押すと同期的に描画する

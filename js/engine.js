@@ -17,7 +17,7 @@ var Engine = (function () {
 
   function initialState(opts, ctx) {
     return {
-      host: 'H_ONLINE', client: 'C_ONLINE', hostDialog: null, clientDialog: null,
+      host: 'Host.MultiModeSelection', client: 'Client.MultiModeSelection', hostDialog: null, clientDialog: null,
       opts: Object.assign(defaultOpts(), opts || {}),
       ctx: Object.assign(defaultCtx(), ctx || {}),
     };

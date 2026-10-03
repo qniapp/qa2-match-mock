@@ -49,11 +49,11 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 `SCREENS` に従って描画し、イベントを `js/engine.js` に渡すだけです。
 
 ```js
-{ from: { host: 'H_WAITING', client: C_TOP_FILLED }, event: 'client.joinMatch',
-  to: { host: 'H_FRIEND_JOINED', client: 'C_WAITING' }, note: '...', undecided: ['U4'] }
+{ from: { host: 'Host.FriendMatch.Lobby.Waiting', client: clientRoomFilled }, event: 'client.joinMatch',
+  to: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: 'Client.FriendMatch.Lobby.Waiting' }, note: '...', undecided: ['U4'] }
 ```
 
-- `from` / `to` の `host` / `client`: 状態名、状態名の配列 (表ではグループ名で表示)、`'*'` (何でもよい / 変更なし)、`'='` (同じ状態のままダイアログだけ変える)
+- `from` / `to` の `host` / `client`: 状態名、状態名の配列 (表ではグループ名で表示。例の `clientRoomFilled` はグループ `Client.FriendMatch.Room.CodeFilled`)、`'*'` (何でもよい / 変更なし)、`'='` (同じ状態のままダイアログだけ変える)
 - `from.hostDialog` / `dialog: { host: 'cancel' }`: 確認ダイアログの開閉 (ダイアログの文言は `DIALOGS`)
 - `when`: 未決トグル (`{ U14: 'keep' }`) やモック設定 (`{ codeResult: 'notFound' }`) の条件
 - `auto`: 自由操作中に自動で発火するまでのミリ秒 (図の点線矢印)
@@ -67,25 +67,145 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 自己テスト: `node tests/check.js` で、全シナリオが遷移表どおりに最後まで再生できること、未定義の状態や未決 ID が無いこと、
 シナリオが前提にしていない未決トグルをどれに切り替えても再生できることを確認します。
 対戦後の遷移 (Win / Lose の 4 イベント、Win / Lose が対戦中以外では押せないこと、再戦、Back to Friend Match) も個別に確認します。
-また、モック独自の 3·2·1 (状態 `H_COUNTDOWN` / `C_COUNTDOWN`、イベント `countdown.done`、その画面) が残っていないこと、
-VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_GAME_COUNTDOWN` / `C_GAME_COUNTDOWN`) になること、
-カウントダウン中は Win / Lose の行が無く、プレイ開始後 (`H_GAME` / `C_GAME`) にはあることも確認します。
+また、モック独自の 3·2·1 (その画面 `view: 'countdown'`、イベント `countdown.done`) が残っていないこと、
+VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Host.Game.Countdown` / `Client.Game.Countdown`) になること、
+カウントダウン中は Win / Lose の行が無く、プレイ開始後 (`Host.Game.Play` / `Client.Game.Play`) にはあることも確認します。
 開始 (U31 で決定) については、ホストが先・クライアントが先のどちらでも、1 回目の Start Match で「押した側は待機 / 相手側は "Friend is ready!"」、
 2 回目で "Starting match…"、続く自動遷移で VS 画面になること、Ready のままや片方だけ押した状態から VS 画面へ進む行が無いこと、
 自動開始 (`sys.autoStart`・U31 のトグル・シナリオの別案) が残っていないことを確認します。
 ランダム対戦 (U13a で決定) については、相手が見つかると両端末とも直接 VS 画面になること、ランダム対戦の状態から Ready / Start Match / "Starting match…" へ進む行が無いこと、
 相手を探す画面が "Searching for an opponent…" と大きな Cancel だけ (トーストなし) であること、Cancel で Online Battle に戻ること、シナリオ 11 / 11b の流れを確認します。
-ポーズについては、両端末とも II でポーズ (`H_GAME_PAUSED` / `C_GAME_PAUSED`)、CONTINUE でプレイに戻り、QUIT で Online Battle に戻ること、
+ポーズについては、両端末とも II でポーズ (`Host.Game.Pause` / `Client.Game.Pause`)、CONTINUE でプレイに戻り、QUIT で Online Battle に戻ること、
 相手の端末が変わらないこと、REMATCH・二重のポーズ・ポーズ中の Win / Lose・カウントダウン中のポーズに行が無いこと、
 モック専用の "Back to Online Battle" と "Game in progress (mock)" が残っていないことを確認します。
 最後に、端末の画面に決定の注記を出すコードと、端末の上に `決定` バッジを出すコードが無いこと、
 結果画面の仮・未決の印 (U21 / U23 / U24 / U30) が端末の上の帯と右パネルの説明にあることも確認します。
 
 端末の画面の検査: `node tests/scan-screens.mjs` (ヘッドレス Chromium が必要。場所は環境変数 `CHROMIUM` で変えられます) で、
-全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 318 枚) を 1280x720 の画面で実際に描画し、
+全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 321 枚) を 1280x720 の画面で実際に描画し、
 両端末の画面 (`.screen`) に `仮`・`未決`・`決定`・U 番号・日本語・モックの注記 (`.mock-note`、`.pill-*` など) が無いこと、
 端末の上の帯が未決バッジだけで、すべて帯の中に見えていることを確認します。各手順で両端末の状態が遷移表の再生結果と同じかも確かめます。
 遷移表に行が無いボタンの破線・半透明 (`[data-norow]`) はモックの操作の手がかりとして残しているので、数を表示するだけです。
+
+## 状態名 (案 C: Host. / Client. + 本体の画面名、2026-10-03)
+
+高宮さんが案 C を選んだので (2026-10-03)、状態名をすべて `役割.画面.状態` の形に改名しました。
+役割と画面の名前は、qa2 本体のコードの名前 (`/home/yasuhito/Work/qa2-verify` で確認、`7fbb97305`) をもとにしています。
+
+- 役割: `Host.` / `Client.` (本体の `MultiplayManager.IsHost()` / `IsClient()` [1])
+- 画面: `MultiModeSelection` (Online Battle) / `FriendMatch.Room` (Friend Match トップ) / `FriendMatch.Lobby` (Match Code を発行したあとの待機・Ready) /
+  `Matchmake` (ランダム対戦で相手を探す) / `Opponent` (VS 画面) / `Game.Countdown` / `Game.Play` / `Game.Pause` / `WinResult` / `LoseResult`、
+  ホストの離席は `Host.Away.FriendMatchRoom.*` / `Host.Away.StageSelection.*`
+- 本体に 1 対 1 の名前が無いもの (Room、Lobby、Opponent (VS 画面)、Countdown、離席の Away、ステージ選択、図の段階名) には **近い名前を当てた** ので、下の表の「対応」に書いています。
+- 遷移表のグループ名も同じ形にしました (例: `Host.FriendMatch.Lobby.Cancelable`)。グループは状態名と重ならない名前 (`.Any` や形容詞) にしています。JS の変数名は `hostCancelable` などの camelCase です。
+
+改名は 67 状態と 12 グループ (計 79 個) です。遷移表の行・画面の描画仕様は改名前と同じです (改名前の遷移表を下の表で写したものと、改名後の 135 行が一致することを確認)。
+URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名には状態名が入っていないので、どちらもそのまま使えます。
+`node tests/check.js` は、すべての状態名とグループ名が `Host.` / `Client.` + 大文字で始まる名前をドットでつないだ形であること、遷移表の host 欄に `Host.`、client 欄に `Client.` の状態だけがあることも確かめます。
+
+根拠にした qa2 本体のファイル (`/home/yasuhito/Work/qa2-verify` からの相対パス):
+
+1. `Assets/Scripts/Runtime/Core/Multiplay/MultiplayManager.cs` - `IsHost()` (357 行目) / `IsClient()` (364 行目)、Unity Lobby (`using Unity.Services.Lobbies`、`public Lobby Lobby` 36 行目)
+2. `Assets/Scripts/Runtime/Features/Title/MultiModeSelectionView.cs` - `MultiModeSelectionView`
+3. `Assets/Scripts/Runtime/Features/Title/FriendMatchView.cs` - `ShowRoomScreen` (98 行目) / `ShowHostScreen` (106 行目) / `ShowClientScreen` (115 行目) / `ShowReadyScreen` (123 行目)
+4. `Assets/Scripts/Runtime/Features/Title/MatchmakeView.cs` - `MatchmakeView`
+5. `Assets/Scripts/Runtime/Features/Title/OpponentView.cs` - `OpponentView.Show(opponentName)`
+6. `Assets/Scripts/Runtime/Core/Game/GameContext.cs` - `enum GameState { Idle, Play, Win, Lose }` (`Play` は 12 行目)
+7. `Assets/Scripts/Runtime/Features/GameModes/GameModeTransition.cs` - `enum GameModeTransitionScreen` の `AiStageRankSelection` / `Pause` / `WinResult` / `LoseResult` (63〜66 行目)
+8. `Assets/Scripts/Runtime/Features/ModeStartAnimation/CountdownTimer.cs` - `CountdownTimer`
+9. `Assets/App/Scenes/Main/Scripts/Views/PauseView.cs` - `PauseView`
+10. `Assets/App/Scenes/Main/Scripts/Views/WinView.cs` / `LoseView.cs` - `WinView` / `LoseView`
+
+### 旧名 → 新名の対応表 (状態 67)
+
+対応: 「一致」= 本体に同じ名前がある。「近い名前を当てた」= 本体に 1 対 1 の名前が無く、近い画面・クラスの名前を使った。「段階名はモック独自」= 図の段階をモックが分けたもので、本体に対応するものが無い。
+
+| 旧名 | 新名 | 本体での名前・根拠 | 対応 |
+|---|---|---|---|
+| `H_ONLINE` | `Host.MultiModeSelection` | `MultiModeSelectionView` [2] | 一致 |
+| `C_ONLINE` | `Client.MultiModeSelection` | `MultiModeSelectionView` [2] | 一致 |
+| `H_TOP` | `Host.FriendMatch.Room` | `FriendMatchView` の Room 画面 (`ShowRoomScreen`) [3] | 近い名前を当てた |
+| `C_TOP` | `Client.FriendMatch.Room` | `FriendMatchView` の Room 画面 (`ShowRoomScreen`) [3] | 近い名前を当てた |
+| `H_TOP_CONN_FAILED` | `Host.FriendMatch.Room.ConnectionFailed` | `FriendMatchView` の Room 画面 [3] + モックの段階 `ConnectionFailed` | 近い名前を当てた (段階名はモック独自) |
+| `C_TOP_CONN_FAILED` | `Client.FriendMatch.Room.ConnectionFailed` | `FriendMatchView` の Room 画面 [3] + モックの段階 `ConnectionFailed` | 近い名前を当てた (段階名はモック独自) |
+| `C_TOP_CODE` | `Client.FriendMatch.Room.CodeEntered` | `FriendMatchView` の Room 画面 [3] + モックの段階 `CodeEntered` | 近い名前を当てた (段階名はモック独自) |
+| `C_TOP_ERR_NOTFOUND` | `Client.FriendMatch.Room.Error.NotFound` | `FriendMatchView` の Room 画面 [3] + モックの段階 `Error.NotFound` | 近い名前を当てた (段階名はモック独自) |
+| `C_TOP_ERR_EXPIRED` | `Client.FriendMatch.Room.Error.Expired` | `FriendMatchView` の Room 画面 [3] + モックの段階 `Error.Expired` | 近い名前を当てた (段階名はモック独自) |
+| `C_TOP_ERR_FULL` | `Client.FriendMatch.Room.Error.Full` | `FriendMatchView` の Room 画面 [3] + モックの段階 `Error.Full` | 近い名前を当てた (段階名はモック独自) |
+| `H_WAITING` | `Host.FriendMatch.Lobby.Waiting` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `Waiting` | 近い名前を当てた (段階名はモック独自) |
+| `C_WAITING` | `Client.FriendMatch.Lobby.Waiting` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `Waiting` | 近い名前を当てた (段階名はモック独自) |
+| `H_FRIEND_JOINED` | `Host.FriendMatch.Lobby.FriendJoined` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `FriendJoined` | 近い名前を当てた (段階名はモック独自) |
+| `C_FRIEND_JOINED` | `Client.FriendMatch.Lobby.FriendJoined` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `FriendJoined` | 近い名前を当てた (段階名はモック独自) |
+| `C_HOST_AWAY` | `Client.FriendMatch.Lobby.HostAway` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `HostAway` | 近い名前を当てた (段階名はモック独自) |
+| `H_READY` | `Host.FriendMatch.Lobby.Ready` | `FriendMatchView` の Ready 画面 (`ShowReadyScreen`) [3] | 近い名前を当てた |
+| `C_READY` | `Client.FriendMatch.Lobby.Ready` | `FriendMatchView` の Ready 画面 (`ShowReadyScreen`) [3] | 近い名前を当てた |
+| `H_READY_WAITING` | `Host.FriendMatch.Lobby.Ready.WaitingForFriend` | `FriendMatchView` の Ready 画面 (`ShowReadyScreen`) [3] + モックの段階 `WaitingForFriend` (U31) | 近い名前を当てた (段階名はモック独自) |
+| `C_READY_WAITING` | `Client.FriendMatch.Lobby.Ready.WaitingForFriend` | `FriendMatchView` の Ready 画面 (`ShowReadyScreen`) [3] + モックの段階 `WaitingForFriend` (U31) | 近い名前を当てた (段階名はモック独自) |
+| `H_READY_PEER_READY` | `Host.FriendMatch.Lobby.Ready.FriendReady` | `FriendMatchView` の Ready 画面 (`ShowReadyScreen`) [3] + モックの段階 `FriendReady` (U31) | 近い名前を当てた (段階名はモック独自) |
+| `C_READY_PEER_READY` | `Client.FriendMatch.Lobby.Ready.FriendReady` | `FriendMatchView` の Ready 画面 (`ShowReadyScreen`) [3] + モックの段階 `FriendReady` (U31) | 近い名前を当てた (段階名はモック独自) |
+| `H_STARTING` | `Host.FriendMatch.Lobby.Starting` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `Starting` | 近い名前を当てた (段階名はモック独自) |
+| `C_STARTING` | `Client.FriendMatch.Lobby.Starting` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `Starting` | 近い名前を当てた (段階名はモック独自) |
+| `H_START_FAILED` | `Host.FriendMatch.Lobby.StartFailed` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `StartFailed` | 近い名前を当てた (段階名はモック独自) |
+| `C_START_FAILED` | `Client.FriendMatch.Lobby.StartFailed` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `StartFailed` | 近い名前を当てた (段階名はモック独自) |
+| `H_CONNECTING` | `Host.FriendMatch.Lobby.Connecting` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `Connecting` | 近い名前を当てた (段階名はモック独自) |
+| `C_CONNECTING` | `Client.FriendMatch.Lobby.Connecting` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `Connecting` | 近い名前を当てた (段階名はモック独自) |
+| `H_CONN_LOST` | `Host.FriendMatch.Lobby.ConnectionLost` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `ConnectionLost` | 近い名前を当てた (段階名はモック独自) |
+| `C_CONN_LOST` | `Client.FriendMatch.Lobby.ConnectionLost` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `ConnectionLost` | 近い名前を当てた (段階名はモック独自) |
+| `H_CLIENT_LEFT` | `Host.FriendMatch.Lobby.ClientLeft` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `ClientLeft` | 近い名前を当てた (段階名はモック独自) |
+| `H_CLIENT_AWAY` | `Host.FriendMatch.Lobby.ClientAway` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `ClientAway` | 近い名前を当てた (段階名はモック独自) |
+| `C_HOST_CANCELLED` | `Client.FriendMatch.Lobby.HostCancelled` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `HostCancelled` | 近い名前を当てた (段階名はモック独自) |
+| `H_EXPIRED` | `Host.FriendMatch.Lobby.MatchExpired` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `MatchExpired` | 近い名前を当てた (段階名はモック独自) |
+| `C_MATCH_EXPIRED` | `Client.FriendMatch.Lobby.MatchExpired` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `MatchExpired` | 近い名前を当てた (段階名はモック独自) |
+| `H_CODE_EXPIRED` | `Host.FriendMatch.Lobby.CodeExpired` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `CodeExpired` | 近い名前を当てた (段階名はモック独自) |
+| `H_AWAY_TOP_WAITING` | `Host.Away.FriendMatchRoom.Waiting` | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_TOP_JOINED` | `Host.Away.FriendMatchRoom.FriendJoined` | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_TOP_READY` | `Host.Away.FriendMatchRoom.Ready` | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_TOP_EXPIRED` | `Host.Away.FriendMatchRoom.Expired` | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_WAITING` | `Host.Away.StageSelection.Waiting` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_JOINED` | `Host.Away.StageSelection.FriendJoined` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_READY` | `Host.Away.StageSelection.Ready` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_EXPIRED` | `Host.Away.StageSelection.Expired` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `C_AWAY_STAGE_READY` | `Client.Away.StageSelection.Ready` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `C_AWAY_STAGE_EXPIRED` | `Client.Away.StageSelection.Expired` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_RANDOM_WAITING` | `Host.Matchmake` | `MatchmakeView` [4] | 一致 |
+| `C_RANDOM_WAITING` | `Client.Matchmake` | `MatchmakeView` [4] | 一致 |
+| `H_VS` | `Host.Opponent` | `OpponentView` (相手の名前を出す画面) [5]。モックの VS 画面 | 近い名前を当てた |
+| `C_VS` | `Client.Opponent` | `OpponentView` (相手の名前を出す画面) [5]。モックの VS 画面 | 近い名前を当てた |
+| `H_GAME_COUNTDOWN` | `Host.Game.Countdown` | `CountdownTimer` [8] (`Game` は `GameState` [6]) | 近い名前を当てた |
+| `C_GAME_COUNTDOWN` | `Client.Game.Countdown` | `CountdownTimer` [8] (`Game` は `GameState` [6]) | 近い名前を当てた |
+| `H_GAME` | `Host.Game.Play` | `GameState.Play` [6] | 一致 |
+| `C_GAME` | `Client.Game.Play` | `GameState.Play` [6] | 一致 |
+| `H_GAME_PAUSED` | `Host.Game.Pause` | `PauseView` [9] / `GameModeTransitionScreen.Pause` [7] | 一致 |
+| `C_GAME_PAUSED` | `Client.Game.Pause` | `PauseView` [9] / `GameModeTransitionScreen.Pause` [7] | 一致 |
+| `H_RESULT_WIN` | `Host.WinResult` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] | 一致 |
+| `C_RESULT_WIN` | `Client.WinResult` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] | 一致 |
+| `H_RESULT_WIN_REMATCH_WAIT` | `Host.WinResult.RematchWaiting` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] + モックの段階 `RematchWaiting` (U23) | 近い名前を当てた (段階名はモック独自) |
+| `C_RESULT_WIN_REMATCH_WAIT` | `Client.WinResult.RematchWaiting` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] + モックの段階 `RematchWaiting` (U23) | 近い名前を当てた (段階名はモック独自) |
+| `H_RESULT_WIN_REMATCH_ASKED` | `Host.WinResult.RematchRequested` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] + モックの段階 `RematchRequested` (U23) | 近い名前を当てた (段階名はモック独自) |
+| `C_RESULT_WIN_REMATCH_ASKED` | `Client.WinResult.RematchRequested` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] + モックの段階 `RematchRequested` (U23) | 近い名前を当てた (段階名はモック独自) |
+| `H_RESULT_LOSE` | `Host.LoseResult` | `GameModeTransitionScreen.LoseResult` [7] / `LoseView` [10] | 一致 |
+| `C_RESULT_LOSE` | `Client.LoseResult` | `GameModeTransitionScreen.LoseResult` [7] / `LoseView` [10] | 一致 |
+| `H_RESULT_LOSE_REMATCH_WAIT` | `Host.LoseResult.RematchWaiting` | `GameModeTransitionScreen.LoseResult` [7] / `LoseView` [10] + モックの段階 `RematchWaiting` (U23) | 近い名前を当てた (段階名はモック独自) |
+| `C_RESULT_LOSE_REMATCH_WAIT` | `Client.LoseResult.RematchWaiting` | `GameModeTransitionScreen.LoseResult` [7] / `LoseView` [10] + モックの段階 `RematchWaiting` (U23) | 近い名前を当てた (段階名はモック独自) |
+| `H_RESULT_LOSE_REMATCH_ASKED` | `Host.LoseResult.RematchRequested` | `GameModeTransitionScreen.LoseResult` [7] / `LoseView` [10] + モックの段階 `RematchRequested` (U23) | 近い名前を当てた (段階名はモック独自) |
+| `C_RESULT_LOSE_REMATCH_ASKED` | `Client.LoseResult.RematchRequested` | `GameModeTransitionScreen.LoseResult` [7] / `LoseView` [10] + モックの段階 `RematchRequested` (U23) | 近い名前を当てた (段階名はモック独自) |
+
+### 旧名 → 新名の対応表 (遷移表のグループ 12)
+
+| 旧名 | 新名 | JS の変数名 | 内容 |
+|---|---|---|---|
+| `H_AWAY_PENDING` | `Host.Away.Pending` | `hostAwayPending` | マッチがまだ有効なホストの離席 (FriendMatchRoom / StageSelection × Waiting / FriendJoined / Ready) (6 状態) |
+| `H_CANCELABLE` | `Host.FriendMatch.Lobby.Cancelable` | `hostCancelable` | ホストが Cancel Match で確認ダイアログを出せるロビーの状態 (8 状態) |
+| `H_WITH_CLIENT` | `Host.FriendMatch.Lobby.WithClient` | `hostWithClient` | クライアントがいるホストのロビーの状態 (7 状態) |
+| `H_EXPIRED_ANY` | `Host.Expired.Any` | `hostExpiredAny` | ホストの期限切れ (ロビーと離席) (4 状態) |
+| `H_ONE_PRESSED` | `Host.FriendMatch.Lobby.Ready.OnePressed` | `hostOnePressed` | 片方だけ Start Match を押した (U31) (2 状態) |
+| `C_ONE_PRESSED` | `Client.FriendMatch.Lobby.Ready.OnePressed` | `clientOnePressed` | 片方だけ Start Match を押した (U31) (2 状態) |
+| `C_IN_MATCH` | `Client.InMatch` | `clientInMatch` | クライアントがマッチに入っている状態 (ロビーと離席) (11 状態) |
+| `C_LEAVABLE` | `Client.FriendMatch.Lobby.Leavable` | `clientLeavable` | クライアントが Leave Match で確認ダイアログを出せるロビーの状態 (6 状態) |
+| `C_TOP_ANY` | `Client.FriendMatch.Room.Any` | `clientRoomAny` | クライアントの Friend Match トップ (Room) のすべて (6 状態) |
+| `C_TOP_FILLED` | `Client.FriendMatch.Room.CodeFilled` | `clientRoomFilled` | Match Code が入力済みの Room (5 状態) |
+| `H_RESULT_ANY` | `Host.Result.Any` | `hostResultAny` | ホストの結果画面のすべて (6 状態) |
+| `C_RESULT_ANY` | `Client.Result.Any` | `clientResultAny` | クライアントの結果画面のすべて (6 状態) |
 
 ## シナリオ一覧
 
@@ -143,13 +263,13 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`H_
 
 | 変更 | 状態 / イベント |
 |---|---|
-| 追加 | `H_READY_WAITING` / `C_READY_WAITING` (自分が先に押して相手を待つ)、`H_READY_PEER_READY` / `C_READY_PEER_READY` (相手が先に押した。"Friend is ready!")。遷移表ではグループ `H_ONE_PRESSED` / `C_ONE_PRESSED` |
-| 意味を変更 | `H_STARTING` / `C_STARTING` ("Starting match…"): 以前は「自分が押して相手を待つ」状態。今は「両者が押して開始の同期中」と、図06 の再試行で先に押した側の待機 |
+| 追加 | `Host.FriendMatch.Lobby.Ready.WaitingForFriend` / `Client.FriendMatch.Lobby.Ready.WaitingForFriend` (自分が先に押して相手を待つ)、`Host.FriendMatch.Lobby.Ready.FriendReady` / `Client.FriendMatch.Lobby.Ready.FriendReady` (相手が先に押した。"Friend is ready!")。遷移表ではグループ `Host.FriendMatch.Lobby.Ready.OnePressed` / `Client.FriendMatch.Lobby.Ready.OnePressed` |
+| 意味を変更 | `Host.FriendMatch.Lobby.Starting` / `Client.FriendMatch.Lobby.Starting` ("Starting match…"): 以前は「自分が押して相手を待つ」状態。今は「両者が押して開始の同期中」と、図06 の再試行で先に押した側の待機 |
 | 削除 | イベント `sys.autoStart` (Ready 後の自動開始)、U31 のトグル、シナリオ 1b の「U31 別案: 自動開始」 |
 | 変更なし | `host.startMatch` / `client.startMatch` / `sys.bothStarted` (ラベルは「自動: 開始の同期が終わる」に変更) |
 
-流れ: `H_READY` / `C_READY` → (先に押した側の `startMatch`) → `H_READY_WAITING` / `C_READY_PEER_READY` (ホストが先) または
-`H_READY_PEER_READY` / `C_READY_WAITING` (クライアントが先) → (もう一方の `startMatch`) → `H_STARTING` / `C_STARTING` → `sys.bothStarted` → `H_VS` / `C_VS`。
+流れ: `Host.FriendMatch.Lobby.Ready` / `Client.FriendMatch.Lobby.Ready` → (先に押した側の `startMatch`) → `Host.FriendMatch.Lobby.Ready.WaitingForFriend` / `Client.FriendMatch.Lobby.Ready.FriendReady` (ホストが先) または
+`Host.FriendMatch.Lobby.Ready.FriendReady` / `Client.FriendMatch.Lobby.Ready.WaitingForFriend` (クライアントが先) → (もう一方の `startMatch`) → `Host.FriendMatch.Lobby.Starting` / `Client.FriendMatch.Lobby.Starting` → `sys.bothStarted` → `Host.Opponent` / `Client.Opponent`。
 
 "Starting match…" をどこに残すか: 図01 では先に押した側が "Starting match…" で相手を待ちます。決定に合わせて、この待機は "Waiting for your friend…" にしました (「表記の修正」に表記差分として記載)。
 "Starting match…" は、両者が押したあと VS 画面までの短い同期の間 (図06 の同期失敗 `sys.startFailed` はここで起きる) と、図06 の再試行で先に押した側の待機に残しています。
@@ -208,11 +328,11 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 
 | 変更 | 状態 / イベント |
 |---|---|
-| 削除 | 状態 `H_COUNTDOWN` / `C_COUNTDOWN` (モック独自の 3·2·1 の画面)、イベント `countdown.done` |
-| 追加 | 状態 `H_GAME_COUNTDOWN` / `C_GAME_COUNTDOWN` (ゲーム画面 + ゲーム本体のカウントダウン、ポーズボタンなし)、イベント `game.countdownDone` (自動、3.4 秒) |
-| 変更なし | `H_GAME` / `C_GAME` (プレイ中、ポーズボタンあり、Win / Lose を押せる) |
+| 削除 | 状態 `H_COUNTDOWN` / `C_COUNTDOWN` (旧名、案 C への改名より前に削除したので対応表には無い。モック独自の 3·2·1 の画面)、イベント `countdown.done` |
+| 追加 | 状態 `Host.Game.Countdown` / `Client.Game.Countdown` (ゲーム画面 + ゲーム本体のカウントダウン、ポーズボタンなし)、イベント `game.countdownDone` (自動、3.4 秒) |
+| 変更なし | `Host.Game.Play` / `Client.Game.Play` (プレイ中、ポーズボタンあり、Win / Lose を押せる) |
 
-流れ: `H_VS` / `C_VS` → `vs.done` → `H_GAME_COUNTDOWN` / `C_GAME_COUNTDOWN` → `game.countdownDone` → `H_GAME` / `C_GAME`。
+流れ: `Host.Opponent` / `Client.Opponent` → `vs.done` → `Host.Game.Countdown` / `Client.Game.Countdown` → `game.countdownDone` → `Host.Game.Play` / `Client.Game.Play`。
 このときの遷移表の行数は 126 行のままでした (`vs.done` の行き先を変え、`countdown.done` の行を `game.countdownDone` に置き換えた)。
 手順の数も変わらないので、既存の `#s=..&step=..` はそのまま使えます (例: 通常対戦の手順 11 がカウントダウン、手順 12 がプレイ開始)。
 
@@ -272,7 +392,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 
 | 変更 | 状態 / イベント |
 |---|---|
-| 追加 | 状態 `H_GAME_PAUSED` / `C_GAME_PAUSED` (ゲーム画面 + ポーズポップアップ)、イベント `host.pause` / `client.pause`、`host.continue` / `client.continue`、`host.quit` / `client.quit`。REMATCH のイベント `host.pauseRematch` / `client.pauseRematch` はラベルだけで行は無い |
+| 追加 | 状態 `Host.Game.Pause` / `Client.Game.Pause` (ゲーム画面 + ポーズポップアップ)、イベント `host.pause` / `client.pause`、`host.continue` / `client.continue`、`host.quit` / `client.quit`。REMATCH のイベント `host.pauseRematch` / `client.pauseRematch` はラベルだけで行は無い |
 | 削除 | イベント `host.backToOnline` / `client.backToOnline` (モック専用のリセット) とその 2 行 |
 
 遷移表は 131 行から 135 行になりました (`backToOnline` の 2 行を削除し、ポーズの 6 行を同じ場所 (T30〜T35) に追加)。
@@ -302,8 +422,8 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 
 | 状態 | 以前は画面の中にあったもの | 移した先 |
 |---|---|---|
-| `H_RESULT_*` / `C_RESULT_*` (結果画面 12 状態ずつ) | Rank の横の `仮` と `未決 U21`、Score の `仮`、Rematch の `未決 U23` (自分が申し込んで待っている `_REMATCH_WAIT` では `未決 U30`)、Back to Friend Match の `未決 U24` | 端末の上の帯に `未決` U21 / U23 / U24 (`_REMATCH_WAIT` では U30 も)。右パネルの説明に「Rank の変化と Score はどちらも仮の表示で、Score の ---- は値が決まっていないため (U21)」と U23 / U24 / U30 の説明。Score の表示は `----` のまま |
-| シナリオ 8 / 9 / 10 のホスト (`H_ONLINE`) | 注記「このシナリオではホストは関与しない」 | 右パネルの現在の状態の下 (`Host` 付きの 1 行)。ホストの端末はその時点の画面 (Online Battle) だけ |
+| `Host.WinResult*` / `Host.LoseResult*` / `Client.WinResult*` / `Client.LoseResult*` (結果画面、ホスト・クライアントで 6 状態ずつ) | Rank の横の `仮` と `未決 U21`、Score の `仮`、Rematch の `未決 U23` (自分が申し込んで待っている `.RematchWaiting` では `未決 U30`)、Back to Friend Match の `未決 U24` | 端末の上の帯に `未決` U21 / U23 / U24 (`.RematchWaiting` では U30 も)。右パネルの説明に「Rank の変化と Score はどちらも仮の表示で、Score の ---- は値が決まっていないため (U21)」と U23 / U24 / U30 の説明。Score の表示は `----` のまま |
+| シナリオ 8 / 9 / 10 のホスト (`Host.MultiModeSelection`) | 注記「このシナリオではホストは関与しない」 | 右パネルの現在の状態の下 (`Host` 付きの 1 行)。ホストの端末はその時点の画面 (Online Battle) だけ |
 
 これで電話の画面の中には、決定・未決・仮の印もモックの注記もありません (`node tests/scan-screens.mjs` で全シナリオの全手順を確認)。
 モックの仮置きとして画面の中に残しているのは次のものだけです。
@@ -311,7 +431,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 | 状態 | 画面の中にあるもの | 場所 |
 |---|---|---|
 | すべての状態 | 遷移表に行が無いボタンの破線・半透明 (例: ポーズの REMATCH、片方だけ押したあとの ‹) | `css/style.css` `.screen [data-norow]` |
-| `H_GAME*` / `C_GAME*`、`H_AWAY_STAGE_*` / `C_AWAY_STAGE_*` | ゲーム画面 (フィールド・HUD) とステージ選択の画面そのものがプレースホルダー | `js/app.js` `VIEWS.game` / `VIEWS.stage` |
+| `Host.Game.*` / `Client.Game.*`、`Host.Away.StageSelection.*` / `Client.Away.StageSelection.*` | ゲーム画面 (フィールド・HUD) とステージ選択の画面そのものがプレースホルダー | `js/app.js` `VIEWS.game` / `VIEWS.stage` |
 
 ## ランダム対戦は相手が見つかり次第 VS へ (2026-10-03 決定、U13a)
 
@@ -368,7 +488,7 @@ ogwssk さんの図は「カウントダウン & ゲーム開始」で終わっ�
 ### 使い方
 
 - 各端末の下に `モック操作 (勝敗): [Win] [Lose]` があります。ゲーム内 UI ではなく、勝敗を決めるためのモック操作です (勝敗判定そのものは対象外)。
-- 押せるのは両端末が対戦中 (ゲーム本体のカウントダウンが終わったあとのゲーム画面、`H_GAME` / `C_GAME`) のときだけです。カウントダウン中 (`H_GAME_COUNTDOWN` / `C_GAME_COUNTDOWN`) は押せません。
+- 押せるのは両端末が対戦中 (ゲーム本体のカウントダウンが終わったあとのゲーム画面、`Host.Game.Play` / `Client.Game.Play`) のときだけです。カウントダウン中 (`Host.Game.Countdown` / `Client.Game.Countdown`) は押せません。
   押せるかどうかは遷移表で決まり、行が無いときは他のボタンと同じく破線・半透明になります。
 - 片方で **Win** を押すと、その端末は "WIN!"、もう片方は自動で "LOSE" の結果画面になります。**Lose** を押すとその逆です。
 
@@ -395,8 +515,8 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
 
 ### 追加した状態・イベント・行
 
-- 状態 (12): `H_RESULT_WIN`, `H_RESULT_LOSE` と、それぞれの `_REMATCH_WAIT` (自分が申し込んで待機中) / `_REMATCH_ASKED` (相手から申し込まれた)。
-  クライアント側も同じく `C_RESULT_*`。遷移表ではグループ `H_RESULT_ANY` / `C_RESULT_ANY` として表示します。
+- 状態 (12): `Host.WinResult`, `Host.LoseResult` と、それぞれの `.RematchWaiting` (自分が申し込んで待機中) / `.RematchRequested` (相手から申し込まれた)。
+  クライアント側も同じく `Client.WinResult*` / `Client.LoseResult*`。遷移表ではグループ `Host.Result.Any` / `Client.Result.Any` として表示します。
 - イベント: `host.win` / `host.lose` / `client.win` / `client.lose` (モック操作)、`host.rematch` / `client.rematch`、
   `host.backToFriendMatch` / `client.backToFriendMatch`
 - 行: 同じ `TRANSITIONS` の末尾に 16 行を追加しました (追加時は T111〜T126。U31 の行とポーズの行を足したので、今は T120〜T135)。
@@ -492,7 +612,7 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   有効期限の長さが未定。ホスト側は "Match code expired." / トースト "Match code expired"、クライアント側は "Match expired." と文言が異なる。
 - **U8 ホストがキャンセルした後のクライアントの出口**  
   "Host User / cancelled the match." の画面にボタンが無い (‹ のみ)。モックでは ‹ で Friend Match トップに戻る。
-- **U9 クライアント待機中 (C_WAITING) の退出方法**  
+- **U9 クライアント待機中 (Client.FriendMatch.Lobby.Waiting) の退出方法**  
   "Waiting for your friend…" のクライアント画面にボタンが無い。モックでは ‹ で抜けて Match Code 入力済みのトップへ戻る。
 - **U10 クライアント離脱で期限切れ後のホスト画面の Start Match**  
   図07 で "Match expired." の画面に Start Match と Cancel Match がある。期限切れで開始できる意味が不明なため、モックでは Start Match に遷移行を用意していない (押せない)。

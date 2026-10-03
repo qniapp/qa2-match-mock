@@ -19,48 +19,60 @@
 
 // ---- 状態のグループ -------------------------------------------------------
 
-var AWAY_PLACES = ['TOP', 'STAGE']; // ホストが Friend Match トップ / ステージ選択にいる
-var AWAY_STATUSES = ['WAITING', 'JOINED', 'READY'];
+// 状態名は案 C (2026-10-03): 「Host. / Client.」+ qa2 本体の画面名・状態名。旧名との対応表は README の「状態名」
+var AWAY_PLACES = ['FriendMatchRoom', 'StageSelection']; // ホストが Friend Match トップ / ステージ選択にいる
+var AWAY_STATUSES = ['Waiting', 'FriendJoined', 'Ready'];
+function away(place, status) { return 'Host.Away.' + place + '.' + status; }
 
-var H_AWAY_PENDING = []; // マッチがまだ有効なホスト離席状態
+var hostAwayPending = []; // マッチがまだ有効なホスト離席状態
 AWAY_PLACES.forEach(function (p) {
-  AWAY_STATUSES.forEach(function (s) { H_AWAY_PENDING.push('H_AWAY_' + p + '_' + s); });
+  AWAY_STATUSES.forEach(function (s) { hostAwayPending.push(away(p, s)); });
 });
 
-var H_CANCELABLE = ['H_WAITING', 'H_FRIEND_JOINED', 'H_READY', 'H_CONNECTING', 'H_CONN_LOST',
-  'H_CLIENT_LEFT', 'H_CLIENT_AWAY', 'H_START_FAILED'];
-var H_WITH_CLIENT = ['H_FRIEND_JOINED', 'H_READY', 'H_STARTING', 'H_START_FAILED',
-  'H_CONNECTING', 'H_CONN_LOST', 'H_CLIENT_AWAY'];
-// 片方だけ Start Match を押した状態 (U31 決定): 押した側は待機 (_WAITING)、相手側には準備完了 (_PEER_READY)
-var H_ONE_PRESSED = ['H_READY_WAITING', 'H_READY_PEER_READY'];
-var C_ONE_PRESSED = ['C_READY_WAITING', 'C_READY_PEER_READY'];
-var C_IN_MATCH = ['C_WAITING', 'C_HOST_AWAY', 'C_FRIEND_JOINED', 'C_READY', 'C_READY_WAITING', 'C_READY_PEER_READY', 'C_STARTING',
-  'C_START_FAILED', 'C_CONNECTING', 'C_CONN_LOST', 'C_AWAY_STAGE_READY'];
-var C_LEAVABLE = ['C_HOST_AWAY', 'C_FRIEND_JOINED', 'C_READY', 'C_START_FAILED',
-  'C_CONNECTING', 'C_CONN_LOST'];
-var C_TOP_ANY = ['C_TOP', 'C_TOP_CODE', 'C_TOP_ERR_NOTFOUND', 'C_TOP_ERR_EXPIRED',
-  'C_TOP_ERR_FULL', 'C_TOP_CONN_FAILED'];
-var C_TOP_FILLED = ['C_TOP_CODE', 'C_TOP_ERR_NOTFOUND', 'C_TOP_ERR_EXPIRED',
-  'C_TOP_ERR_FULL', 'C_TOP_CONN_FAILED'];
-var H_EXPIRED_ANY = ['H_CODE_EXPIRED', 'H_EXPIRED', 'H_AWAY_TOP_EXPIRED', 'H_AWAY_STAGE_EXPIRED'];
+var hostCancelable = ['Host.FriendMatch.Lobby.Waiting', 'Host.FriendMatch.Lobby.FriendJoined', 'Host.FriendMatch.Lobby.Ready', 'Host.FriendMatch.Lobby.Connecting', 'Host.FriendMatch.Lobby.ConnectionLost',
+  'Host.FriendMatch.Lobby.ClientLeft', 'Host.FriendMatch.Lobby.ClientAway', 'Host.FriendMatch.Lobby.StartFailed'];
+var hostWithClient = ['Host.FriendMatch.Lobby.FriendJoined', 'Host.FriendMatch.Lobby.Ready', 'Host.FriendMatch.Lobby.Starting', 'Host.FriendMatch.Lobby.StartFailed',
+  'Host.FriendMatch.Lobby.Connecting', 'Host.FriendMatch.Lobby.ConnectionLost', 'Host.FriendMatch.Lobby.ClientAway'];
+// 片方だけ Start Match を押した状態 (U31 決定): 押した側は待機 (.WaitingForFriend)、相手側には準備完了 (.FriendReady)
+var hostOnePressed = ['Host.FriendMatch.Lobby.Ready.WaitingForFriend', 'Host.FriendMatch.Lobby.Ready.FriendReady'];
+var clientOnePressed = ['Client.FriendMatch.Lobby.Ready.WaitingForFriend', 'Client.FriendMatch.Lobby.Ready.FriendReady'];
+var clientInMatch = ['Client.FriendMatch.Lobby.Waiting', 'Client.FriendMatch.Lobby.HostAway', 'Client.FriendMatch.Lobby.FriendJoined', 'Client.FriendMatch.Lobby.Ready', 'Client.FriendMatch.Lobby.Ready.WaitingForFriend', 'Client.FriendMatch.Lobby.Ready.FriendReady', 'Client.FriendMatch.Lobby.Starting',
+  'Client.FriendMatch.Lobby.StartFailed', 'Client.FriendMatch.Lobby.Connecting', 'Client.FriendMatch.Lobby.ConnectionLost', 'Client.Away.StageSelection.Ready'];
+var clientLeavable = ['Client.FriendMatch.Lobby.HostAway', 'Client.FriendMatch.Lobby.FriendJoined', 'Client.FriendMatch.Lobby.Ready', 'Client.FriendMatch.Lobby.StartFailed',
+  'Client.FriendMatch.Lobby.Connecting', 'Client.FriendMatch.Lobby.ConnectionLost'];
+var clientRoomAny = ['Client.FriendMatch.Room', 'Client.FriendMatch.Room.CodeEntered', 'Client.FriendMatch.Room.Error.NotFound', 'Client.FriendMatch.Room.Error.Expired',
+  'Client.FriendMatch.Room.Error.Full', 'Client.FriendMatch.Room.ConnectionFailed'];
+var clientRoomFilled = ['Client.FriendMatch.Room.CodeEntered', 'Client.FriendMatch.Room.Error.NotFound', 'Client.FriendMatch.Room.Error.Expired',
+  'Client.FriendMatch.Room.Error.Full', 'Client.FriendMatch.Room.ConnectionFailed'];
+var hostExpiredAny = ['Host.FriendMatch.Lobby.CodeExpired', 'Host.FriendMatch.Lobby.MatchExpired', 'Host.Away.FriendMatchRoom.Expired', 'Host.Away.StageSelection.Expired'];
 
 // 対戦後の結果画面: 勝ち負け × 再戦の段階 (なし / 自分が申し込んで待機中 / 相手から申し込まれた)
-var OUTCOMES = ['WIN', 'LOSE'];
-var RESULT_PHASES = { '': null, _REMATCH_WAIT: 'wait', _REMATCH_ASKED: 'asked' };
-var H_RESULT_ANY = [];
-var C_RESULT_ANY = [];
+var OUTCOMES = ['Win', 'Lose'];
+var RESULT_PHASES = { '': null, '.RematchWaiting': 'wait', '.RematchRequested': 'asked' };
+function resultState(role, outcome, phase) { return role + '.' + outcome + 'Result' + (phase || ''); }
+var hostResultAny = [];
+var clientResultAny = [];
 OUTCOMES.forEach(function (o) {
   Object.keys(RESULT_PHASES).forEach(function (ph) {
-    H_RESULT_ANY.push('H_RESULT_' + o + ph);
-    C_RESULT_ANY.push('C_RESULT_' + o + ph);
+    hostResultAny.push(resultState('Host', o, ph));
+    clientResultAny.push(resultState('Client', o, ph));
   });
 });
 
 // 遷移表の表示で、配列の代わりにグループ名を出すための一覧
 var STATE_GROUPS = {
-  H_AWAY_PENDING: H_AWAY_PENDING, H_CANCELABLE: H_CANCELABLE, H_WITH_CLIENT: H_WITH_CLIENT,
-  H_EXPIRED_ANY: H_EXPIRED_ANY, H_ONE_PRESSED: H_ONE_PRESSED, C_ONE_PRESSED: C_ONE_PRESSED, C_IN_MATCH: C_IN_MATCH, C_LEAVABLE: C_LEAVABLE,
-  C_TOP_ANY: C_TOP_ANY, C_TOP_FILLED: C_TOP_FILLED, H_RESULT_ANY: H_RESULT_ANY, C_RESULT_ANY: C_RESULT_ANY,
+  'Host.Away.Pending': hostAwayPending,
+  'Host.FriendMatch.Lobby.Cancelable': hostCancelable,
+  'Host.FriendMatch.Lobby.WithClient': hostWithClient,
+  'Host.Expired.Any': hostExpiredAny,
+  'Host.FriendMatch.Lobby.Ready.OnePressed': hostOnePressed,
+  'Client.FriendMatch.Lobby.Ready.OnePressed': clientOnePressed,
+  'Client.InMatch': clientInMatch,
+  'Client.FriendMatch.Lobby.Leavable': clientLeavable,
+  'Client.FriendMatch.Room.Any': clientRoomAny,
+  'Client.FriendMatch.Room.CodeFilled': clientRoomFilled,
+  'Host.Result.Any': hostResultAny,
+  'Client.Result.Any': clientResultAny,
 };
 
 // ゲーム本体の開始カウントダウン (VsAI の CountdownTimer と同じ): 1 秒待ってから 3 → 2 → 1 を 0.8 秒ずつ
@@ -75,193 +87,193 @@ var TRANSITIONS = (function () {
   function eachPlace(fn) { AWAY_PLACES.forEach(fn); }
 
   // === Online Battle / Friend Match トップ ===
-  T({ from: { host: 'H_ONLINE', client: '*' }, event: 'host.friendMatch', to: { host: 'H_TOP', client: '*' } });
-  T({ from: { host: 'H_ONLINE', client: '*' }, event: 'host.randomMatch', to: { host: 'H_RANDOM_WAITING', client: '*' },
+  T({ from: { host: 'Host.MultiModeSelection', client: '*' }, event: 'host.friendMatch', to: { host: 'Host.FriendMatch.Room', client: '*' } });
+  T({ from: { host: 'Host.MultiModeSelection', client: '*' }, event: 'host.randomMatch', to: { host: 'Host.Matchmake', client: '*' },
     note: '決定 (U13a): 相手を探す画面 ("Searching for an opponent…" と Cancel)', decided: ['U13a'] });
-  T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.back', to: { host: 'H_ONLINE', client: '*' } });
-  T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.createMatch', when: { createResult: 'connFailed' },
-    to: { host: 'H_TOP_CONN_FAILED', client: '*' }, note: 'モック設定「Create Match の結果 = 接続失敗」のとき', undecided: ['U6'] });
-  T({ from: { host: ['H_TOP', 'H_TOP_CONN_FAILED'], client: '*' }, event: 'host.createMatch', to: { host: 'H_WAITING', client: '*' }, note: '図01: Match Code QWERTY123 が発行される' });
-  T({ from: { host: 'H_TOP_CONN_FAILED', client: '*' }, event: 'host.tapToast', to: { host: 'H_TOP', client: '*' }, undecided: ['U6'] });
+  T({ from: { host: ['Host.FriendMatch.Room', 'Host.FriendMatch.Room.ConnectionFailed'], client: '*' }, event: 'host.back', to: { host: 'Host.MultiModeSelection', client: '*' } });
+  T({ from: { host: ['Host.FriendMatch.Room', 'Host.FriendMatch.Room.ConnectionFailed'], client: '*' }, event: 'host.createMatch', when: { createResult: 'connFailed' },
+    to: { host: 'Host.FriendMatch.Room.ConnectionFailed', client: '*' }, note: 'モック設定「Create Match の結果 = 接続失敗」のとき', undecided: ['U6'] });
+  T({ from: { host: ['Host.FriendMatch.Room', 'Host.FriendMatch.Room.ConnectionFailed'], client: '*' }, event: 'host.createMatch', to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, note: '図01: Match Code QWERTY123 が発行される' });
+  T({ from: { host: 'Host.FriendMatch.Room.ConnectionFailed', client: '*' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Room', client: '*' }, undecided: ['U6'] });
 
-  T({ from: { host: '*', client: 'C_ONLINE' }, event: 'client.friendMatch', to: { host: '*', client: 'C_TOP' } });
-  T({ from: { host: '*', client: 'C_ONLINE' }, event: 'client.randomMatch', to: { host: '*', client: 'C_RANDOM_WAITING' },
+  T({ from: { host: '*', client: 'Client.MultiModeSelection' }, event: 'client.friendMatch', to: { host: '*', client: 'Client.FriendMatch.Room' } });
+  T({ from: { host: '*', client: 'Client.MultiModeSelection' }, event: 'client.randomMatch', to: { host: '*', client: 'Client.Matchmake' },
     note: '決定 (U13a): 相手を探す画面 ("Searching for an opponent…" と Cancel)', decided: ['U13a'] });
-  T({ from: { host: '*', client: C_TOP_ANY }, event: 'client.back', to: { host: '*', client: 'C_ONLINE' } });
-  T({ from: { host: '*', client: 'C_TOP' }, event: 'client.enterCode', to: { host: '*', client: 'C_TOP_CODE' }, note: 'モックでは入力欄タップで QWERTY123 を入力' });
-  T({ from: { host: '*', client: 'C_TOP_CONN_FAILED' }, event: 'client.tapToast', to: { host: '*', client: 'C_TOP_CODE' }, undecided: ['U6'] });
+  T({ from: { host: '*', client: clientRoomAny }, event: 'client.back', to: { host: '*', client: 'Client.MultiModeSelection' } });
+  T({ from: { host: '*', client: 'Client.FriendMatch.Room' }, event: 'client.enterCode', to: { host: '*', client: 'Client.FriendMatch.Room.CodeEntered' }, note: 'モックでは入力欄タップで QWERTY123 を入力' });
+  T({ from: { host: '*', client: 'Client.FriendMatch.Room.ConnectionFailed' }, event: 'client.tapToast', to: { host: '*', client: 'Client.FriendMatch.Room.CodeEntered' }, undecided: ['U6'] });
 
   // === Join Match の結果 ===
-  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'notFound' },
-    to: { host: '*', client: 'C_TOP_ERR_NOTFOUND' }, note: '図08: 無効な Match Code' });
-  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'expired' },
-    to: { host: '*', client: 'C_TOP_ERR_EXPIRED' }, note: '図09: Match Code が期限切れ' });
-  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'full' },
-    to: { host: '*', client: 'C_TOP_ERR_FULL' }, note: '図10: すでにほかの人が入っている' });
-  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch', when: { codeResult: 'connFailed' },
-    to: { host: '*', client: 'C_TOP_CONN_FAILED' }, note: '"Connection failed" の発生条件は図に無い', undecided: ['U6'] });
-  T({ from: { host: 'H_WAITING', client: C_TOP_FILLED }, event: 'client.joinMatch',
-    to: { host: 'H_FRIEND_JOINED', client: 'C_WAITING' }, note: '図01: ホストは Friend joined!、クライアントはまず Waiting for your friend…' });
+  T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch', when: { codeResult: 'notFound' },
+    to: { host: '*', client: 'Client.FriendMatch.Room.Error.NotFound' }, note: '図08: 無効な Match Code' });
+  T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch', when: { codeResult: 'expired' },
+    to: { host: '*', client: 'Client.FriendMatch.Room.Error.Expired' }, note: '図09: Match Code が期限切れ' });
+  T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch', when: { codeResult: 'full' },
+    to: { host: '*', client: 'Client.FriendMatch.Room.Error.Full' }, note: '図10: すでにほかの人が入っている' });
+  T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch', when: { codeResult: 'connFailed' },
+    to: { host: '*', client: 'Client.FriendMatch.Room.ConnectionFailed' }, note: '"Connection failed" の発生条件は図に無い', undecided: ['U6'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Waiting', client: clientRoomFilled }, event: 'client.joinMatch',
+    to: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: 'Client.FriendMatch.Lobby.Waiting' }, note: '図01: ホストは Friend joined!、クライアントはまず Waiting for your friend…' });
   eachPlace(function (p) {
-    T({ from: { host: 'H_AWAY_' + p + '_WAITING', client: C_TOP_FILLED }, event: 'client.joinMatch',
-      to: { host: 'H_AWAY_' + p + '_JOINED', client: 'C_WAITING' }, note: '図02: ホストは別画面のまま緑の "Friend joined!" トースト' });
+    T({ from: { host: away(p, 'Waiting'), client: clientRoomFilled }, event: 'client.joinMatch',
+      to: { host: away(p, 'FriendJoined'), client: 'Client.FriendMatch.Lobby.Waiting' }, note: '図02: ホストは別画面のまま緑の "Friend joined!" トースト' });
   });
-  T({ from: { host: H_EXPIRED_ANY, client: C_TOP_FILLED }, event: 'client.joinMatch',
-    to: { host: '*', client: 'C_TOP_ERR_EXPIRED' }, note: 'ホストの Match Code が期限切れ' });
-  T({ from: { host: '*', client: C_TOP_FILLED }, event: 'client.joinMatch',
-    to: { host: '*', client: 'C_TOP_ERR_NOTFOUND' }, note: 'ホストが待機中のマッチを持っていないので見つからない' });
+  T({ from: { host: hostExpiredAny, client: clientRoomFilled }, event: 'client.joinMatch',
+    to: { host: '*', client: 'Client.FriendMatch.Room.Error.Expired' }, note: 'ホストの Match Code が期限切れ' });
+  T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch',
+    to: { host: '*', client: 'Client.FriendMatch.Room.Error.NotFound' }, note: 'ホストが待機中のマッチを持っていないので見つからない' });
 
   // === 通常対戦 (図01) ===
-  T({ from: { host: 'H_FRIEND_JOINED', client: 'C_WAITING' }, event: 'sys.peerConnected', auto: 800,
-    to: { host: '*', client: 'C_FRIEND_JOINED' }, note: '図01: 点線 (自動)' });
-  T({ from: { host: 'H_FRIEND_JOINED', client: 'C_FRIEND_JOINED' }, event: 'sys.ready', auto: 1500,
-    to: { host: 'H_READY', client: 'C_READY' }, note: '図01: 点線 (自動)。何をもって Ready か不明', undecided: ['U4'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: 'Client.FriendMatch.Lobby.Waiting' }, event: 'sys.peerConnected', auto: 800,
+    to: { host: '*', client: 'Client.FriendMatch.Lobby.FriendJoined' }, note: '図01: 点線 (自動)' });
+  T({ from: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: 'Client.FriendMatch.Lobby.FriendJoined' }, event: 'sys.ready', auto: 1500,
+    to: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, note: '図01: 点線 (自動)。何をもって Ready か不明', undecided: ['U4'] });
   // 決定 (U31): 両者が Start Match を押したら開始。先に押した側は待機、相手側には相手が準備完了であることを表示
-  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'host.startMatch',
-    to: { host: 'H_READY_WAITING', client: 'C_READY_PEER_READY' },
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, event: 'host.startMatch',
+    to: { host: 'Host.FriendMatch.Lobby.Ready.WaitingForFriend', client: 'Client.FriendMatch.Lobby.Ready.FriendReady' },
     note: '決定 (U31): 押した側は "Waiting for your friend…"、相手側には "Friend is ready!" (図01 では押した側は "Starting match…")', decided: ['U31'], undecided: ['U36'] });
-  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'client.startMatch',
-    to: { host: 'H_READY_PEER_READY', client: 'C_READY_WAITING' },
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, event: 'client.startMatch',
+    to: { host: 'Host.FriendMatch.Lobby.Ready.FriendReady', client: 'Client.FriendMatch.Lobby.Ready.WaitingForFriend' },
     note: '決定 (U31): 押した側は "Waiting for your friend…"、相手側には "Friend is ready!" (図01 では押した側は "Starting match…")', decided: ['U31'], undecided: ['U36'] });
-  T({ from: { host: 'H_READY_PEER_READY', client: 'C_READY_WAITING' }, event: 'host.startMatch',
-    to: { host: 'H_STARTING', client: 'C_STARTING' }, note: '決定 (U31): 両者が押したので開始。同期の間は図の "Starting match…"', decided: ['U31'] });
-  T({ from: { host: 'H_READY_WAITING', client: 'C_READY_PEER_READY' }, event: 'client.startMatch',
-    to: { host: 'H_STARTING', client: 'C_STARTING' }, note: '決定 (U31): 両者が押したので開始。同期の間は図の "Starting match…"', decided: ['U31'] });
-  T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.bothStarted', auto: 1500,
-    to: { host: 'H_VS', client: 'C_VS' }, note: '合意: マッチ成立時に VS 画面を挟む' });
-  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'vs.done', auto: 2500,
-    to: { host: 'H_GAME_COUNTDOWN', client: 'C_GAME_COUNTDOWN' },
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready.FriendReady', client: 'Client.FriendMatch.Lobby.Ready.WaitingForFriend' }, event: 'host.startMatch',
+    to: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, note: '決定 (U31): 両者が押したので開始。同期の間は図の "Starting match…"', decided: ['U31'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready.WaitingForFriend', client: 'Client.FriendMatch.Lobby.Ready.FriendReady' }, event: 'client.startMatch',
+    to: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, note: '決定 (U31): 両者が押したので開始。同期の間は図の "Starting match…"', decided: ['U31'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, event: 'sys.bothStarted', auto: 1500,
+    to: { host: 'Host.Opponent', client: 'Client.Opponent' }, note: '合意: マッチ成立時に VS 画面を挟む' });
+  T({ from: { host: 'Host.Opponent', client: 'Client.Opponent' }, event: 'vs.done', auto: 2500,
+    to: { host: 'Host.Game.Countdown', client: 'Client.Game.Countdown' },
     note: '合意: VS 画面は 2〜3 秒。決定 (U2): そのままゲーム画面へ移り、ゲーム本体のカウントダウンが始まる', decided: ['U2'] });
-  T({ from: { host: 'H_GAME_COUNTDOWN', client: 'C_GAME_COUNTDOWN' }, event: 'game.countdownDone', auto: GAME_COUNTDOWN_MS,
-    to: { host: 'H_GAME', client: 'C_GAME' }, note: '決定 (U2): ゲーム本体の 3 → 2 → 1 (1 秒待ち + 0.8 秒 × 3) が終わるとポーズボタンが出てプレイ開始', decided: ['U2'] });
+  T({ from: { host: 'Host.Game.Countdown', client: 'Client.Game.Countdown' }, event: 'game.countdownDone', auto: GAME_COUNTDOWN_MS,
+    to: { host: 'Host.Game.Play', client: 'Client.Game.Play' }, note: '決定 (U2): ゲーム本体の 3 → 2 → 1 (1 秒待ち + 0.8 秒 × 3) が終わるとポーズボタンが出てプレイ開始', decided: ['U2'] });
 
   // === 対戦中のポーズ (実機の VsAI のポーズポップアップにならう。オンラインで出すかは未決 U37) ===
   // 相手の端末は変えない (仮、U38)。2 番目のボタン REMATCH には行が無い (U39)
-  T({ from: { host: 'H_GAME', client: '*' }, event: 'host.pause', to: { host: 'H_GAME_PAUSED', client: '*' },
+  T({ from: { host: 'Host.Game.Play', client: '*' }, event: 'host.pause', to: { host: 'Host.Game.Pause', client: '*' },
     note: '仮: ポーズポップアップを開く (実機の VsPlayer ではポーズボタンが出ない)。相手の端末は変わらない', undecided: ['U37', 'U38'] });
-  T({ from: { host: '*', client: 'C_GAME' }, event: 'client.pause', to: { host: '*', client: 'C_GAME_PAUSED' },
+  T({ from: { host: '*', client: 'Client.Game.Play' }, event: 'client.pause', to: { host: '*', client: 'Client.Game.Pause' },
     note: '仮: ポーズポップアップを開く (実機の VsPlayer ではポーズボタンが出ない)。相手の端末は変わらない', undecided: ['U37', 'U38'] });
-  T({ from: { host: 'H_GAME_PAUSED', client: '*' }, event: 'host.continue', to: { host: 'H_GAME', client: '*' },
+  T({ from: { host: 'Host.Game.Pause', client: '*' }, event: 'host.continue', to: { host: 'Host.Game.Play', client: '*' },
     note: '実機と同じ: CONTINUE でポップアップを閉じてプレイに戻る', undecided: ['U37'] });
-  T({ from: { host: '*', client: 'C_GAME_PAUSED' }, event: 'client.continue', to: { host: '*', client: 'C_GAME' },
+  T({ from: { host: '*', client: 'Client.Game.Pause' }, event: 'client.continue', to: { host: '*', client: 'Client.Game.Play' },
     note: '実機と同じ: CONTINUE でポップアップを閉じてプレイに戻る', undecided: ['U37'] });
-  T({ from: { host: 'H_GAME_PAUSED', client: '*' }, event: 'host.quit', to: { host: 'H_ONLINE', client: '*' },
+  T({ from: { host: 'Host.Game.Pause', client: '*' }, event: 'host.quit', to: { host: 'Host.MultiModeSelection', client: '*' },
     note: '仮: 確認なしで Online Battle へ (実機は AI / SOLO 選択画面へ)。相手の端末は変わらない', undecided: ['U38', 'U40', 'U41'] });
-  T({ from: { host: '*', client: 'C_GAME_PAUSED' }, event: 'client.quit', to: { host: '*', client: 'C_ONLINE' },
+  T({ from: { host: '*', client: 'Client.Game.Pause' }, event: 'client.quit', to: { host: '*', client: 'Client.MultiModeSelection' },
     note: '仮: 確認なしで Online Battle へ (実機は AI / SOLO 選択画面へ)。相手の端末は変わらない', undecided: ['U38', 'U40', 'U41'] });
 
   // === Start Match 直後の同期失敗 (図06) ===
-  T({ from: { host: 'H_STARTING', client: 'C_STARTING' }, event: 'sys.startFailed',
-    to: { host: 'H_START_FAILED', client: 'C_START_FAILED' }, note: '図06: 接続が切れる / 同期処理の失敗' });
-  T({ from: { host: 'H_START_FAILED', client: '*' }, event: 'host.startMatch',
-    to: { host: 'H_STARTING', client: '*' }, note: '図06: 再試行。先に押した側は図どおり "Starting match…" で相手を待つ', undecided: ['U15'] });
-  T({ from: { host: '*', client: 'C_START_FAILED' }, event: 'client.startMatch',
-    to: { host: '*', client: 'C_STARTING' }, note: '図06: 再試行。先に押した側は図どおり "Starting match…" で相手を待つ', undecided: ['U15'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, event: 'sys.startFailed',
+    to: { host: 'Host.FriendMatch.Lobby.StartFailed', client: 'Client.FriendMatch.Lobby.StartFailed' }, note: '図06: 接続が切れる / 同期処理の失敗' });
+  T({ from: { host: 'Host.FriendMatch.Lobby.StartFailed', client: '*' }, event: 'host.startMatch',
+    to: { host: 'Host.FriendMatch.Lobby.Starting', client: '*' }, note: '図06: 再試行。先に押した側は図どおり "Starting match…" で相手を待つ', undecided: ['U15'] });
+  T({ from: { host: '*', client: 'Client.FriendMatch.Lobby.StartFailed' }, event: 'client.startMatch',
+    to: { host: '*', client: 'Client.FriendMatch.Lobby.Starting' }, note: '図06: 再試行。先に押した側は図どおり "Starting match…" で相手を待つ', undecided: ['U15'] });
 
   // === ホストのキャンセル (図03, 図04) ===
   // 片方が Start Match を押したあとのキャンセルは図に無い。Ready からのキャンセルと同じ結果を仮に置く
-  T({ from: { host: H_ONE_PRESSED, client: '*' }, event: 'host.cancelMatch',
+  T({ from: { host: hostOnePressed, client: '*' }, event: 'host.cancelMatch',
     to: { host: '=', client: '*' }, dialog: { host: 'cancel' }, note: '仮: 片方が Start Match を押したあとのキャンセル (図に無い)', undecided: ['U34'] });
-  T({ from: { host: H_ONE_PRESSED, client: C_ONE_PRESSED, hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
-    to: { host: 'H_TOP', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '仮: Ready からのキャンセル (図04) と同じ結果', undecided: ['U34', 'U8'] });
-  T({ from: { host: H_CANCELABLE, client: '*' }, event: 'host.cancelMatch',
+  T({ from: { host: hostOnePressed, client: clientOnePressed, hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
+    to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Lobby.HostCancelled' }, dialog: { host: null }, note: '仮: Ready からのキャンセル (図04) と同じ結果', undecided: ['U34', 'U8'] });
+  T({ from: { host: hostCancelable, client: '*' }, event: 'host.cancelMatch',
     to: { host: '=', client: '*' }, dialog: { host: 'cancel' }, note: '確認ダイアログ' });
   T({ from: { host: '*', client: '*', hostDialog: 'cancel' }, event: 'host.dialog.keepWaiting',
     to: { host: '=', client: '*' }, dialog: { host: null }, note: '合意: 図の "Go Back" → "Keep Waiting"' });
-  T({ from: { host: '*', client: C_IN_MATCH, hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
-    to: { host: 'H_TOP', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '図04: クライアントは "cancelled the match."', undecided: ['U8'] });
+  T({ from: { host: '*', client: clientInMatch, hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
+    to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Lobby.HostCancelled' }, dialog: { host: null }, note: '図04: クライアントは "cancelled the match."', undecided: ['U8'] });
   T({ from: { host: '*', client: '*', hostDialog: 'cancel' }, event: 'host.dialog.cancelMatch',
-    to: { host: 'H_TOP', client: '*' }, dialog: { host: null }, note: '図03/04: Friend Match トップへ' });
-  T({ from: { host: 'H_EXPIRED', client: '*' }, event: 'host.cancelMatch',
-    to: { host: 'H_TOP', client: '*' }, note: '期限切れなので確認ダイアログなし (モックの仮定)', undecided: ['U10'] });
-  T({ from: { host: 'H_EXPIRED', client: '*' }, event: 'host.back', to: { host: 'H_TOP', client: '*' } });
+    to: { host: 'Host.FriendMatch.Room', client: '*' }, dialog: { host: null }, note: '図03/04: Friend Match トップへ' });
+  T({ from: { host: 'Host.FriendMatch.Lobby.MatchExpired', client: '*' }, event: 'host.cancelMatch',
+    to: { host: 'Host.FriendMatch.Room', client: '*' }, note: '期限切れなので確認ダイアログなし (モックの仮定)', undecided: ['U10'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.MatchExpired', client: '*' }, event: 'host.back', to: { host: 'Host.FriendMatch.Room', client: '*' } });
 
   // === クライアントの退出 (図05) ===
   // 片方が Start Match を押したあとの退出は図に無い。Ready からの退出と同じ結果を仮に置く
-  T({ from: { host: '*', client: C_ONE_PRESSED }, event: 'client.leaveMatch',
+  T({ from: { host: '*', client: clientOnePressed }, event: 'client.leaveMatch',
     to: { host: '*', client: '=' }, dialog: { client: 'leave' }, note: '仮: 片方が Start Match を押したあとの退出 (図に無い)', undecided: ['U34', 'U11'] });
-  T({ from: { host: H_ONE_PRESSED, client: C_ONE_PRESSED, clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
-    to: { host: 'H_CLIENT_LEFT', client: 'C_TOP_CODE' }, dialog: { client: null }, note: '仮: Ready からの退出 (図05) と同じ結果', undecided: ['U34'] });
-  T({ from: { host: '*', client: C_LEAVABLE }, event: 'client.leaveMatch',
+  T({ from: { host: hostOnePressed, client: clientOnePressed, clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
+    to: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null }, note: '仮: Ready からの退出 (図05) と同じ結果', undecided: ['U34'] });
+  T({ from: { host: '*', client: clientLeavable }, event: 'client.leaveMatch',
     to: { host: '*', client: '=' }, dialog: { client: 'leave' }, note: '確認ダイアログ', undecided: ['U11'] });
   T({ from: { host: '*', client: '*', clientDialog: 'leave' }, event: 'client.dialog.goBack',
     to: { host: '*', client: '=' }, dialog: { client: null }, undecided: ['U11'] });
-  T({ from: { host: H_WITH_CLIENT, client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
-    to: { host: 'H_CLIENT_LEFT', client: 'C_TOP_CODE' }, dialog: { client: null }, note: '図05: クライアントは入力欄に Match Code が残ったトップへ' });
+  T({ from: { host: hostWithClient, client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
+    to: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null }, note: '図05: クライアントは入力欄に Match Code が残ったトップへ' });
   eachPlace(function (p) {
-    T({ from: { host: ['H_AWAY_' + p + '_JOINED', 'H_AWAY_' + p + '_READY'], client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
-      to: { host: 'H_AWAY_' + p + '_WAITING', client: 'C_TOP_CODE' }, dialog: { client: null },
+    T({ from: { host: [away(p, 'FriendJoined'), away(p, 'Ready')], client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
+      to: { host: away(p, 'Waiting'), client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null },
       note: 'ホスト離席中の退出: トーストが青に戻る (図に無い)', undecided: ['U17'] });
   });
   T({ from: { host: '*', client: '*', clientDialog: 'leave' }, event: 'client.dialog.leaveMatch',
-    to: { host: '*', client: 'C_TOP_CODE' }, dialog: { client: null } });
-  T({ from: { host: 'H_CLIENT_LEFT', client: '*' }, event: 'sys.resetWaiting', auto: 1500,
-    to: { host: 'H_WAITING', client: '*' }, note: '図05: 点線 (自動)。同じ Match Code で待機に戻る' });
+    to: { host: '*', client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null } });
+  T({ from: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: '*' }, event: 'sys.resetWaiting', auto: 1500,
+    to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, note: '図05: 点線 (自動)。同じ Match Code で待機に戻る' });
 
-  // クライアント待機中 (C_WAITING) の退出: 図にボタンが無いので ‹ で抜ける仮定
-  T({ from: { host: 'H_FRIEND_JOINED', client: 'C_WAITING' }, event: 'client.back',
-    to: { host: 'H_CLIENT_LEFT', client: 'C_TOP_CODE' }, note: 'C_WAITING には退出ボタンが無い。‹ で抜ける仮定', undecided: ['U9'] });
+  // クライアント待機中 (Client.FriendMatch.Lobby.Waiting) の退出: 図にボタンが無いので ‹ で抜ける仮定
+  T({ from: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: 'Client.FriendMatch.Lobby.Waiting' }, event: 'client.back',
+    to: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: 'Client.FriendMatch.Room.CodeEntered' }, note: 'Client.FriendMatch.Lobby.Waiting には退出ボタンが無い。‹ で抜ける仮定', undecided: ['U9'] });
   eachPlace(function (p) {
-    T({ from: { host: 'H_AWAY_' + p + '_JOINED', client: 'C_WAITING' }, event: 'client.back',
-      to: { host: 'H_AWAY_' + p + '_WAITING', client: 'C_TOP_CODE' }, note: 'C_WAITING には退出ボタンが無い。‹ で抜ける仮定', undecided: ['U9'] });
+    T({ from: { host: away(p, 'FriendJoined'), client: 'Client.FriendMatch.Lobby.Waiting' }, event: 'client.back',
+      to: { host: away(p, 'Waiting'), client: 'Client.FriendMatch.Room.CodeEntered' }, note: 'Client.FriendMatch.Lobby.Waiting には退出ボタンが無い。‹ で抜ける仮定', undecided: ['U9'] });
   });
-  T({ from: { host: '*', client: 'C_WAITING' }, event: 'client.back',
-    to: { host: '*', client: 'C_TOP_CODE' }, undecided: ['U9'] });
+  T({ from: { host: '*', client: 'Client.FriendMatch.Lobby.Waiting' }, event: 'client.back',
+    to: { host: '*', client: 'Client.FriendMatch.Room.CodeEntered' }, undecided: ['U9'] });
 
   // === ホストが別画面へ移る (図02, 図03) ===
-  T({ from: { host: 'H_WAITING', client: '*' }, event: 'host.back', when: { U14: 'keep' },
-    to: { host: 'H_AWAY_TOP_WAITING', client: '*' }, note: '図02: 別画面に遷移したらバナーで状態を示す', undecided: ['U14'] });
-  T({ from: { host: 'H_FRIEND_JOINED', client: '*' }, event: 'host.back', when: { U14: 'keep' },
-    to: { host: 'H_AWAY_TOP_JOINED', client: '*' }, undecided: ['U14'] });
-  T({ from: { host: 'H_READY', client: ['C_READY', 'C_FRIEND_JOINED'] }, event: 'host.back', when: { U14: 'keep' },
-    to: { host: 'H_AWAY_TOP_READY', client: 'C_HOST_AWAY' }, note: '図07 の逆: ホスト離席でクライアントは "Away"', undecided: ['U14'] });
-  T({ from: { host: 'H_CONN_LOST', client: '*' }, event: 'host.back', when: { U14: 'keep' },
-    to: { host: 'H_AWAY_TOP_WAITING', client: '*' }, note: '図03: Connection lost から ‹ で青いバナー付きトップへ (?)', undecided: ['U19', 'U14'] });
-  T({ from: { host: ['H_WAITING', 'H_FRIEND_JOINED', 'H_READY', 'H_CONN_LOST'], client: '*' }, event: 'host.back', when: { U14: 'confirm' },
+  T({ from: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'Host.Away.FriendMatchRoom.Waiting', client: '*' }, note: '図02: 別画面に遷移したらバナーで状態を示す', undecided: ['U14'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: '*' }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'Host.Away.FriendMatchRoom.FriendJoined', client: '*' }, undecided: ['U14'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready', client: ['Client.FriendMatch.Lobby.Ready', 'Client.FriendMatch.Lobby.FriendJoined'] }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'Host.Away.FriendMatchRoom.Ready', client: 'Client.FriendMatch.Lobby.HostAway' }, note: '図07 の逆: ホスト離席でクライアントは "Away"', undecided: ['U14'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.ConnectionLost', client: '*' }, event: 'host.back', when: { U14: 'keep' },
+    to: { host: 'Host.Away.FriendMatchRoom.Waiting', client: '*' }, note: '図03: Connection lost から ‹ で青いバナー付きトップへ (?)', undecided: ['U19', 'U14'] });
+  T({ from: { host: ['Host.FriendMatch.Lobby.Waiting', 'Host.FriendMatch.Lobby.FriendJoined', 'Host.FriendMatch.Lobby.Ready', 'Host.FriendMatch.Lobby.ConnectionLost'], client: '*' }, event: 'host.back', when: { U14: 'confirm' },
     to: { host: '=', client: '*' }, dialog: { host: 'cancel' }, note: 'U14 別案: ‹ でキャンセル確認を出す', undecided: ['U14'] });
 
   eachPlace(function (p) {
-    var other = p === 'TOP' ? 'STAGE' : 'TOP';
-    AWAY_STATUSES.concat(['EXPIRED']).forEach(function (s) {
-      T({ from: { host: 'H_AWAY_' + p + '_' + s, client: '*' }, event: 'host.back',
-        to: { host: 'H_AWAY_' + other + '_' + s, client: '*' },
-        note: p === 'TOP' ? '他の画面 (ステージ選択) へ。途中の画面は省略' : 'Friend Match トップへ戻る。途中の画面は省略' });
+    var other = p === 'FriendMatchRoom' ? 'StageSelection' : 'FriendMatchRoom';
+    AWAY_STATUSES.concat(['Expired']).forEach(function (s) {
+      T({ from: { host: away(p, s), client: '*' }, event: 'host.back',
+        to: { host: away(other, s), client: '*' },
+        note: p === 'FriendMatchRoom' ? '他の画面 (ステージ選択) へ。途中の画面は省略' : 'Friend Match トップへ戻る。途中の画面は省略' });
     });
   });
   eachPlace(function (p) {
-    T({ from: { host: 'H_AWAY_' + p + '_JOINED', client: ['C_WAITING', 'C_FRIEND_JOINED'] }, event: 'sys.ready', auto: 1500,
-      to: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, note: '図02: 緑 → 赤 "Ready to start"、クライアントは "Away"', undecided: ['U4'] });
+    T({ from: { host: away(p, 'FriendJoined'), client: ['Client.FriendMatch.Lobby.Waiting', 'Client.FriendMatch.Lobby.FriendJoined'] }, event: 'sys.ready', auto: 1500,
+      to: { host: away(p, 'Ready'), client: 'Client.FriendMatch.Lobby.HostAway' }, note: '図02: 緑 → 赤 "Ready to start"、クライアントは "Away"', undecided: ['U4'] });
   });
   eachPlace(function (p) {
-    T({ from: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, event: 'host.tapToast', when: { U1: 'lobby' },
-      to: { host: 'H_READY', client: 'C_FRIEND_JOINED' }, note: '図02: Ready to start ボタン押下で遷移', undecided: ['U1', 'U17'] });
-    T({ from: { host: 'H_AWAY_' + p + '_READY', client: 'C_HOST_AWAY' }, event: 'host.tapToast', when: { U1: 'direct' },
-      to: { host: 'H_READY_WAITING', client: 'C_READY_PEER_READY' },
+    T({ from: { host: away(p, 'Ready'), client: 'Client.FriendMatch.Lobby.HostAway' }, event: 'host.tapToast', when: { U1: 'lobby' },
+      to: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.FriendJoined' }, note: '図02: Ready to start ボタン押下で遷移', undecided: ['U1', 'U17'] });
+    T({ from: { host: away(p, 'Ready'), client: 'Client.FriendMatch.Lobby.HostAway' }, event: 'host.tapToast', when: { U1: 'direct' },
+      to: { host: 'Host.FriendMatch.Lobby.Ready.WaitingForFriend', client: 'Client.FriendMatch.Lobby.Ready.FriendReady' },
       note: 'U1 別案: トーストのタップでホストが Start Match を押した扱い。開始はクライアントも押してから (U31 決定)', undecided: ['U1'], decided: ['U31'] });
-    T({ from: { host: 'H_AWAY_' + p + '_WAITING', client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
-      to: { host: 'H_WAITING', client: '*' }, note: 'U16 別案: 青バナーもタップでロビーへ', undecided: ['U16'] });
-    T({ from: { host: 'H_AWAY_' + p + '_JOINED', client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
-      to: { host: 'H_FRIEND_JOINED', client: '*' }, note: 'U16 別案: 緑トーストもタップでロビーへ', undecided: ['U16'] });
+    T({ from: { host: away(p, 'Waiting'), client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
+      to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, note: 'U16 別案: 青バナーもタップでロビーへ', undecided: ['U16'] });
+    T({ from: { host: away(p, 'FriendJoined'), client: '*' }, event: 'host.tapToast', when: { U16: 'yes' },
+      to: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: '*' }, note: 'U16 別案: 緑トーストもタップでロビーへ', undecided: ['U16'] });
   });
-  T({ from: { host: 'H_READY', client: 'C_FRIEND_JOINED' }, event: 'sys.ready', auto: 1500,
-    to: { host: '*', client: 'C_READY' }, note: '図02: ホストが戻ったあとクライアントも Ready へ', undecided: ['U17'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.FriendJoined' }, event: 'sys.ready', auto: 1500,
+    to: { host: '*', client: 'Client.FriendMatch.Lobby.Ready' }, note: '図02: ホストが戻ったあとクライアントも Ready へ', undecided: ['U17'] });
 
   eachPlace(function (p) {
-    var pending = AWAY_STATUSES.map(function (s) { return 'H_AWAY_' + p + '_' + s; });
-    T({ from: { host: pending, client: ['C_WAITING', 'C_HOST_AWAY'] }, event: 'timer.codeExpired',
-      to: { host: 'H_AWAY_' + p + '_EXPIRED', client: 'C_MATCH_EXPIRED' }, note: '図02: 放置したので Match Code の有効期限が切れた', undecided: ['U7'] });
+    var pending = AWAY_STATUSES.map(function (s) { return away(p, s); });
+    T({ from: { host: pending, client: ['Client.FriendMatch.Lobby.Waiting', 'Client.FriendMatch.Lobby.HostAway'] }, event: 'timer.codeExpired',
+      to: { host: away(p, 'Expired'), client: 'Client.FriendMatch.Lobby.MatchExpired' }, note: '図02: 放置したので Match Code の有効期限が切れた', undecided: ['U7'] });
     T({ from: { host: pending, client: '*' }, event: 'timer.codeExpired',
-      to: { host: 'H_AWAY_' + p + '_EXPIRED', client: '*' }, undecided: ['U7'] });
-    T({ from: { host: 'H_AWAY_' + p + '_EXPIRED', client: '*' }, event: 'host.tapToast',
-      to: { host: 'H_CODE_EXPIRED', client: '*' }, note: '図02: 期限切れトーストをタップ' });
+      to: { host: away(p, 'Expired'), client: '*' }, undecided: ['U7'] });
+    T({ from: { host: away(p, 'Expired'), client: '*' }, event: 'host.tapToast',
+      to: { host: 'Host.FriendMatch.Lobby.CodeExpired', client: '*' }, note: '図02: 期限切れトーストをタップ' });
   });
-  T({ from: { host: 'H_CODE_EXPIRED', client: '*' }, event: 'host.back', to: { host: 'H_TOP', client: '*' } });
-  T({ from: { host: '*', client: 'C_MATCH_EXPIRED' }, event: 'client.back', to: { host: '*', client: 'C_TOP' } });
-  T({ from: { host: '*', client: 'C_HOST_CANCELLED' }, event: 'client.back',
-    to: { host: '*', client: 'C_TOP' }, note: '図04 にはボタンが無く ‹ のみ', undecided: ['U8'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.CodeExpired', client: '*' }, event: 'host.back', to: { host: 'Host.FriendMatch.Room', client: '*' } });
+  T({ from: { host: '*', client: 'Client.FriendMatch.Lobby.MatchExpired' }, event: 'client.back', to: { host: '*', client: 'Client.FriendMatch.Room' } });
+  T({ from: { host: '*', client: 'Client.FriendMatch.Lobby.HostCancelled' }, event: 'client.back',
+    to: { host: '*', client: 'Client.FriendMatch.Room' }, note: '図04 にはボタンが無く ‹ のみ', undecided: ['U8'] });
 
   // 離席中のホストが Friend Match トップで Create / Join を押す (10-01 合意)
-  var awayTopPending = AWAY_STATUSES.map(function (s) { return 'H_AWAY_TOP_' + s; });
+  var awayTopPending = AWAY_STATUSES.map(function (s) { return away('FriendMatchRoom', s); });
   T({ from: { host: awayTopPending, client: '*' }, event: 'host.createMatch',
     to: { host: '=', client: '*' }, dialog: { host: 'newMatch' }, note: '合意 (10-01): 確認ダイアログ', undecided: ['U12'] });
   T({ from: { host: awayTopPending, client: '*' }, event: 'host.joinMatch',
@@ -270,88 +282,88 @@ var TRANSITIONS = (function () {
     to: { host: '=', client: '*' }, dialog: { host: null } });
   T({ from: { host: '*', client: '*', hostDialog: 'joinAnother' }, event: 'host.dialog.keepCurrent',
     to: { host: '=', client: '*' }, dialog: { host: null } });
-  T({ from: { host: '*', client: C_IN_MATCH, hostDialog: 'newMatch' }, event: 'host.dialog.createMatch',
-    to: { host: 'H_WAITING', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '古いマッチにいたクライアントの扱いは図に無い', undecided: ['U12'] });
+  T({ from: { host: '*', client: clientInMatch, hostDialog: 'newMatch' }, event: 'host.dialog.createMatch',
+    to: { host: 'Host.FriendMatch.Lobby.Waiting', client: 'Client.FriendMatch.Lobby.HostCancelled' }, dialog: { host: null }, note: '古いマッチにいたクライアントの扱いは図に無い', undecided: ['U12'] });
   T({ from: { host: '*', client: '*', hostDialog: 'newMatch' }, event: 'host.dialog.createMatch',
-    to: { host: 'H_WAITING', client: '*' }, dialog: { host: null }, note: 'モックでは同じ Match Code を表示' });
-  T({ from: { host: '*', client: C_IN_MATCH, hostDialog: 'joinAnother' }, event: 'host.dialog.joinMatch',
-    to: { host: 'H_TOP', client: 'C_HOST_CANCELLED' }, dialog: { host: null }, note: '別マッチへの参加はモックでは省略', undecided: ['U12'] });
+    to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, dialog: { host: null }, note: 'モックでは同じ Match Code を表示' });
+  T({ from: { host: '*', client: clientInMatch, hostDialog: 'joinAnother' }, event: 'host.dialog.joinMatch',
+    to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Lobby.HostCancelled' }, dialog: { host: null }, note: '別マッチへの参加はモックでは省略', undecided: ['U12'] });
   T({ from: { host: '*', client: '*', hostDialog: 'joinAnother' }, event: 'host.dialog.joinMatch',
-    to: { host: 'H_TOP', client: '*' }, dialog: { host: null }, note: '別マッチへの参加はモックでは省略', undecided: ['U12'] });
-  T({ from: { host: ['H_AWAY_TOP_EXPIRED'], client: '*' }, event: 'host.createMatch',
-    to: { host: 'H_WAITING', client: '*' }, note: '期限切れなので確認なしで作り直し (モックの仮定)' });
+    to: { host: 'Host.FriendMatch.Room', client: '*' }, dialog: { host: null }, note: '別マッチへの参加はモックでは省略', undecided: ['U12'] });
+  T({ from: { host: ['Host.Away.FriendMatchRoom.Expired'], client: '*' }, event: 'host.createMatch',
+    to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, note: '期限切れなので確認なしで作り直し (モックの仮定)' });
 
   // === クライアントが別画面へ移る (図07) ===
-  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'client.back',
-    to: { host: 'H_CLIENT_AWAY', client: 'C_AWAY_STAGE_READY' }, note: '図07: クライアントが他の画面に遷移した' });
-  T({ from: { host: '*', client: 'C_READY' }, event: 'client.back',
-    to: { host: '*', client: 'C_AWAY_STAGE_READY' } });
-  T({ from: { host: 'H_CLIENT_AWAY', client: 'C_AWAY_STAGE_READY' }, event: 'client.tapToast',
-    to: { host: 'H_READY', client: 'C_READY' }, note: '図07: Ready to start をタップして戻る' });
-  T({ from: { host: '*', client: 'C_AWAY_STAGE_READY' }, event: 'client.tapToast',
-    to: { host: '*', client: 'C_READY' } });
-  T({ from: { host: 'H_CLIENT_AWAY', client: 'C_AWAY_STAGE_READY' }, event: 'timer.codeExpired',
-    to: { host: 'H_EXPIRED', client: 'C_AWAY_STAGE_EXPIRED' }, note: '図07: クライアントが戻らず期限切れ。クライアント側は図に無い', undecided: ['U10', 'U18', 'U7'] });
-  T({ from: { host: '*', client: 'C_AWAY_STAGE_EXPIRED' }, event: 'client.tapToast',
-    to: { host: '*', client: 'C_MATCH_EXPIRED' }, undecided: ['U18'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, event: 'client.back',
+    to: { host: 'Host.FriendMatch.Lobby.ClientAway', client: 'Client.Away.StageSelection.Ready' }, note: '図07: クライアントが他の画面に遷移した' });
+  T({ from: { host: '*', client: 'Client.FriendMatch.Lobby.Ready' }, event: 'client.back',
+    to: { host: '*', client: 'Client.Away.StageSelection.Ready' } });
+  T({ from: { host: 'Host.FriendMatch.Lobby.ClientAway', client: 'Client.Away.StageSelection.Ready' }, event: 'client.tapToast',
+    to: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, note: '図07: Ready to start をタップして戻る' });
+  T({ from: { host: '*', client: 'Client.Away.StageSelection.Ready' }, event: 'client.tapToast',
+    to: { host: '*', client: 'Client.FriendMatch.Lobby.Ready' } });
+  T({ from: { host: 'Host.FriendMatch.Lobby.ClientAway', client: 'Client.Away.StageSelection.Ready' }, event: 'timer.codeExpired',
+    to: { host: 'Host.FriendMatch.Lobby.MatchExpired', client: 'Client.Away.StageSelection.Expired' }, note: '図07: クライアントが戻らず期限切れ。クライアント側は図に無い', undecided: ['U10', 'U18', 'U7'] });
+  T({ from: { host: '*', client: 'Client.Away.StageSelection.Expired' }, event: 'client.tapToast',
+    to: { host: '*', client: 'Client.FriendMatch.Lobby.MatchExpired' }, undecided: ['U18'] });
 
   // === Ready 後の通信不安定 (図03) ===
-  T({ from: { host: 'H_READY', client: 'C_READY' }, event: 'net.unstable',
-    to: { host: 'H_CONNECTING', client: 'C_CONNECTING' }, note: '図03: 何らかの理由により通信が不安定になった。クライアント側は図に無い', undecided: ['U5'] });
-  T({ from: { host: 'H_CONNECTING', client: 'C_CONNECTING' }, event: 'net.recovered',
-    to: { host: 'H_READY', client: 'C_READY' }, note: '図03: 通信が回復' });
-  T({ from: { host: 'H_CONNECTING', client: 'C_CONNECTING' }, event: 'net.lost',
-    to: { host: 'H_CONN_LOST', client: 'C_CONN_LOST' }, note: '図03: 通信が回復しない', undecided: ['U5'] });
-  T({ from: { host: 'H_CONN_LOST', client: 'C_CONN_LOST' }, event: 'net.recovered', when: { U5: 'wait' },
-    to: { host: 'H_READY', client: 'C_READY' }, note: 'U5 別案: しばらく待てば復帰できる', undecided: ['U5'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, event: 'net.unstable',
+    to: { host: 'Host.FriendMatch.Lobby.Connecting', client: 'Client.FriendMatch.Lobby.Connecting' }, note: '図03: 何らかの理由により通信が不安定になった。クライアント側は図に無い', undecided: ['U5'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Connecting', client: 'Client.FriendMatch.Lobby.Connecting' }, event: 'net.recovered',
+    to: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, note: '図03: 通信が回復' });
+  T({ from: { host: 'Host.FriendMatch.Lobby.Connecting', client: 'Client.FriendMatch.Lobby.Connecting' }, event: 'net.lost',
+    to: { host: 'Host.FriendMatch.Lobby.ConnectionLost', client: 'Client.FriendMatch.Lobby.ConnectionLost' }, note: '図03: 通信が回復しない', undecided: ['U5'] });
+  T({ from: { host: 'Host.FriendMatch.Lobby.ConnectionLost', client: 'Client.FriendMatch.Lobby.ConnectionLost' }, event: 'net.recovered', when: { U5: 'wait' },
+    to: { host: 'Host.FriendMatch.Lobby.Ready', client: 'Client.FriendMatch.Lobby.Ready' }, note: 'U5 別案: しばらく待てば復帰できる', undecided: ['U5'] });
 
   // === VS 画面中の切断 (合意済みの追加項目、図なし) ===
-  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'net.lostDuringVs', when: { U3: 'lobby' },
-    to: { host: 'H_CONN_LOST', client: 'C_CONN_LOST' }, note: 'U3 既定: ロビーで "Connection lost."', undecided: ['U3'] });
-  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'net.lostDuringVs', when: { U3: 'top' },
-    to: { host: 'H_TOP', client: 'C_TOP_CODE' }, note: 'U3 別案: Friend Match トップへ', undecided: ['U3'] });
-  T({ from: { host: 'H_VS', client: 'C_VS' }, event: 'net.lostDuringVs', when: { U3: 'online' },
-    to: { host: 'H_ONLINE', client: 'C_ONLINE' }, note: 'U3 別案: Online Battle へ', undecided: ['U3'] });
+  T({ from: { host: 'Host.Opponent', client: 'Client.Opponent' }, event: 'net.lostDuringVs', when: { U3: 'lobby' },
+    to: { host: 'Host.FriendMatch.Lobby.ConnectionLost', client: 'Client.FriendMatch.Lobby.ConnectionLost' }, note: 'U3 既定: ロビーで "Connection lost."', undecided: ['U3'] });
+  T({ from: { host: 'Host.Opponent', client: 'Client.Opponent' }, event: 'net.lostDuringVs', when: { U3: 'top' },
+    to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Room.CodeEntered' }, note: 'U3 別案: Friend Match トップへ', undecided: ['U3'] });
+  T({ from: { host: 'Host.Opponent', client: 'Client.Opponent' }, event: 'net.lostDuringVs', when: { U3: 'online' },
+    to: { host: 'Host.MultiModeSelection', client: 'Client.MultiModeSelection' }, note: 'U3 別案: Online Battle へ', undecided: ['U3'] });
 
   // === ランダム対戦 (決定 U13a: 相手が見つかり次第 VS 画面へ。Ready / Start Match は挟まない。U31 は Friend Match だけ) ===
-  T({ from: { host: 'H_RANDOM_WAITING', client: 'C_RANDOM_WAITING' }, event: 'sys.opponentFound', auto: 2500,
-    to: { host: 'H_VS', client: 'C_VS' }, note: '決定 (U13a): 相手が見つかり次第 VS 画面へ。Ready / Start Match は無い (U31 は Friend Match だけ)', decided: ['U13a'] });
-  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.cancelSearch',
-    to: { host: 'H_ONLINE', client: '*' }, note: '決定 (U13a): Cancel で Online Battle へ。確認を挟むかは未決 (モックは確認なし)', decided: ['U13a'], undecided: ['U13'] });
-  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.cancelSearch',
-    to: { host: '*', client: 'C_ONLINE' }, note: '決定 (U13a): Cancel で Online Battle へ。確認を挟むかは未決 (モックは確認なし)', decided: ['U13a'], undecided: ['U13'] });
-  T({ from: { host: 'H_RANDOM_WAITING', client: '*' }, event: 'host.back', to: { host: 'H_ONLINE', client: '*' },
+  T({ from: { host: 'Host.Matchmake', client: 'Client.Matchmake' }, event: 'sys.opponentFound', auto: 2500,
+    to: { host: 'Host.Opponent', client: 'Client.Opponent' }, note: '決定 (U13a): 相手が見つかり次第 VS 画面へ。Ready / Start Match は無い (U31 は Friend Match だけ)', decided: ['U13a'] });
+  T({ from: { host: 'Host.Matchmake', client: '*' }, event: 'host.cancelSearch',
+    to: { host: 'Host.MultiModeSelection', client: '*' }, note: '決定 (U13a): Cancel で Online Battle へ。確認を挟むかは未決 (モックは確認なし)', decided: ['U13a'], undecided: ['U13'] });
+  T({ from: { host: '*', client: 'Client.Matchmake' }, event: 'client.cancelSearch',
+    to: { host: '*', client: 'Client.MultiModeSelection' }, note: '決定 (U13a): Cancel で Online Battle へ。確認を挟むかは未決 (モックは確認なし)', decided: ['U13a'], undecided: ['U13'] });
+  T({ from: { host: 'Host.Matchmake', client: '*' }, event: 'host.back', to: { host: 'Host.MultiModeSelection', client: '*' },
     note: '仮: ‹ も Cancel と同じく Online Battle へ', undecided: ['U13'] });
-  T({ from: { host: '*', client: 'C_RANDOM_WAITING' }, event: 'client.back', to: { host: '*', client: 'C_ONLINE' },
+  T({ from: { host: '*', client: 'Client.Matchmake' }, event: 'client.back', to: { host: '*', client: 'Client.MultiModeSelection' },
     note: '仮: ‹ も Cancel と同じく Online Battle へ', undecided: ['U13'] });
 
   // === 対戦後 (図なし、すべて未決) ===
   // Win / Lose は端末の下のモック操作。勝敗判定そのものはモックの対象外
-  var opposite = { WIN: 'LOSE', LOSE: 'WIN' };
-  [['host.win', 'WIN'], ['host.lose', 'LOSE'], ['client.win', 'LOSE'], ['client.lose', 'WIN']].forEach(function (p) {
-    T({ from: { host: 'H_GAME', client: 'C_GAME' }, event: p[0],
-      to: { host: 'H_RESULT_' + p[1], client: 'C_RESULT_' + opposite[p[1]] },
+  var opposite = { Win: 'Lose', Lose: 'Win' };
+  [['host.win', 'Win'], ['host.lose', 'Lose'], ['client.win', 'Lose'], ['client.lose', 'Win']].forEach(function (p) {
+    T({ from: { host: 'Host.Game.Play', client: 'Client.Game.Play' }, event: p[0],
+      to: { host: resultState('Host', p[1]), client: resultState('Client', opposite[p[1]]) },
       note: 'モック操作: 押した側が' + (/win$/.test(p[0]) ? '勝ち' : '負け') + '、相手は自動で逆の結果。対戦後の画面は図に無い', undecided: ['U28'] });
   });
   OUTCOMES.forEach(function (o) {
-    var h = 'H_RESULT_' + o;
-    var c = 'C_RESULT_' + opposite[o];
-    T({ from: { host: h, client: c }, event: 'host.rematch', to: { host: h + '_REMATCH_WAIT', client: c + '_REMATCH_ASKED' },
+    var h = resultState('Host', o);
+    var c = resultState('Client', opposite[o]);
+    T({ from: { host: h, client: c }, event: 'host.rematch', to: { host: h + '.RematchWaiting', client: c + '.RematchRequested' },
       note: '仮: 押した側は相手を待ち、相手には再戦の希望を表示', undecided: ['U23'] });
-    T({ from: { host: h, client: c }, event: 'client.rematch', to: { host: h + '_REMATCH_ASKED', client: c + '_REMATCH_WAIT' },
+    T({ from: { host: h, client: c }, event: 'client.rematch', to: { host: h + '.RematchRequested', client: c + '.RematchWaiting' },
       note: '仮: 押した側は相手を待ち、相手には再戦の希望を表示', undecided: ['U23'] });
-    T({ from: { host: h + '_REMATCH_ASKED', client: c + '_REMATCH_WAIT' }, event: 'host.rematch', to: { host: 'H_VS', client: 'C_VS' },
+    T({ from: { host: h + '.RematchRequested', client: c + '.RematchWaiting' }, event: 'host.rematch', to: { host: 'Host.Opponent', client: 'Client.Opponent' },
       note: '仮: 両者が押したら VS 画面からやり直す。同じ Match Code を使うかは未決', undecided: ['U23'] });
-    T({ from: { host: h + '_REMATCH_WAIT', client: c + '_REMATCH_ASKED' }, event: 'client.rematch', to: { host: 'H_VS', client: 'C_VS' },
+    T({ from: { host: h + '.RematchWaiting', client: c + '.RematchRequested' }, event: 'client.rematch', to: { host: 'Host.Opponent', client: 'Client.Opponent' },
       note: '仮: 両者が押したら VS 画面からやり直す。同じ Match Code を使うかは未決', undecided: ['U23'] });
   });
-  T({ from: { host: H_RESULT_ANY, client: C_RESULT_ANY }, event: 'host.backToFriendMatch', to: { host: 'H_TOP', client: '=' },
+  T({ from: { host: hostResultAny, client: clientResultAny }, event: 'host.backToFriendMatch', to: { host: 'Host.FriendMatch.Room', client: '=' },
     note: '仮: 押した側だけ Friend Match トップへ。相手は結果画面のまま', undecided: ['U24', 'U25'] });
-  T({ from: { host: H_RESULT_ANY, client: '*' }, event: 'host.backToFriendMatch', to: { host: 'H_TOP', client: '*' },
+  T({ from: { host: hostResultAny, client: '*' }, event: 'host.backToFriendMatch', to: { host: 'Host.FriendMatch.Room', client: '*' },
     note: '仮: 相手はすでに結果画面を抜けている', undecided: ['U24'] });
-  T({ from: { host: H_RESULT_ANY, client: C_RESULT_ANY }, event: 'client.backToFriendMatch', to: { host: '=', client: 'C_TOP' },
+  T({ from: { host: hostResultAny, client: clientResultAny }, event: 'client.backToFriendMatch', to: { host: '=', client: 'Client.FriendMatch.Room' },
     note: '仮: 押した側だけ Friend Match トップへ。相手は結果画面のまま', undecided: ['U24', 'U25'] });
-  T({ from: { host: '*', client: C_RESULT_ANY }, event: 'client.backToFriendMatch', to: { host: '*', client: 'C_TOP' },
+  T({ from: { host: '*', client: clientResultAny }, event: 'client.backToFriendMatch', to: { host: '*', client: 'Client.FriendMatch.Room' },
     note: '仮: 相手はすでに結果画面を抜けている', undecided: ['U24'] });
 
   rows.forEach(function (r, i) {
@@ -479,85 +491,85 @@ var SCREENS = (function () {
     return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [] }, extra);
   }
   var errMsg = {
-    NOTFOUND: 'Match not found. Check the Match Code and try again.',
-    EXPIRED: 'The match has expired.',
-    FULL: 'The match is already full.',
+    NotFound: 'Match not found. Check the Match Code and try again.',
+    Expired: 'The match has expired.',
+    Full: 'The match is already full.',
   };
 
   // --- ホスト ---
-  S.H_ONLINE = online('host');
-  S.H_TOP = top({});
-  S.H_TOP_CONN_FAILED = top({ toast: 'failed', undecided: ['U6'] });
-  S.H_WAITING = lobby({ status: 'Waiting for your friend…', buttons: [B.cancel] });
-  S.H_FRIEND_JOINED = lobby({ name: 'Client User', status: 'Friend joined!', buttons: [B.cancel], undecided: ['U4'] });
-  S.H_READY = lobby({ name: 'Client User', status: 'Ready', buttons: [B.start, B.cancel], decided: ['U31'] });
-  S.H_READY_WAITING = lobby({ name: 'Client User', status: 'Waiting for your friend…', buttons: [B.pressed, B.cancel],
+  S['Host.MultiModeSelection'] = online('host');
+  S['Host.FriendMatch.Room'] = top({});
+  S['Host.FriendMatch.Room.ConnectionFailed'] = top({ toast: 'failed', undecided: ['U6'] });
+  S['Host.FriendMatch.Lobby.Waiting'] = lobby({ status: 'Waiting for your friend…', buttons: [B.cancel] });
+  S['Host.FriendMatch.Lobby.FriendJoined'] = lobby({ name: 'Client User', status: 'Friend joined!', buttons: [B.cancel], undecided: ['U4'] });
+  S['Host.FriendMatch.Lobby.Ready'] = lobby({ name: 'Client User', status: 'Ready', buttons: [B.start, B.cancel], decided: ['U31'] });
+  S['Host.FriendMatch.Lobby.Ready.WaitingForFriend'] = lobby({ name: 'Client User', status: 'Waiting for your friend…', buttons: [B.pressed, B.cancel],
     decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
-  S.H_READY_PEER_READY = lobby({ name: 'Client User', peerReady: true, status: 'Ready', buttons: [B.start, B.cancel],
+  S['Host.FriendMatch.Lobby.Ready.FriendReady'] = lobby({ name: 'Client User', peerReady: true, status: 'Ready', buttons: [B.start, B.cancel],
     decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
-  S.H_STARTING = lobby({ name: 'Client User', status: 'Starting match…', back: 'disabled' });
-  S.H_START_FAILED = lobby({ name: 'Client User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
+  S['Host.FriendMatch.Lobby.Starting'] = lobby({ name: 'Client User', status: 'Starting match…', back: 'disabled' });
+  S['Host.FriendMatch.Lobby.StartFailed'] = lobby({ name: 'Client User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
     buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.cancel], undecided: ['U15'] });
-  S.H_CONNECTING = lobby({ name: 'Client User', status: 'Connecting…', buttons: [B.cancel] });
-  S.H_CONN_LOST = lobby({ name: 'Client User', status: 'Connection lost.', buttons: [B.cancel], undecided: ['U5'] });
-  S.H_CLIENT_LEFT = lobby({ name: 'Client User', status: 'left the match.', buttons: [B.cancel] });
-  S.H_CLIENT_AWAY = lobby({ name: 'Client User', status: 'Away', buttons: [B.cancel] });
-  S.H_EXPIRED = lobby({ status: 'Match expired.', buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.cancel],
+  S['Host.FriendMatch.Lobby.Connecting'] = lobby({ name: 'Client User', status: 'Connecting…', buttons: [B.cancel] });
+  S['Host.FriendMatch.Lobby.ConnectionLost'] = lobby({ name: 'Client User', status: 'Connection lost.', buttons: [B.cancel], undecided: ['U5'] });
+  S['Host.FriendMatch.Lobby.ClientLeft'] = lobby({ name: 'Client User', status: 'left the match.', buttons: [B.cancel] });
+  S['Host.FriendMatch.Lobby.ClientAway'] = lobby({ name: 'Client User', status: 'Away', buttons: [B.cancel] });
+  S['Host.FriendMatch.Lobby.MatchExpired'] = lobby({ status: 'Match expired.', buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.cancel],
     undecided: ['U10', 'U7'] });
-  S.H_CODE_EXPIRED = lobby({ status: 'Match code expired.', undecided: ['U7'] });
-  var awayToast = { WAITING: 'waiting', JOINED: 'joined', READY: 'ready', EXPIRED: 'expired' };
+  S['Host.FriendMatch.Lobby.CodeExpired'] = lobby({ status: 'Match code expired.', undecided: ['U7'] });
+  var awayToast = { Waiting: 'waiting', FriendJoined: 'joined', Ready: 'ready', Expired: 'expired' };
   AWAY_PLACES.forEach(function (p) {
     Object.keys(awayToast).forEach(function (s) {
-      var u = s === 'READY' ? ['U1'] : s === 'EXPIRED' ? ['U7'] : ['U16'];
-      S['H_AWAY_' + p + '_' + s] = p === 'TOP'
+      var u = s === 'Ready' ? ['U1'] : s === 'Expired' ? ['U7'] : ['U16'];
+      S[away(p, s)] = p === 'FriendMatchRoom'
         ? top({ toast: awayToast[s], undecided: u })
         : { view: 'stage', back: 'back', toast: awayToast[s], undecided: u };
     });
   });
-  S.H_RANDOM_WAITING = matchmake();
-  S.H_VS = { view: 'vs', undecided: [] };
+  S['Host.Matchmake'] = matchmake();
+  S['Host.Opponent'] = { view: 'vs', undecided: [] };
   // ゲーム画面: カウントダウン中 (ポーズボタンなし・Win / Lose は押せない) → プレイ中 → ポーズ中
-  S.H_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
-  S.H_GAME = { view: 'game', context: GAME_CONTEXT };
-  S.H_GAME_PAUSED = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
+  S['Host.Game.Countdown'] = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
+  S['Host.Game.Play'] = { view: 'game', context: GAME_CONTEXT };
+  S['Host.Game.Pause'] = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
 
   // --- クライアント ---
-  S.C_ONLINE = online('client');
-  S.C_TOP = top({});
-  S.C_TOP_CODE = top({ input: 'QWERTY123' });
+  S['Client.MultiModeSelection'] = online('client');
+  S['Client.FriendMatch.Room'] = top({});
+  S['Client.FriendMatch.Room.CodeEntered'] = top({ input: 'QWERTY123' });
   Object.keys(errMsg).forEach(function (k) {
-    S['C_TOP_ERR_' + k] = top({ input: 'QWERTY123', error: errMsg[k] });
+    S['Client.FriendMatch.Room.Error.' + k] = top({ input: 'QWERTY123', error: errMsg[k] });
   });
-  S.C_TOP_CONN_FAILED = top({ input: 'QWERTY123', toast: 'failed', undecided: ['U6'] });
-  S.C_WAITING = lobby({ status: 'Waiting for your friend…', undecided: ['U9'] });
-  S.C_HOST_AWAY = lobby({ name: 'Host User', status: 'Away', buttons: [B.leave] });
-  S.C_FRIEND_JOINED = lobby({ name: 'Host User', status: 'Friend joined!', buttons: [B.leave], undecided: ['U4'] });
-  S.C_READY = lobby({ name: 'Host User', status: 'Ready', buttons: [B.start, B.leave], decided: ['U31'] });
-  S.C_READY_WAITING = lobby({ name: 'Host User', status: 'Waiting for your friend…', buttons: [B.pressed, B.leave],
+  S['Client.FriendMatch.Room.ConnectionFailed'] = top({ input: 'QWERTY123', toast: 'failed', undecided: ['U6'] });
+  S['Client.FriendMatch.Lobby.Waiting'] = lobby({ status: 'Waiting for your friend…', undecided: ['U9'] });
+  S['Client.FriendMatch.Lobby.HostAway'] = lobby({ name: 'Host User', status: 'Away', buttons: [B.leave] });
+  S['Client.FriendMatch.Lobby.FriendJoined'] = lobby({ name: 'Host User', status: 'Friend joined!', buttons: [B.leave], undecided: ['U4'] });
+  S['Client.FriendMatch.Lobby.Ready'] = lobby({ name: 'Host User', status: 'Ready', buttons: [B.start, B.leave], decided: ['U31'] });
+  S['Client.FriendMatch.Lobby.Ready.WaitingForFriend'] = lobby({ name: 'Host User', status: 'Waiting for your friend…', buttons: [B.pressed, B.leave],
     decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
-  S.C_READY_PEER_READY = lobby({ name: 'Host User', peerReady: true, status: 'Ready', buttons: [B.start, B.leave],
+  S['Client.FriendMatch.Lobby.Ready.FriendReady'] = lobby({ name: 'Host User', peerReady: true, status: 'Ready', buttons: [B.start, B.leave],
     decided: ['U31'], undecided: ['U33', 'U35', 'U36'] });
-  S.C_STARTING = lobby({ name: 'Host User', status: 'Starting match…', back: 'disabled' });
-  S.C_START_FAILED = lobby({ name: 'Host User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
+  S['Client.FriendMatch.Lobby.Starting'] = lobby({ name: 'Host User', status: 'Starting match…', back: 'disabled' });
+  S['Client.FriendMatch.Lobby.StartFailed'] = lobby({ name: 'Host User', status: 'Unable to start the match.\nPlease try again.', back: 'disabled',
     buttons: [{ label: 'Start Match', event: 'startMatch', primary: true }, B.leave], undecided: ['U15'] });
-  S.C_CONNECTING = lobby({ name: 'Host User', status: 'Connecting…', buttons: [B.leave], undecided: ['U5'] });
-  S.C_CONN_LOST = lobby({ name: 'Host User', status: 'Connection lost.', buttons: [B.leave], undecided: ['U5'] });
-  S.C_HOST_CANCELLED = lobby({ name: 'Host User', status: 'cancelled the match.', undecided: ['U8'] });
-  S.C_MATCH_EXPIRED = lobby({ status: 'Match expired.', undecided: ['U7'] });
-  S.C_AWAY_STAGE_READY = { view: 'stage', back: 'back', toast: 'ready' };
-  S.C_AWAY_STAGE_EXPIRED = { view: 'stage', back: 'back', toast: 'expired', undecided: ['U18'] };
-  S.C_RANDOM_WAITING = matchmake();
-  S.C_VS = { view: 'vs' };
-  S.C_GAME_COUNTDOWN = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
-  S.C_GAME = { view: 'game', context: GAME_CONTEXT };
-  S.C_GAME_PAUSED = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
+  S['Client.FriendMatch.Lobby.Connecting'] = lobby({ name: 'Host User', status: 'Connecting…', buttons: [B.leave], undecided: ['U5'] });
+  S['Client.FriendMatch.Lobby.ConnectionLost'] = lobby({ name: 'Host User', status: 'Connection lost.', buttons: [B.leave], undecided: ['U5'] });
+  S['Client.FriendMatch.Lobby.HostCancelled'] = lobby({ name: 'Host User', status: 'cancelled the match.', undecided: ['U8'] });
+  S['Client.FriendMatch.Lobby.MatchExpired'] = lobby({ status: 'Match expired.', undecided: ['U7'] });
+  S['Client.Away.StageSelection.Ready'] = { view: 'stage', back: 'back', toast: 'ready' };
+  S['Client.Away.StageSelection.Expired'] = { view: 'stage', back: 'back', toast: 'expired', undecided: ['U18'] };
+  S['Client.Matchmake'] = matchmake();
+  S['Client.Opponent'] = { view: 'vs' };
+  S['Client.Game.Countdown'] = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
+  S['Client.Game.Play'] = { view: 'game', context: GAME_CONTEXT };
+  S['Client.Game.Pause'] = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
 
   // --- 対戦後 (両端末共通。図なし) ---
-  ['H', 'C'].forEach(function (p) {
+  ['Host', 'Client'].forEach(function (role) {
     OUTCOMES.forEach(function (o) {
       Object.keys(RESULT_PHASES).forEach(function (ph) {
         var wait = RESULT_PHASES[ph] === 'wait';
-        S[p + '_RESULT_' + o + ph] = { view: 'result', title: 'RESULT', back: null, outcome: o, rematch: RESULT_PHASES[ph],
+        S[resultState(role, o, ph)] = { view: 'result', title: 'RESULT', back: null, outcome: o.toUpperCase(), rematch: RESULT_PHASES[ph],
           undecided: ['U20', 'U21', 'U22', 'U23', 'U24', 'U26', 'U27'].concat(wait ? ['U30'] : []),
           context: wait ? RESULT_WAIT_CONTEXT : RESULT_CONTEXT };
       });
@@ -625,7 +637,7 @@ var UNDECIDED = [
     desc: '有効期限の長さが未定。ホスト側は "Match code expired." / トースト "Match code expired"、クライアント側は "Match expired." と文言が異なる。' },
   { id: 'U8', title: 'ホストがキャンセルした後のクライアントの出口',
     desc: '"Host User / cancelled the match." の画面にボタンが無い (‹ のみ)。モックでは ‹ で Friend Match トップに戻る。' },
-  { id: 'U9', title: 'クライアント待機中 (C_WAITING) の退出方法',
+  { id: 'U9', title: 'クライアント待機中 (Client.FriendMatch.Lobby.Waiting) の退出方法',
     desc: '"Waiting for your friend…" のクライアント画面にボタンが無い。モックでは ‹ で抜けて Match Code 入力済みのトップへ戻る。' },
   { id: 'U10', title: 'クライアント離脱で期限切れ後のホスト画面の Start Match',
     desc: '図07 で "Match expired." の画面に Start Match と Cancel Match がある。期限切れで開始できる意味が不明なため、モックでは Start Match に遷移行を用意していない (押せない)。' },

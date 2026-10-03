@@ -399,7 +399,7 @@
     var name = app.state[dev];
     var spec = SCREENS[name];
     var dlg = app.state[dev + 'Dialog'];
-    $('.state-name', root).textContent = name + (dlg ? ' + 🗨 ' + dlg : '');
+    $('.state-name', root).innerHTML = stateName(name) + (dlg ? ' + 🗨 ' + esc(dlg) : '');
 
     var screen = $('.screen', root);
     var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + dialogHtml(dev, dlg);
@@ -506,9 +506,9 @@
     $('#ctx-createResult').value = app.ctx.createResult;
   }
 
-  // 状態名は _ の後ろで折り返す
+  // 状態名 (Host.FriendMatch.Lobby.Ready など) は . の後ろで折り返す
   function stateName(name) {
-    return esc(name).replace(/_/g, '_<wbr>');
+    return esc(name).replace(/\./g, '.<wbr>');
   }
 
   function groupName(list) {
@@ -566,8 +566,8 @@
     var dl = function (d) { return s[d + 'Dialog'] ? ' <span class="dlg">+ 🗨 ' + esc(s[d + 'Dialog']) + '</span>' : ''; };
     var r = app.lastRow;
     $('#current-state').innerHTML =
-      '<div class="cs-line"><span class="role-badge host small">Host</span> <code>' + esc(s.host) + '</code>' + dl('host') +
-      ' <span class="sep">/</span> <span class="role-badge client small">Client</span> <code>' + esc(s.client) + '</code>' + dl('client') + '</div>' +
+      '<div class="cs-line"><span class="role-badge host small">Host</span> <code>' + esc(s.host) + '</code>' + dl('host') + '</div>' +
+      '<div class="cs-line"><span class="role-badge client small">Client</span> <code>' + esc(s.client) + '</code>' + dl('client') + '</div>' +
       '<div class="cs-last">' + (r ? '直前の遷移: <a href="#row-' + r.id + '" data-row="' + r.id + '">' + r.id + '</a> <code>' + esc(r.event) + '</code>' : '直前の遷移: なし (初期状態)') + '</div>' +
       contextHtml() + decidedHtml();
   }

@@ -139,7 +139,7 @@ function scan() {
       const where = `s=${sc.id} step=${step}`;
       const sel = step === 0 ? `#scenario-list [data-scenario="${sc.id}"]` : `#step-list [data-step="${step}"]`;
       if (!click(sel, where, sc, step)) continue;
-      if (/COUNTDOWN/.test(document.querySelector('.device .state-name').textContent)) {
+      if (/\.Game\.Countdown$/.test(document.querySelector('.device .state-name').textContent)) {
         GAME_COUNTDOWN.digits.forEach((cd) => {
           if (!click(`#cd-freeze [data-cd="${cd}"]`, `${where} cd=${cd}`, sc, step)) return;
           const frozen = document.querySelector('.g-cd.frozen');

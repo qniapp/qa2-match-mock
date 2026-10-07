@@ -225,10 +225,8 @@ for (const id of ['U20', 'U21', 'U22', 'U23', 'U24', 'U25', 'U26', 'U27', 'U28',
   if (!u || !u.decided || u.decided.by !== '高宮さん' || u.decided.date !== '2026-10-07') fail(`${id} が 高宮さん 2026-10-07 の決定になっていない`);
   for (const r of TRANSITIONS) if (r.undecided.includes(id)) fail(`${r.id}: 決定済みの ${id} が未決として残っている`);
 }
-// 決まっていない点は新しい未決 (U44〜U50)。U43 (調査中) はそのまま
+// 決まっていない点は新しい未決 (U44〜U50)
 for (const id of ['U44', 'U45', 'U46', 'U47', 'U48', 'U49', 'U50']) if (!openIds.has(id)) fail(`未決 ${id} が無い`);
-const u43 = UNDECIDED.find((u) => u.id === 'U43');
-if (!u43 || u43.decided || u43.title !== 'アプリを離れて検索が止まったときの通知の場所とボタン') fail('U43 が変わっている');
 const eachSide = [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']];
 const sides = (dev, mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
 
@@ -584,13 +582,12 @@ if (got11 !== want11) fail(`シナリオ 11 の流れ ${got11} (期待: ${want11
 console.log('ok  U13a: ランダム対戦は相手が見つかり次第 VS 画面、Searching + Cancel');
 
 // 決定 (U13、高宮さん 2026-10-07): 相手を探している間の Cancel は確認なしで Online Battle へ。‹ も Cancel とまったく同じ。
-// 探している間に行けるのは Online Battle だけ。アプリを離れると検索を止めて "Search stopped because you left the app."、
+// 探している間に行けるのは Online Battle だけ。アプリを離れると検索を止めて通知 (出し方は U43)、
 // 見つからなければ元の画面 (Online Battle) に "No opponent found." と Search again (→ 探し直す) / Close (→ 通知を閉じる)。
 // 60 秒という長さは仮で、右パネル (説明) と README にだけ書き、端末の画面には出さない
 const u13 = UNDECIDED.find((u) => u.id === 'U13');
 if (!u13 || !u13.decided || u13.decided.by !== '高宮さん' || u13.decided.date !== '2026-10-07') fail('U13 が 高宮さん 2026-10-07 の決定になっていない');
 if (u13 && !/60 秒という長さは仮/.test(u13.desc)) fail('U13 の説明に「60 秒という長さは仮」が無い');
-if (!openIds.has('U43')) fail('U43 (検索が止まったときの通知の場所とボタン) が未決として無い');
 for (const r of TRANSITIONS) {
   if (r.undecided.includes('U13')) fail(`${r.id}: 決定済みの U13 が未決として残っている`);
   if (r.note && /確認を挟むかは未決|仮: ‹ も Cancel/.test(r.note)) fail(`${r.id}: U13 が未決だったころのメモが残っている`);
@@ -621,21 +618,22 @@ for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Hos
     if (res && !allowed.includes(ev)) fail(`${R}.Matchmake で ${ev} の行がある (探している間はほかの画面へ行けない)`);
     if (res && ![`${R}.MultiModeSelection`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`].includes(res.state[dev])) fail(`${R}.Matchmake から ${ev} で ${res.state[dev]} へ行く`);
   }
-  // 通知を出している間に押せるのは Search again / Close だけ
-  for (const notice of [`${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`]) {
-    const st = at(...pair3(notice, `${O}.MultiModeSelection`));
-    for (const ev of devEvents) if (Engine.canFire(st, ev) && ![`${dev}.searchAgain`, `${dev}.closeNotice`].includes(ev)) fail(`${notice} で ${ev} の行がある`);
-  }
-  // 通知の画面: 元の画面 (Online Battle) の上に文言と Search again / Close。60 秒という長さは画面に出さない
-  for (const [name, text] of [[`${R}.Matchmake.Stopped`, 'Search stopped because you left the app.'], [`${R}.Matchmake.NotFound`, 'No opponent found.']]) {
+  // "No opponent found." (モーダル) を出している間に押せるのは Search again / Close だけ
+  const notFoundSt = at(...pair3(`${R}.Matchmake.NotFound`, `${O}.MultiModeSelection`));
+  for (const ev of devEvents) if (Engine.canFire(notFoundSt, ev) && ![`${dev}.searchAgain`, `${dev}.closeNotice`].includes(ev)) fail(`${R}.Matchmake.NotFound で ${ev} の行がある`);
+  // 通知の画面: 文言と Search again / Close。60 秒という長さは画面に出さない。
+  // "No opponent found." は Online Battle の上 (モーダル)、"Search stopped…" は Online Battle の中 (モーダルではない、U43)
+  for (const [name, key, text] of [[`${R}.Matchmake.Stopped`, 'inlineNotice', 'Search stopped while the app was in the background.'],
+    [`${R}.Matchmake.NotFound`, 'notice', 'No opponent found.']]) {
     const s = SCREENS[name];
-    if (!s || s.view !== 'online' || !s.notice) { fail(`${name} が Online Battle の上の通知になっていない`); continue; }
-    if (s.notice.text !== text) fail(`${name} の文言が "${text}" でない (${s.notice.text})`);
-    if (s.notice.buttons.map((b) => `${b.label}:${b.event}`).join() !== 'Search again:searchAgain,Close:closeNotice') fail(`${name} のボタンが Search again / Close でない`);
-    if (/\d/.test(s.notice.text)) fail(`${name} の画面に数字 (60 秒) が出る`);
+    if (!s || s.view !== 'online' || !s[key]) { fail(`${name} が Online Battle の ${key} になっていない`); continue; }
+    if (s.notice && s.inlineNotice) fail(`${name} にモーダルとインラインの通知が両方ある`);
+    if (s[key].text !== text) fail(`${name} の文言が "${text}" でない (${s[key].text})`);
+    if (s[key].buttons.map((b) => `${b.label}:${b.event}`).join() !== 'Search again:searchAgain,Close:closeNotice') fail(`${name} のボタンが Search again / Close でない`);
+    if (/\d/.test(s[key].text)) fail(`${name} の画面に数字 (60 秒) が出る`);
     if (!s.decided.includes('U13')) fail(`${name} に決定 U13 が無い`);
   }
-  if (!SCREENS[`${R}.Matchmake.Stopped`].undecided.includes('U43')) fail(`${R}.Matchmake.Stopped に未決 U43 が無い`);
+  if (SCREENS[`${R}.Matchmake.Stopped`].notice) fail(`${R}.Matchmake.Stopped の通知がモーダル (U43 はモーダルにしない)`);
   if (SCREENS[`${R}.Matchmake`].undecided.length) fail(`${R}.Matchmake に未決 ${SCREENS[`${R}.Matchmake`].undecided} が残っている`);
 }
 if (!/leaveApp/.test(appJs) || !/searchTimeout/.test(appJs) || !/mockControlsHtml/.test(appJs)) fail('app.js の端末の下のモック操作に「アプリを離れる」「60 秒たつ」が無い');
@@ -656,6 +654,58 @@ for (const [id, want] of Object.entries(u13Scenarios)) {
   if (!sc || sc.steps.length !== want.length || got.join() !== want.join()) fail(`シナリオ ${id} の流れ ${got.join(' → ')} (期待: ${want.join(' → ')})`);
 }
 console.log('ok  U13: Cancel / ‹ は確認なしで Online Battle、アプリを離れると "Search stopped…"、見つからなければ "No opponent found." (Search again / Close) (両端末)');
+
+// 決定 (U43、高宮さん 2026-10-07): アプリを離れて検索が止まったら、戻ったときに Online Battle の中に通知のボックス (モーダルではない)。
+// 文言 "Search stopped while the app was in the background."、ボタンは Search again (新しく探す) / Close。
+// 自動では消えず、ほかの画面へ移ると消える (Online Battle のほかの操作もそのまま使える)。"No opponent found." はこれまでどおり
+const u43 = UNDECIDED.find((u) => u.id === 'U43');
+if (!u43 || !u43.decided || u43.decided.by !== '高宮さん' || u43.decided.date !== '2026-10-07') fail('U43 が 高宮さん 2026-10-07 の決定になっていない');
+if (u43 && !u43.desc.includes('Search stopped while the app was in the background.')) fail('U43 の説明に新しい文言が無い');
+for (const r of TRANSITIONS) if (r.undecided.includes('U43')) fail(`${r.id}: 決定済みの U43 が未決として残っている`);
+for (const name of Object.keys(SCREENS)) {
+  const s = SCREENS[name];
+  if ((s.undecided || []).includes('U43')) fail(`${name} に決定済みの U43 が未決として残っている`);
+  for (const n of [s.notice, s.inlineNotice]) if (n && /because you left the app/.test(n.text)) fail(`${name} に古い文言 "…because you left the app." が残っている`);
+}
+for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Host']]) {
+  const pair3 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
+  const stopped = `${R}.Matchmake.Stopped`;
+  if (!SCREENS[stopped].decided.includes('U43')) fail(`${stopped} に決定 U43 が無い`);
+  // Online Battle で押せるもの (Random Match / Friend Match) は、通知を出している間も同じ行き先へ行ける。行き先に通知は無い
+  const online = SCREENS[`${R}.MultiModeSelection`];
+  if (SCREENS[stopped].items.map((i) => i.event).join() !== online.items.map((i) => i.event).join()) fail(`${stopped} のメニューが Online Battle と違う`);
+  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`, `${O}.FriendMatch.Room`]) {
+    for (const it of online.items) {
+      const ev = `${dev}.${it.event}`;
+      const want = Engine.fire(at(...pair3(`${R}.MultiModeSelection`, theirs)), ev);
+      if (!want) { fail(`${R}.MultiModeSelection で ${ev} の行が無い`); continue; }
+      expectFire(at(...pair3(stopped, theirs)), ev, want.state.host, want.state.client);
+    }
+  }
+  // 通知から出ていく行はすべて、ユーザーの操作で、通知の無い画面へ行く (自動・環境・タイマーでは消えない)
+  const st = at(...pair3(stopped, `${O}.MultiModeSelection`));
+  for (const ev of Object.keys(EVENT_LABELS)) {
+    const res = Engine.fire(st, ev);
+    if (!res || res.state[dev] === stopped) continue;
+    if (!ev.startsWith(dev + '.')) fail(`${stopped} が ${ev} (ユーザー以外の操作) で消える`);
+    if (res.row.auto) fail(`${stopped} から自動遷移 (${res.row.id}) がある`);
+    const to = SCREENS[res.state[dev]];
+    if (to.notice || to.inlineNotice) fail(`${stopped} から ${ev} で行った ${res.state[dev]} にも通知がある`);
+  }
+  if (![`${dev}.searchAgain`, `${dev}.closeNotice`, `${dev}.randomMatch`, `${dev}.friendMatch`].every((ev) => Engine.canFire(st, ev))) fail(`${stopped} で Search again / Close / Random Match / Friend Match のどれかが押せない`);
+}
+// アプリ: インラインの通知は Online Battle のメニューの中に描き、暗幕 (.dim) を重ねない
+if (!/inlineNoticeHtml\(dev, s\.inlineNotice\)/.test(appJs)) fail('app.js が Online Battle の中にインラインの通知を描いていない');
+if (!/\.inline-notice\s*\{/.test(read('css', 'style.css'))) fail('style.css に .inline-notice が無い');
+// [手順ごとの状態] 11g: 通知を出したまま Friend Match → ‹ で戻っても通知は出ない
+{
+  const want = ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection',
+    'Host.FriendMatch.Room / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection'];
+  const sc = SCENARIOS.find((x) => x.id === '11g');
+  const got = sc ? want.map((_, i) => pair(Engine.replay(sc, i + 1).state)) : [];
+  if (!sc || sc.steps.length !== want.length || got.join() !== want.join()) fail(`シナリオ 11g の流れ ${got.join(' → ')} (期待: ${want.join(' → ')})`);
+}
+console.log('ok  U43: 検索が止まった通知は Online Battle の中 (モーダルではない)、Search again / Close、ほかの画面へ移ると消え、自動では消えない (両端末)');
 
 // 端末の画面にはゲームが出すものだけ: 決定の注記や「決定」バッジは端末の中にも端末の上にも出さない (右パネルへ)
 if (/decided-note|decidedNoteHtml|GAME_COUNTDOWN_PREMISE/.test(appJs)) fail('app.js が端末の画面に決定の注記を出している');

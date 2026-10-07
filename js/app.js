@@ -257,7 +257,7 @@
     online: function (dev, s) {
       return header(dev, s, s.title) + '<div class="menu">' + s.items.map(function (it) {
         return '<button type="button" class="menu-item"' + attrs(dev, it.event) + '>' + esc(it.label) + '<span class="chev">›</span></button>';
-      }).join('') + '</div>';
+      }).join('') + inlineNoticeHtml(dev, s.inlineNotice) + '</div>';
     },
     friendTop: function (dev, s) {
       var input = s.input
@@ -444,10 +444,19 @@
     return '<span class="mc-label">モック操作 (対戦):</span>' + btn('win', 'Win') + btn('lose', 'Lose') + btn('draw', 'Draw') + btn('disconnect', '切断する');
   }
 
-  // 相手を探すのをやめたときの通知 (決定 U13)。元の画面の上に、確認ダイアログと同じ見た目で出す
+  // 60 秒探しても見つからなかったときの通知 (決定 U13 / U29)。元の画面の上に、確認ダイアログと同じ見た目で出す
   function noticeHtml(dev, n) {
     if (!n) return '';
     return '<div class="dim"><div class="dialog" role="dialog"><div class="d-title notice">' + esc(n.text) + '</div>' +
+      n.buttons.map(function (b) {
+        return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+      }).join('') + '</div></div>';
+  }
+
+  // アプリを離れて検索が止まったときの通知 (決定 U43)。モーダルではなく Online Battle の中のボックスなので、上のメニューも押せる
+  function inlineNoticeHtml(dev, n) {
+    if (!n) return '';
+    return '<div class="inline-notice" role="status"><p class="in-text">' + esc(n.text) + '</p><div class="btn-row">' +
       n.buttons.map(function (b) {
         return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
       }).join('') + '</div></div>';

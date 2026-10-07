@@ -181,6 +181,12 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   box-shadow: 0 0 12px rgba(95, 201, 250, 0.15);
 }
 .menu-item .chev { color: var(--h); font-size: 22px; }
+/* アプリを離れて検索が止まったときの通知 (決定 U43)。モーダルにせず、メニューの下に置いてメニューの位置を変えない */
+.inline-notice {
+  margin-top: 10px; padding: 16px 16px 14px; border-radius: 12px; background: #161C36; border: 1px solid #3A4466;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+.in-text { margin: 0 0 14px; text-align: center; font-family: var(--game); font-size: 15px; font-weight: 600; line-height: 1.45; text-wrap: balance; }
 
 .body { padding: 20px 28px 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .body.center { align-items: center; justify-content: center; text-align: center; }

@@ -2,6 +2,7 @@
 // 全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 も) をヘッドレス Chromium で描画し、
 // 両端末の画面 (.screen) にゲームが出さないもの (仮・未決・決定の印、U 番号、モックの注記、日本語) が無いことを確かめる。
 // ランダム対戦の画面に 60 秒 (仮の長さ) が出ないこと、検索中のモック操作が端末の外にあることも確かめる (決定 U13)。
+// アプリを離れて検索が止まった通知がモーダルではなく、メニューをさまたげないことも確かめる (決定 U43)。
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
 // No contest にスコアの行が無いこと (値が決まっていないスコアは "----" ではなく行ごと出さない) も確かめる (決定 U20 / U27 / U28 / U30)。
 // 端末の上の帯は未決バッジだけで、すべて見えていること (1280x720 で確かめる) も確かめる。
@@ -140,6 +141,29 @@ function scan() {
         ['leaveApp', 'searchTimeout'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]:not([data-norow])`)) findings.push(`${at}: 端末の下のモック操作で ${ev} を押せない`);
         });
+      }
+      // アプリを離れて検索が止まった通知 (決定 U43): Online Battle の中のボックスで、暗幕を重ねない。
+      // メニュー (Random Match / Friend Match) は上に何も重ならず押せ、通知は端末の画面に収まっている
+      if (/\.Matchmake\.Stopped$/.test(state)) {
+        const box = screen.querySelector('.menu > .inline-notice');
+        if (!box) findings.push(`${at}: Online Battle の中に通知のボックスが無い`);
+        if (screen.querySelector('.dim')) findings.push(`${at}: 通知がモーダル (暗幕がある)`);
+        if (box) {
+          const sr = screen.getBoundingClientRect();
+          const r = box.getBoundingClientRect();
+          if (r.top < sr.top || r.bottom > sr.bottom || r.left < sr.left || r.right > sr.right) findings.push(`${at}: 通知のボックスが画面からはみ出している`);
+          if (box.textContent.indexOf('Search stopped while the app was in the background.') !== 0) findings.push(`${at}: 通知の文言が違う (${box.textContent})`);
+        }
+        // 1280x720 では端末の列が横にスクロールするので、押す人と同じく見えるところまでスクロールしてから確かめ、元に戻す
+        const scroller = document.querySelector('.devices');
+        const [sx, sy] = [scroller.scrollLeft, scroller.scrollTop];
+        screen.querySelectorAll('.menu-item, .inline-notice .btn').forEach((el) => {
+          el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+          const r = el.getBoundingClientRect();
+          const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          if (el.hasAttribute('data-norow') || !el.contains(hit)) findings.push(`${at}: ${el.textContent.trim()} を押せない`);
+        });
+        scroller.scrollTo(sx, sy);
       }
       // 結果画面と切断を待つ画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアが決まっていなければ行ごと出さない
       if (/Result|Disconnected$/.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(text)) findings.push(`${at}: 秒数がある: ${text.trim().slice(0, 80)}`);

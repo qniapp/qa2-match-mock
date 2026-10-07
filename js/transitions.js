@@ -428,7 +428,7 @@ var TRANSITIONS = (function () {
     T({ from: row(R + '.Matchmake'), event: d + '.back', to: row(R + '.MultiModeSelection'),
       note: '決定 (U13): ‹ は Cancel とまったく同じ (確認なしで Online Battle へ)', decided: ['U13'] });
     T({ from: row(R + '.Matchmake'), event: d + '.leaveApp', to: row(R + '.Matchmake.Stopped'),
-      note: 'モック操作。決定 (U13): アプリを離れると検索を止め、戻ると "Search stopped because you left the app." を出す。出す場所 (Online Battle の上) とボタンは仮', decided: ['U13'], undecided: ['U43'] });
+      note: 'モック操作。決定 (U13 / U43): アプリを離れると検索を止め、戻ると Online Battle の中に "Search stopped while the app was in the background." の通知 (モーダルではない)', decided: ['U13', 'U43'] });
     T({ from: row(R + '.Matchmake'), event: d + '.searchTimeout', to: row(R + '.Matchmake.NotFound'),
       note: 'モック操作。決定 (U13): 見つからなければ元の画面 (Online Battle) に "No opponent found." と Search again / Close。60 秒という長さは仮', decided: ['U13'] });
     T({ from: row(R + '.Matchmake.NotFound'), event: d + '.searchAgain', to: row(R + '.Matchmake'),
@@ -436,9 +436,14 @@ var TRANSITIONS = (function () {
     T({ from: row(R + '.Matchmake.NotFound'), event: d + '.closeNotice', to: row(R + '.MultiModeSelection'),
       note: '決定 (U13): Close で通知を閉じ、Online Battle のまま', decided: ['U13'] });
     T({ from: row(R + '.Matchmake.Stopped'), event: d + '.searchAgain', to: row(R + '.Matchmake'),
-      note: '仮: "No opponent found." と同じく Search again でもう一度相手を探す', decided: ['U13'], undecided: ['U43'] });
+      note: '決定 (U43): Search again で新しく相手を探す', decided: ['U43'] });
     T({ from: row(R + '.Matchmake.Stopped'), event: d + '.closeNotice', to: row(R + '.MultiModeSelection'),
-      note: '仮: "No opponent found." と同じく Close で通知を閉じ、Online Battle のまま', decided: ['U13'], undecided: ['U43'] });
+      note: '決定 (U43): Close で通知を閉じ、Online Battle のまま', decided: ['U43'] });
+    // 通知はモーダルではないので、Online Battle のほかの操作もそのまま使える。ほかの画面へ移ると通知は消える (自動では消えない)
+    T({ from: row(R + '.Matchmake.Stopped'), event: d + '.randomMatch', to: row(R + '.Matchmake'),
+      note: '決定 (U43): 通知を出したまま Random Match も押せる (新しく相手を探す。通知は消える)', decided: ['U43', 'U13a'] });
+    T({ from: row(R + '.Matchmake.Stopped'), event: d + '.friendMatch', to: row(R + '.FriendMatch.Room'),
+      note: '決定 (U43): 通知を出したまま Friend Match も押せる。ほかの画面へ移ると通知は消える (戻っても出ない)', decided: ['U43'] });
   });
 
   // === 次の相手を探す (決定 U29、高宮さん 2026-10-07) ===
@@ -461,7 +466,7 @@ var TRANSITIONS = (function () {
       note: '仮: Random Match から探しているとき (U13) と同じく、‹ は Cancel とまったく同じ', decided: ['U29', 'U13'] });
     T({ from: row(next), event: d + '.searchTimeout', to: row(next + '.NotFound'),
       note: 'モック操作。決定 (U29): 60 秒 (仮) 探しても見つからなければ "No opponent found." と Search again / Back to Online。' +
-        'アプリを離れたとき (U13 の "Search stopped…") に当たる行は無い (U47)', decided: ['U29'], undecided: ['U47'] });
+        'アプリを離れたとき (U13 / U43 の "Search stopped…") に当たる行は無い (U47)', decided: ['U29'], undecided: ['U47'] });
     T({ from: row(next + '.NotFound'), event: d + '.searchAgain', to: row(next),
       note: '決定 (U29): Search again でもう一度次の相手を探す', decided: ['U29'] });
     T({ from: row(next + '.NotFound'), event: d + '.backToOnlineBattle', to: row(R + '.MultiModeSelection'),
@@ -790,7 +795,7 @@ var DISCONNECT_OVERLAYS = {
   opponent: { title: 'Your opponent disconnected', body: 'Waiting for your opponent to reconnect…' },
 };
 // ランダム対戦で相手を探すのをやめたときの通知 (決定 U13)。60 秒という長さは端末の画面には出さない
-var SEARCH_NOTICES = { stopped: 'Search stopped because you left the app.', notFound: 'No opponent found.' };
+var SEARCH_NOTICES = { stopped: 'Search stopped while the app was in the background.', notFound: 'No opponent found.' };
 
 // 右パネルに出す、その状態の画面の説明 (端末の画面の中には出さない)
 var GAME_COUNTDOWN_CONTEXT = 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。終わるとメニューボタン (☰) が出てプレイ開始。';
@@ -814,8 +819,8 @@ var MATCHMAKE_CONTEXT = 'ランダム対戦で相手を探している画面 (�
   'Cancel と ‹ はどちらも確認なしで Online Battle へ戻る (U13)。探している間は、ほかの画面へは行けない。' +
   'アプリを離れる (バックグラウンド・画面ロック) と検索を止める。60 秒探しても見つからなければ Online Battle に "No opponent found." を出す (60 秒という長さは仮)。' +
   'どちらも端末の下のモック操作で試せる。';
-var SEARCH_STOPPED_CONTEXT = 'アプリを離れた (バックグラウンド・画面ロック) ので検索を止めた (決定 U13)。戻ると "Search stopped because you left the app." を出す。' +
-  '出す場所 (Online Battle の上) と Search again / Close のボタンは、"No opponent found." にそろえたモックの仮 (U43)。';
+var SEARCH_STOPPED_CONTEXT = 'アプリを離れた (バックグラウンド・画面ロック) ので検索を止めた (決定 U13)。戻ると Online Battle の中に "Search stopped while the app was in the background." を出す (決定 U43)。' +
+  'モーダルではないので Random Match / Friend Match もそのまま押せる。Search again で新しく探し、Close で閉じる。自動では消えず、ほかの画面へ移ると消える。';
 var SEARCH_NOT_FOUND_CONTEXT = '60 秒探しても相手が見つからなかった (決定 U13、60 秒という長さは仮)。元の画面 (Online Battle) に "No opponent found." を出す。' +
   'Search again でもう一度相手を探し (Searching に戻る)、Close で通知を閉じて Online Battle のまま。';
 var MATCH_MENU_CONTEXT = 'MATCH MENU (決定 U37)。試合は止まらない: Time.timeScale = 0 にせず、暗幕も薄くしてゲームが見えたまま。メニュー中に試合が終われば (Win / Lose) そのまま結果画面へ。' +
@@ -852,10 +857,17 @@ var SCREENS = (function () {
     return { view: 'random', title: 'Random Match', back: 'back', status: 'Searching for an opponent…',
       buttons: [B.search], decided: ['U13a', 'U13'], context: MATCHMAKE_CONTEXT };
   }
-  // 相手を探すのをやめたときの通知 (決定 U13)。元の画面 (Online Battle) の上に出す
+  // 相手を探すのをやめたときの通知 (決定 U13)。Search again / Close
+  function noticeButtons() {
+    return [{ label: 'Search again', event: 'searchAgain', primary: true }, { label: 'Close', event: 'closeNotice' }];
+  }
+  // 見つからなかったとき: 元の画面 (Online Battle) の上に出す
   function searchNotice(text, extra) {
-    return Object.assign(online(), { notice: { text: text, buttons: [
-      { label: 'Search again', event: 'searchAgain', primary: true }, { label: 'Close', event: 'closeNotice' }] }, decided: ['U13'] }, extra);
+    return Object.assign(online(), { notice: { text: text, buttons: noticeButtons() }, decided: ['U13'] }, extra);
+  }
+  // アプリを離れて止まったとき (決定 U43): Online Battle の中に出す。モーダルではなく、ほかの操作を妨げない
+  function inlineSearchNotice(text, extra) {
+    return Object.assign(online(), { inlineNotice: { text: text, buttons: noticeButtons() }, decided: ['U13', 'U43'] }, extra);
   }
   // 結果画面の Find Next Opponent で次の相手を探す (決定 U29)。見た目は Random Match から探すときと同じ
   function nextSearch() {
@@ -923,7 +935,7 @@ var SCREENS = (function () {
     });
   });
   S['Host.Matchmake'] = matchmake();
-  S['Host.Matchmake.Stopped'] = searchNotice(SEARCH_NOTICES.stopped, { undecided: ['U43'], context: SEARCH_STOPPED_CONTEXT });
+  S['Host.Matchmake.Stopped'] = inlineSearchNotice(SEARCH_NOTICES.stopped, { context: SEARCH_STOPPED_CONTEXT });
   S['Host.Matchmake.NotFound'] = searchNotice(SEARCH_NOTICES.notFound, { context: SEARCH_NOT_FOUND_CONTEXT });
   S['Host.Matchmake.NextOpponent'] = nextSearch();
   S['Host.Matchmake.NextOpponent.NotFound'] = nextNotFound();
@@ -962,7 +974,7 @@ var SCREENS = (function () {
   S['Client.Away.StageSelection.Ready'] = { view: 'stage', back: 'back', toast: 'ready' };
   S['Client.Away.StageSelection.Expired'] = { view: 'stage', back: 'back', toast: 'expired', undecided: ['U18'] };
   S['Client.Matchmake'] = matchmake();
-  S['Client.Matchmake.Stopped'] = searchNotice(SEARCH_NOTICES.stopped, { undecided: ['U43'], context: SEARCH_STOPPED_CONTEXT });
+  S['Client.Matchmake.Stopped'] = inlineSearchNotice(SEARCH_NOTICES.stopped, { context: SEARCH_STOPPED_CONTEXT });
   S['Client.Matchmake.NotFound'] = searchNotice(SEARCH_NOTICES.notFound, { context: SEARCH_NOT_FOUND_CONTEXT });
   S['Client.Matchmake.NextOpponent'] = nextSearch();
   S['Client.Matchmake.NextOpponent.NotFound'] = nextNotFound();
@@ -1079,7 +1091,7 @@ var UNDECIDED = [
   { id: 'U13', title: 'ランダム対戦の待機中: Cancel と ‹ は確認なしで戻る。アプリを離れたら検索を止める。見つからなければ "No opponent found."',
     desc: '相手を探している間 ("Searching for an opponent…") の操作。Cancel を押すと、確認ダイアログを出さずに Online Battle へ戻る。' +
       '‹ も Cancel とまったく同じ (Online Battle へ)。探している間は、ほかの画面へは行けない (出口は Cancel と ‹ だけ)。' +
-      'アプリを離れる (バックグラウンドへ移る・画面ロック) と検索を止め、戻ったときに "Search stopped because you left the app." (アプリを離れたので検索を止めました) を出す。' +
+      'アプリを離れる (バックグラウンドへ移る・画面ロック) と検索を止め、戻ったときに通知を出す (文言・出す場所・ボタンは U43 で決定: Online Battle の中に "Search stopped while the app was in the background." と Search again / Close)。' +
       '60 秒探しても相手が見つからなければ元の画面 (Online Battle) に戻り、"No opponent found." と Search again / Close を出す。Search again でもう一度探し、Close で通知を閉じる。' +
       '60 秒という長さは仮 (変わりうる)。相手が見つかり次第 VS 画面へ進むこと (U13a) は変わらない。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
@@ -1196,10 +1208,12 @@ var UNDECIDED = [
   { id: 'U42', title: 'MATCH MENU 中も BGM を下げない',
     desc: '実ゲームのポーズは BGM を -5dB 下げる (ダッキング) が、オンライン対戦の MATCH MENU では試合が続くので BGM を下げない。モックには音が無いので、決定の記録だけ。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
-  { id: 'U43', title: 'アプリを離れて検索が止まったときの通知の場所とボタン',
-    desc: 'U13 の決定で、相手を探している間にアプリを離れると検索を止め、戻ったときに "Search stopped because you left the app." を出す。' +
-      'どの画面の上に出すか、どんなボタンを置くかは決定に書かれていない。モックでは "No opponent found." (U13) とそろえて、Online Battle の上に Search again / Close を出している。' +
-      'Close (や OK) だけにする、"Searching for an opponent…" の画面の上に出す、などの案もありうる。' },
+  { id: 'U43', title: 'アプリを離れて検索が止まったら、Online Battle の中に通知 (Search again / Close)。自動では消えない',
+    desc: '相手を探している間にアプリを離れて (バックグラウンド・画面ロック) 検索が止まったら、戻ったときに Online Battle の画面の中に通知のボックスを出す。' +
+      'モーダルではなく、Online Battle のほかの操作 (Random Match / Friend Match) をさまたげない。文言は "Search stopped while the app was in the background." ' +
+      '(以前の "Search stopped because you left the app." から変更)。ボタンは Search again (新しく探す) と Close。' +
+      '通知は自動では消えず、ほかの画面へ移ると消える。60 秒で見つからなかったときの "No opponent found." (U13) はこれまでどおり。',
+    decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U44', title: '通常の決着のときの終わった理由の文言と、引き分けになる条件',
     desc: 'U20 の決定で結果画面に終わった理由を出すが、降参・切断・接続エラー以外 (ゲームの決着) のときの文言は決まっていない。モックは仮に "Match finished" を出している。' +
       'また Draw (引き分け) が結果の 1 つになったが、どういうときに引き分けになるかはゲームのルール次第で決まっていない (モックは端末の下のモック操作 Draw)。' },
@@ -1212,7 +1226,7 @@ var UNDECIDED = [
       '切断した側には "Connection lost" / "Reconnecting…" を出し、20 秒のうちに戻れば試合を続ける (環境イベント「通信が回復する」)。' +
       '待っている間も試合 (残った側のプレイ) が続くのか止まるのか、待ち時間を画面に出すかも未定。モックでは待っている間は Win / Lose / Draw を押せない。' },
   { id: 'U47', title: '次の相手を探している間にアプリを離れたとき',
-    desc: 'U13 の決定で、Random Match から探している間にアプリを離れると検索を止める ("Search stopped because you left the app."、出す場所とボタンは U43)。' +
+    desc: 'U13 / U43 の決定で、Random Match から探している間にアプリを離れると検索を止め、戻ると Online Battle の中に "Search stopped while the app was in the background." を出す。' +
       '結果画面の Find Next Opponent から探している間 (U29) にアプリを離れたときも同じでよいか、通知をどこに出すかは決まっていない。モックには行が無い (端末の下の「アプリを離れる」は押せない)。' },
   { id: 'U48', title: 'VS 画面の "Rank" とレーティング (Elo) の関係',
     desc: 'VS 画面は 10-01 の合意で名前・ランク・あいさつを出し、モックは "Rank 12" / "Rank 9" (架空) を出している。U21 の決定でランダム対戦は Elo のレーティング (初期値 1000) になった。' +

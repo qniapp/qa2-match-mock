@@ -1164,9 +1164,9 @@ var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両
   '時間切れで終わったときの理由は "Time is up"、同点の引き分けは "Same score when time ran out" (U44)。' +
   'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
   'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら Find Next Opponent / Rematch / Back to Online。自動では次へ進まない (U26)。';
-var RESULT_COOLDOWN_CONTEXT = '3 秒 (仮) は Rematch を押せない (左の環境イベント「3 秒たつ」で進める)。3 秒たっても一行は残り、どちらかがまた申し込むか結果画面を抜けるまで出しておく (U50)。';
+var RESULT_COOLDOWN_CONTEXT = '3 秒 (仮) は Rematch を押せない (右パネルの環境イベント「3 秒たつ」で進める)。3 秒たっても一行は残り、どちらかがまた申し込むか結果画面を抜けるまで出しておく (U50)。';
 var RESULT_PHASE_CONTEXT = {
-  RematchRequested: '自分が再戦を申し込んで待っている (U23 / U30)。Cancel Request で取り消せる。応答の期限 20 秒 (仮) は左の環境イベントで進める (秒数は端末の画面に出さない)。',
+  RematchRequested: '自分が再戦を申し込んで待っている (U23 / U30)。Cancel Request で取り消せる。応答の期限 20 秒 (仮) は右パネルの環境イベントで進める (秒数は端末の画面に出さない)。',
   RematchIncoming: '相手から再戦を申し込まれた (U23 / U30)。Rematch で応じるとそのまま VS 画面、Decline で断る。',
   RematchCancelled: '相手が申し込みを取り消した (U30)。取り消した側と同じ "Rematch request cancelled" を出す (2026-10-08 に両者の文言を統一)。両者とも結果画面に残る。',
   RematchCancelledByYou: '自分が申し込みを取り消した。取り消した側にも "Rematch request cancelled" を出す (U50。相手と同じ文言、2026-10-08)。両者とも結果画面に残る。',
@@ -1207,7 +1207,7 @@ var SPECIAL_RESULT_CONTEXT = {
 var DISCONNECT_CONTEXT = {
   self: 'この端末の接続が切れた (決定 U28)。20 秒 (仮) のうちに戻れば試合を続け、戻れなければ負け。待っている間はサーバーが両者のゲームと得点を止め、' +
     '"Connection lost" / "Reconnecting…" と残りの秒数を出す (U46。20 秒は QA² 側の仮の値で、モックは "20s" のまま描く)。MATCH MENU では試合は止まらない (U37)。' +
-    '端末の下のモック操作 (または左の環境イベント) で「再接続する」「20 秒たつ」を選べる。',
+    '端末の下のモック操作 (または右パネルの環境イベント) で「再接続する」「20 秒たつ」を選べる。',
   opponent: '相手の接続が切れたので 20 秒 (仮) 待つ (決定 U28)。戻らなければ勝ち。待っている間はサーバーが両者のゲームと得点を止め、' +
     '"Your opponent disconnected" / "Waiting for your opponent to reconnect…" と残りの秒数を出す (U46)。時間切れの決着は押せない。',
 };
@@ -1259,23 +1259,23 @@ var RECONNECT_TIMER_CONTEXT = '20 秒は QA² 側の仮の値で、モックは 
 var READY_PHASE_CONTEXT = {
   Confirming: 'Ready を送っている間 (決定 U36)。ボタンが "Confirming\u2026" になり、届くと自動で次へ進む (モックは 0.8 秒)。送っている間は Ready を取り消せず、Close Room / Leave Room / \u2039 も押せない (U53)。',
   WaitingForOpponent: '自分だけ Ready (決定 U36)。"Waiting for opponent\u2026" と 60 秒のカウントダウン、Cancel Ready。60 秒は QA² 側の仮の値で、モックは押した直後の "60s" のまま描く。' +
-    '相手が押さないまま 60 秒たつと (左の環境イベント) 両者の Ready が消えて "Ready check timed out…" (U33)。Cancel Ready で取り消しても、部屋には残る (U34)。',
+    '相手が押さないまま 60 秒たつと (右パネルの環境イベント) 両者の Ready が消えて "Ready check timed out…" (U33)。Cancel Ready で取り消しても、部屋には残る (U34)。',
   OpponentReady: '相手だけ Ready (決定 U36)。"Opponent is ready. Are you?"。Ready を押せば開始する。離席中に "Friend is ready!" の帯をタップして戻ったときもこの画面 (Ready は押していない、U1)。',
   TimedOut: '片方が Ready のまま 60 秒 (仮) たったので、両者の Ready を消した (決定 U33)。罰はなく、どちらも部屋に残る。',
   OpponentNotReady: '相手が Ready を取り消した (Cancel Ready、決定 U34)、アプリを離れて Ready が消えた (決定 U35)、またはホストが別の画面へ移って Ready が消えた (決定 U14)。相手への表示はどれも同じ (U53)。',
   StartFailed: '読み込み ("Starting match\u2026") が 20 秒 (仮) で終わらなかった (決定 U32)。両者とも Ready 画面に戻り、Ready は消えている。もう一度両者が Ready を押せば開始する。',
   SyncFailed: '開始の同期に失敗した (決定 U15)。両者の Ready を消し、ふつうの Ready の流れ (60 秒 (仮) の期限つき) からやり直す。Match Code が有効な間は何度でもやり直せる。',
-  Starting: '両者の Ready がそろい、読み込み中 (決定 U31 / U32)。20 秒 (仮) で終わらなければ "Match could not start. Please try again."、同期に失敗すれば "Couldn\u2019t start the match. Please ready up again." で両者とも Ready 画面に戻る (U15、どちらも左の環境イベント)。' +
+  Starting: '両者の Ready がそろい、読み込み中 (決定 U31 / U32)。20 秒 (仮) で終わらなければ "Match could not start. Please try again."、同期に失敗すれば "Couldn\u2019t start the match. Please ready up again." で両者とも Ready 画面に戻る (U15、どちらも右パネルの環境イベント)。' +
     '読み込み中は Ready を取り消せず、Cancel Ready / Close Room / Leave Room / \u2039 を出さない (U53)。ここでの切断は部屋での切断 (U5)。',
   OpponentDisconnected: 'VS 画面・カウントダウン中に相手の接続が切れた (決定 U32)。両者の Ready を消し、"Opponent disconnected. Waiting for them to reconnect\u2026" と 20 秒のカウントダウン。' + RECONNECT_TIMER_CONTEXT +
-    '戻れば (左の環境イベント「通信が回復する」) 両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。' +
+    '戻れば (右パネルの環境イベント「通信が回復する」) 両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。' +
     '戻らなければ (「切断から 20 秒たつ」)、相手がクライアントならホストは "Match cancelled. Opponent did not reconnect." で同じ Match Code のまま部屋に残り、相手がホストならクライアントは "Room closed. The host disconnected." で Friend Match トップへ。勝敗は記録しない。',
   Reconnecting: 'VS 画面・カウントダウン中にこの端末の接続が切れた (決定 U32)。"Connection lost. Reconnecting\u2026" と 20 秒のカウントダウン (U52)。' + RECONNECT_TIMER_CONTEXT +
     '戻れなければ Friend Match トップに "Could not reconnect. The match did not start." (U52)。',
   FriendJoined: '友だちが入った (決定 U4)。サーバーが参加を確認し、両者が部屋の画面にいて同期が終わると Ready を押せる (決まった待ち時間ではない。モックは 0.8 秒で自動で進む)。',
   Connecting: '部屋に入った (決定 U4)。同期が終わるまでは "Connecting\u2026" で Ready を押せない。ホストが別の画面にいる間は同期が終わらない (ホストが戻ると進む)。Leave Room と \u2039 で確認を出す (U9)。',
   ConnectionLost: '部屋でこの端末の接続が切れた (決定 U5)。両者の Ready は消え、20 秒まで自動で再接続する ("Connection lost. Reconnecting\u2026" と残りの秒数、U52)。' + RECONNECT_TIMER_CONTEXT +
-    '戻れれば (左の環境イベント「通信が回復する」) Ready 画面へ、戻れなければ (「切断から 20 秒たつ」) "Could not reconnect."。この間も Match Code の期限の時計は止まらない (U7)。',
+    '戻れれば (右パネルの環境イベント「通信が回復する」) Ready 画面へ、戻れなければ (「切断から 20 秒たつ」) "Could not reconnect."。この間も Match Code の期限の時計は止まらない (U7)。',
   FriendDisconnected: '部屋で相手の接続が切れた (決定 U5)。両者の Ready は消え、"Your friend disconnected. Waiting for them to reconnect\u2026" で 20 秒待つ。' +
     '残りの秒数も出す (切れた側 (U52) と VS 画面中の切断 (U32) にそろえた。2026-10-08 に確認)。' + RECONNECT_TIMER_CONTEXT +
     '戻らなければ、相手がクライアントならホストは空の部屋を残して "Waiting for your friend…"、相手がホストならクライアントは Friend Match トップに "The room was closed." (U52)。',

@@ -22,14 +22,14 @@ var SCENARIOS = (function () {
   var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (13 手順)
   var toRandomGame = ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound'].concat(toGame); // ランダム対戦でプレイ開始まで (5 手順)
   var postMatch = '結果画面は 2026-10-07 に決定 (U20〜U30。細部は 2026-10-08 の U44〜U50)。時間切れの勝ち / 負け / 同点と「切断する」は端末の下のモック操作で、得点の計算は対象外。' +
-    '秒数 (20 秒・3 秒・5 秒・60 秒) と Elo の値 (初期値 1000、K=24) は QA² 側の仮の値で、タイマーは左の環境イベントか端末の下のモック操作で進める。';
+    '秒数 (20 秒・3 秒・5 秒・60 秒) と Elo の値 (初期値 1000、K=24) は QA² 側の仮の値で、タイマーは右パネルの環境イベントか端末の下のモック操作で進める。';
   var matchMenu = 'オンライン対戦の MATCH MENU は 2026-10-07 に決定 (案A、U37〜U42)。試合は止まらず (Time.timeScale = 0 にしない、BGM も下げない)、' +
     '暗幕は薄くゲーム画面が見えたまま。ボタンは CONTINUE と SURRENDER だけで、対戦中に REMATCH / RETRY は無い (U39)。';
   var beforeStart = 'Ready 画面と開始前の切断は 2026-10-07 に決定 (U31 の Ready への変更、U32〜U36。細部は 2026-10-08 の U52 / U53)。Ready を取り消せるのは届いたあとの Ready 画面だけで、' +
     '試合が始まる (3-2-1 のあとサーバーが確認する) までは勝敗を記録しない。' +
-    '秒数 (Ready の 60 秒・再接続の 20 秒・読み込みの 20 秒) は QA² 側の仮の値で、タイマーは左の環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。';
+    '秒数 (Ready の 60 秒・再接続の 20 秒・読み込みの 20 秒) は QA² 側の仮の値で、タイマーは右パネルの環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。';
   var roomNote = 'フレンド対戦の部屋は 2026-10-07 に決定 (U1〜U19。細部は 2026-10-08 の U51 / U52 / U55)。ホストの ‹ は確認なしで部屋を残して帯で示し (U14)、クライアントの ‹ は退出の確認 (U9)。' +
-    '秒数 (再接続の 20 秒・Ready の 60 秒) と Match Code の期限 30 分は QA² 側の仮の値で、タイマーは左の環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。';
+    '秒数 (再接続の 20 秒・Ready の 60 秒) と Match Code の期限 30 分は QA² 側の仮の値で、タイマーは右パネルの環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。';
 
   return [
     { id: '1', title: '通常対戦 (ホストが先に Ready)', diagram: '01',
@@ -64,23 +64,23 @@ var SCENARIOS = (function () {
       steps: toReady.concat(['host.back', 'client.leaveRoom', 'client.dialog.leaveRoom', 'sys.friendLeftShown', 'client.joinMatch', 'host.tapToast', 'sys.roomSynced']) },
     { id: '2e', title: 'ホストの離席中に友だちが切断 → "Reconnecting…" → 20 秒で "Waiting for your friend…"', diagram: '02 / 03 (10-07 の決定 U5 / U19)',
       desc: 'Ready 画面でホストが ‹ で離れている間に、クライアントの接続が切れる (端末の下のモック操作「切断する」)。ホストの帯は青い "Waiting for your friend…" ではなく "Reconnecting…" (U19)、' +
-        'クライアントは "Connection lost. Reconnecting…" (U5)。ホストがステージ選択へ移っても帯は続く。20 秒 (仮) たっても戻らない (左の環境イベント) と、ホストの帯は "Waiting for your friend…" に戻り、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。' +
+        'クライアントは "Connection lost. Reconnecting…" (U5)。ホストがステージ選択へ移っても帯は続く。20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、ホストの帯は "Waiting for your friend…" に戻り、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。' +
         'クライアントが Retry してつながると部屋に入り直し、ホストの帯は緑の "Friend joined!" (U17)。ホストがタップして戻ると同期して Ready 画面。' + roomNote,
       steps: toReady.concat(['host.back', 'client.disconnect', 'host.back', 'timer.disconnectTimeout', 'client.retry', 'net.recovered', 'host.tapToast', 'sys.roomSynced']) },
     { id: '3a', title: 'Ready 画面でホストが切断 → 20 秒のうちに戻る → もう一度 Ready', diagram: '03 (10-07 の決定 U5 で置き換え)',
       desc: 'クライアントが Ready を押して待っている間にホストの接続が切れる (端末の下のモック操作「切断する」)。両者の Ready は消え、20 秒 (仮) まで自動で再接続する (U5)。' +
         'ホストは "Connection lost. Reconnecting…"、クライアントは "Your friend disconnected. Waiting for them to reconnect…"。' +
-        '20 秒のうちに戻る (左の環境イベント「通信が回復する」) と、両者とも Ready していない Ready 画面に戻る (入り直しではないので "Friend joined!" は出さない、U17)。両者が Ready を押して開始。' +
+        '20 秒のうちに戻る (右パネルの環境イベント「通信が回復する」) と、両者とも Ready していない Ready 画面に戻る (入り直しではないので "Friend joined!" は出さない、U17)。両者が Ready を押して開始。' +
         '図03 の「両者が "Connecting…" → "Connection lost." → Cancel Match」の流れは、この決定で置き換えた。' + roomNote,
       steps: toReady.concat(clientReady, ['host.disconnect', 'net.recovered'], bothStart, toGame) },
     { id: '3b', title: 'Ready 画面でクライアントが切断 → 戻らない → Could not reconnect → Leave Room', diagram: '03 (10-07 の決定 U5 で置き換え)',
-      desc: 'クライアントの接続が切れ、20 秒 (仮) たっても戻らない (左の環境イベント) と、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。' +
+      desc: 'クライアントの接続が切れ、20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。' +
         'ホストは空の部屋を残して "Waiting for your friend…" (同じ Match Code)。クライアントが Leave Room → 確認 → Leave Room で Friend Match トップへ戻る (U5 / U9)。' + roomNote,
       steps: toReady.concat(['client.disconnect', 'timer.disconnectTimeout', 'client.leaveRoom', 'client.dialog.leaveRoom']) },
     { id: '3c', title: 'Ready 画面でホストが切断 → 戻らない → Retry → 空の部屋に戻る', diagram: '03 (10-07 の決定 U5 で置き換え)',
       desc: 'ホストの接続が切れると、両者に 20 秒のカウントダウン ("Connection lost. Reconnecting…" は U52)。20 秒 (仮) たっても戻らないと、ホストは "Could not reconnect." と Retry / Leave Room、' +
         'クライアントは Friend Match トップへ戻り、"The room was closed." の帯 (U52。"You left the room" とは出さない)。' +
-        'ホストが Retry してつながる (左の環境イベント「通信が回復する」) と、残しておいた空の部屋に戻る ("Waiting for your friend…"、U5)。' +
+        'ホストが Retry してつながる (右パネルの環境イベント「通信が回復する」) と、残しておいた空の部屋に戻る ("Waiting for your friend…"、U5)。' +
         'クライアントが Match Code を入れても帯は残り (U52)、Close で閉じる。同じ Match Code で入り直すと "Friend joined!" (U17)。' + roomNote,
       steps: toReady.concat(['host.disconnect', 'timer.disconnectTimeout', 'host.retry', 'net.recovered', 'client.enterCode', 'client.closeNotice', 'client.joinMatch', 'sys.roomSynced']) },
     { id: '3d', title: '友だちの切断を待っている間にホストが ‹ → "Reconnecting…" の帯 → 戻ってくる', diagram: '03 (10-07 の決定 U14 / U19)',
@@ -104,11 +104,11 @@ var SCENARIOS = (function () {
         '‹ を押すと Leave Room と同じ確認 "Leave this room?" (U9)。Keep Waiting で残り (U11)、Leave Room → Leave Room で抜けると、ホストは "Your friend left. Waiting for another friend…"。' + roomNote,
       steps: hostCreates.concat(clientJoins, ['client.back', 'client.dialog.keepWaiting', 'client.leaveRoom', 'client.dialog.leaveRoom']) },
     { id: '6', title: '読み込みが 20 秒で終わらない → もう一度 Ready', diagram: '06 (10-07 の決定 U32 で変更)',
-      desc: '両者が Ready を押し ("Starting match…")、読み込みが 20 秒 (仮) で終わらない (左の環境イベント) と、両者に "Match could not start. Please try again." を出して Ready 画面に戻る (U32)。両者の Ready は消える。' +
+      desc: '両者が Ready を押し ("Starting match…")、読み込みが 20 秒 (仮) で終わらない (右パネルの環境イベント) と、両者に "Match could not start. Please try again." を出して Ready 画面に戻る (U32)。両者の Ready は消える。' +
         'もう一度両者が Ready を押して VS 画面へ。' + beforeStart,
       steps: toReady.concat(bothStart.slice(0, 4), ['timer.loadTimeout'], bothStart, toGame) },
     { id: '6b', title: '開始の同期に失敗 → もう一度 Ready', diagram: '06 (10-07 の決定 U15 で変更)',
-      desc: '両者が Ready を押したあと、開始の同期に失敗する (左の環境イベント) と、両者の Ready を消して "Couldn’t start the match. Please ready up again." (U15)。' +
+      desc: '両者が Ready を押したあと、開始の同期に失敗する (右パネルの環境イベント) と、両者の Ready を消して "Couldn’t start the match. Please ready up again." (U15)。' +
         'ふつうの Ready の流れ (60 秒の期限つき) からやり直し、両者が Ready を押して VS 画面へ。Match Code が有効な間は何度でもやり直せる。図06 の "Unable to start the match." を置き換えた。' + beforeStart,
       steps: toReady.concat(bothStart.slice(0, 4), ['sys.syncFailed'], clientFirst, toGame) },
     { id: '7a', title: 'Ready 画面でクライアントが ‹ → 確認 → Keep Waiting → ‹ → 抜ける', diagram: '07 (10-07 の決定 U9 / U35 で置き換え)',
@@ -158,7 +158,7 @@ var SCENARIOS = (function () {
     { id: '12', title: 'VS 画面中にクライアントが切断 → 戻らない → 同じ Match Code で入り直す', diagram: 'なし (10-07 の決定 U32)',
       desc: 'VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」) と、試合はまだ始まっていないので両者の Ready を消して止める (U32)。' +
         'ホストは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Close Room、クライアントは "Connection lost. Reconnecting…" と 20 秒のカウントダウン (U52)。' +
-        '20 秒 (仮) たっても戻らない (左の環境イベント) と、ホストは "Match cancelled. Opponent did not reconnect." (結果なし) で同じ Match Code のまま部屋に残る。' +
+        '20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、ホストは "Match cancelled. Opponent did not reconnect." (結果なし) で同じ Match Code のまま部屋に残る。' +
         'クライアントは Friend Match トップに "Could not reconnect. The match did not start." の帯 (U52)。もう一度 Match Code を入れて Join Match で入ると "Friend joined!"。' +
         '部屋 (Ready 画面・読み込み) での切断は U5 で、文言と流れが違う (3a〜3d)。' + beforeStart,
       steps: toReady.concat(bothStart, ['client.disconnect', 'timer.disconnectTimeout', 'client.enterCode', 'client.joinMatch']) },
@@ -186,7 +186,7 @@ var SCENARIOS = (function () {
     { id: '15d', title: '再戦の申し込みを取り消す → 3 秒後にまた申し込める', diagram: 'なし (10-07 の決定 U30)',
       desc: 'ホストが Rematch で申し込み、Cancel Request で取り消すと、両者に "Rematch request cancelled" (クライアントは U30、ホストは U50。2026-10-08 に両者の文言を統一)。' +
         '両者とも結果画面に残り、3 秒 (仮) は Rematch を押せない。3 秒たっても一行は次の操作まで残る (U50)。' +
-        '左の環境イベント「3 秒たつ」でまた押せるようになり、今度はクライアントが申し込んでホストが応じ、VS 画面へ。' + postMatch,
+        '右パネルの環境イベント「3 秒たつ」でまた押せるようになり、今度はクライアントが申し込んでホストが応じ、VS 画面へ。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'host.rematch', 'host.cancelRematch', 'timer.rematchCooldown', 'client.rematch', 'host.rematch']) },
     { id: '15e', title: '再戦を断られる (Decline)', diagram: 'なし (10-07 の決定 U30)',
       desc: 'クライアントが Rematch で申し込み、ホストが Decline で断ると、クライアントに "Your opponent declined the rematch" (U30)、ホストにも "Rematch declined" (U50)。' +
@@ -194,12 +194,12 @@ var SCENARIOS = (function () {
         'そのあとクライアントが Back to Friend Match で抜けると、ホストに "Your opponent left. Rematch is not available." (U25)。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.declineRematch', 'timer.rematchCooldown', 'client.backToFriendMatch']) },
     { id: '15f', title: '再戦の申し込みに応答がない (20 秒) → 申し込み直す', diagram: 'なし (10-07 の決定 U30)',
-      desc: 'ホストが Rematch で申し込み、クライアントが 20 秒 (仮) 応答しないと (左の環境イベント)、ホストに "No response to rematch request" (U30)、クライアントには "Rematch request expired" (U50)。' +
+      desc: 'ホストが Rematch で申し込み、クライアントが 20 秒 (仮) 応答しないと (右パネルの環境イベント)、ホストに "No response to rematch request" (U30)、クライアントには "Rematch request expired" (U50)。' +
         '3 秒 (仮) のあとホストが申し込み直し、今度はクライアントが応じて VS 画面へ。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'host.rematch', 'timer.rematchTimeout', 'timer.rematchCooldown', 'host.rematch', 'client.rematch']) },
     { id: '15g', title: '引き分け → 両者が同時に Rematch', diagram: 'なし (10-07 の決定 U20 / U23)',
       desc: '時間切れで同点 (クライアントの下のモック操作「同点」) になると、両者 "DRAW" / "Same score when time ran out" の結果画面 (U20 / U44)。' +
-        '両者が同時に Rematch を押す (左の環境イベント) と、申し込みに応じたのと同じく成立し、そのまま VS 画面 → プレイ開始 (U23)。' + postMatch,
+        '両者が同時に Rematch を押す (右パネルの環境イベント) と、申し込みに応じたのと同じく成立し、そのまま VS 画面 → プレイ開始 (U23)。' + postMatch,
       steps: toMatchEnd.concat(['client.draw', 'sys.rematchSimultaneous'], toGame) },
     { id: '15h', title: '結果画面のスタンプとミュート', diagram: 'なし (10-07 の決定 U27)',
       desc: 'ホストが 👏 "Good game"、クライアントが 🤝 "Thanks for the match" を送ると、両者の画面で送った人の名前の上に出る (U27)。送ってから 5 秒 (仮) はスタンプを押せない。' +
@@ -240,17 +240,17 @@ var SCENARIOS = (function () {
     { id: '18', title: '対戦中にクライアントが切断 → 20 秒で切断した側の負け', diagram: 'なし (10-07 の決定 U28)',
       desc: 'Friend Match の対戦中にクライアントの接続が切れる (端末の下のモック操作「切断する」) と、サーバーが両者のゲームと得点を止め、ホストは "Your opponent disconnected"、クライアントは "Connection lost" / "Reconnecting…"。' +
         'どちらにも残りの秒数 (20 秒、仮) を出す (U46)。' +
-        '20 秒たっても戻らない (左の環境イベント) と、切断したクライアントの負け: ホストは "WIN!" / "Your opponent disconnected"、クライアントは "LOSE" / "You were disconnected" (U28)。再戦は無い (U45)。' + postMatch,
+        '20 秒たっても戻らない (右パネルの環境イベント) と、切断したクライアントの負け: ホストは "WIN!" / "Your opponent disconnected"、クライアントは "LOSE" / "You were disconnected" (U28)。再戦は無い (U45)。' + postMatch,
       steps: toMatchEnd.concat(['client.disconnect', 'timer.disconnectTimeout', 'host.backToFriendMatch']) },
     { id: '18b', title: '対戦中にホストが切断 → 20 秒のうちに戻る', diagram: 'なし (10-07 の決定 U28)',
-      desc: 'ホストの接続が切れたあと、20 秒 (仮) のうちに通信が回復する (左の環境イベント) と、止めていたところから両者とも試合を続ける (U46)。そのあと時間切れでホストが勝つ。' + postMatch,
+      desc: 'ホストの接続が切れたあと、20 秒 (仮) のうちに通信が回復する (右パネルの環境イベント) と、止めていたところから両者とも試合を続ける (U46)。そのあと時間切れでホストが勝つ。' + postMatch,
       steps: toMatchEnd.concat(['host.disconnect', 'net.recovered', 'host.win']) },
     { id: '18c', title: '両者が切断 → No contest', diagram: 'なし (10-07 の決定 U28)',
-      desc: 'クライアントの接続が切れ、ホストが待っている間にホストの接続も切れると (左の環境イベント「両者の接続が切れる」)、両者とも "NO CONTEST" / "No contest due to a connection error" (U28)。' +
+      desc: 'クライアントの接続が切れ、ホストが待っている間にホストの接続も切れると (右パネルの環境イベント「両者の接続が切れる」)、両者とも "NO CONTEST" / "No contest due to a connection error" (U28)。' +
         'スコアは決まっていないので行ごと出さない (U20)。再戦は無い (U45)。' + postMatch,
       steps: toMatchEnd.concat(['client.disconnect', 'net.bothDisconnected']) },
     { id: '18d', title: 'ランダム対戦でサービス障害 → No contest (レートは変わらない)', diagram: 'なし (10-07 の決定 U28 / U21)',
-      desc: 'ランダム対戦の対戦中にサービス障害が起きると (左の環境イベント)、両者とも "NO CONTEST" / "No contest due to a connection error" で "No rating change (no contest)" (U28 / U21)。' +
+      desc: 'ランダム対戦の対戦中にサービス障害が起きると (右パネルの環境イベント)、両者とも "NO CONTEST" / "No contest due to a connection error" で "No rating change (no contest)" (U28 / U21)。' +
         'ホストは Back to Online、クライアントは Find Next Opponent で抜ける。' + postMatch,
       steps: toRandomGame.concat(['net.serviceFailure', 'host.backToOnlineBattle', 'client.findNextOpponent']) },
     { id: '18e', title: 'ランダム対戦で切断負け (レートが変わる)', diagram: 'なし (10-07 の決定 U28 / U21)',
@@ -261,13 +261,13 @@ var SCENARIOS = (function () {
         'そのあとホストが Ready を押すと、今度はホストが "Waiting for opponent…" になる。' + beforeStart,
       steps: toReady.concat(clientReady, ['client.cancelReady'], hostReady) },
     { id: '19b', title: 'Ready のタイムアウト (60 秒)', diagram: 'なし (10-07 の決定 U33)',
-      desc: 'ホストが Ready を押し、クライアントが 60 秒 (仮) 押さない (左の環境イベント) と、両者の Ready を消して両者に "Ready check timed out. Press Ready when you’re ready." (U33)。' +
+      desc: 'ホストが Ready を押し、クライアントが 60 秒 (仮) 押さない (右パネルの環境イベント) と、両者の Ready を消して両者に "Ready check timed out. Press Ready when you’re ready." (U33)。' +
         '罰はなく、どちらも部屋に残る。もう一度両者が Ready を押して開始。' + beforeStart,
       steps: toReady.concat(hostReady, ['timer.readyTimeout'], clientFirst, toGame) },
     { id: '19c', title: 'カウントダウン中にホストが切断 → 20 秒のうちに戻る → もう一度 Ready', diagram: 'なし (10-07 の決定 U32)',
       desc: 'ゲーム本体のカウントダウン中にホストの接続が切れる (端末の下のモック操作「切断する」)。3-2-1 のあとサーバーが確認するまでは試合開始ではないので、勝敗はつけず、両者の Ready を消して止める (U32)。' +
         'クライアントは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Leave Room、ホストは "Connection lost. Reconnecting…" と 20 秒のカウントダウン (U52)。' +
-        '20 秒 (仮) のうちに戻る (左の環境イベント「通信が回復する」) と、両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。' + beforeStart,
+        '20 秒 (仮) のうちに戻る (右パネルの環境イベント「通信が回復する」) と、両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。' + beforeStart,
       steps: toReady.concat(bothStart, ['vs.done', 'host.disconnect', 'net.recovered'], bothStart, toGame) },
     { id: '19d', title: 'VS 画面中にホストが切断 → 戻らない → Room closed', diagram: 'なし (10-07 の決定 U32)',
       desc: 'VS 画面中にホストの接続が切れると、両者の Ready を消して止める (U32)。クライアントは "Opponent disconnected…" で 20 秒 (仮) 待つ。' +
@@ -279,13 +279,13 @@ var SCENARIOS = (function () {
         '切断中のクライアントは、戻ったときに "Room closed. The host left." の Friend Match トップ (モックの仮定。お知らせは Close で閉じる帯、U52)。' + roomNote,
       steps: toReady.concat(['client.disconnect', 'host.closeRoom', 'host.dialog.closeRoom']) },
     { id: '20', title: '両者が Ready 画面にいる間に期限切れ → Create Match / Join Match', diagram: 'なし (10-07 の決定 U7 / U10 / U18)',
-      desc: '両者が Ready 画面にいる間に Match Code の期限 (30 分、仮) が切れる (左の環境イベント) と、両者に "Match code expired." (U7)。Ready は消え、Ready のボタンも出さない (U10)。' +
+      desc: '両者が Ready 画面にいる間に Match Code の期限 (30 分、仮) が切れる (右パネルの環境イベント) と、両者に "Match code expired." (U7)。Ready は消え、Ready のボタンも出さない (U10)。' +
         'ホストには Create Match、クライアントには Join Match。クライアントは別の画面へ移されず、今の画面のまま (U18)。ホストが Create Match で新しい部屋を作り、クライアントが Join Match → 新しい Match Code を入れて入る。' + roomNote,
       steps: toReady.concat(clientReady, ['timer.codeExpired', 'host.createMatch', 'client.joinMatch', 'client.enterCode', 'client.joinMatch', 'sys.roomSynced']) },
     { id: '21', title: 'ランダム対戦の VS 画面中に切断 → 20 秒のうちに戻る → VS 画面からやり直す', diagram: 'なし (10-08 の決定 U54)',
       desc: 'ランダム対戦の VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」)。試合はまだ始まっていないが、Ready 画面は無いので VS 画面のまま 20 秒 (仮) 待つ (U54)。' +
         '表示は対戦中の切断 (U46) と同じで、ホストは "Your opponent disconnected"、クライアントは "Connection lost" と、どちらも残りの秒数。' +
-        '20 秒のうちに戻る (端末の下のモック操作「再接続する」か左の環境イベント) と、VS 画面からやり直してゲーム本体のカウントダウン → プレイ開始。',
+        '20 秒のうちに戻る (端末の下のモック操作「再接続する」か右パネルの環境イベント) と、VS 画面からやり直してゲーム本体のカウントダウン → プレイ開始。',
       steps: ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound', 'client.disconnect', 'net.recovered'].concat(toGame) },
     { id: '21b', title: 'ランダム対戦のカウントダウン中に切断 → 戻らない → 取りやめ → Search again', diagram: 'なし (10-08 の決定 U52 / U54)',
       desc: 'ランダム対戦のゲーム本体のカウントダウン中にホストの接続が切れ、20 秒 (仮) たっても戻らない (端末の下のモック操作「20 秒たつ」) と、試合を取りやめる (U54)。勝敗は無く、レートも変わらない。' +

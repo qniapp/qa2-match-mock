@@ -14,47 +14,6 @@
   </header>
 
   <main class="layout">
-    <aside class="panel scenario-panel" aria-label="シナリオ">
-      <h2>シナリオ</h2>
-      <ul id="scenario-list" class="scenario-list"></ul>
-
-      <div id="scenario-detail" class="scenario-detail"></div>
-
-      <div class="controls">
-        <button id="btn-prev" type="button">◀ 戻る</button>
-        <button id="btn-next" type="button" class="primary">▶ 次へ</button>
-        <button id="btn-reset" type="button">⟲ 最初から</button>
-        <button id="btn-auto" type="button">自動再生</button>
-      </div>
-      <div id="cd-freeze" class="cd-freeze" hidden>
-        <span>ゲーム本体のカウントダウン (手順中は止めて表示):</span>
-        <button type="button" data-cd="3">3</button><button type="button" data-cd="2">2</button><button type="button" data-cd="1">1</button>
-      </div>
-      <ol id="step-list" class="step-list"></ol>
-
-      <section class="free-play">
-        <h3>環境イベント <small>(電話のボタン以外の外部要因)</small></h3>
-        <div id="env-events" class="env-events"></div>
-        <p id="auto-next" class="auto-next"></p>
-        <h3>モック設定</h3>
-        <label>Join Match の結果
-          <select id="ctx-codeResult">
-            <option value="auto">自動 (ホストの状態に従う)</option>
-            <option value="notFound">Match not found</option>
-            <option value="expired">期限切れ</option>
-            <option value="full">満員</option>
-            <option value="connFailed">接続失敗 (サーバーに届かない)</option>
-          </select>
-        </label>
-        <label>Create Match の結果
-          <select id="ctx-createResult">
-            <option value="ok">成功</option>
-            <option value="connFailed">接続失敗 (サーバーに届かない)</option>
-          </select>
-        </label>
-      </section>
-    </aside>
-
     <section class="devices" aria-label="端末">
       <div class="device" data-dev="host">
         <div class="device-head">
@@ -77,6 +36,29 @@
     </section>
 
     <aside class="panel table-panel" aria-label="状態遷移表">
+      <section class="free-play" aria-label="環境イベントとモック設定">
+        <h3>環境イベント <small>(電話のボタン以外の外部要因)</small></h3>
+        <div id="env-events" class="env-events"></div>
+        <p id="auto-next" class="auto-next"></p>
+        <div class="fp-row">
+          <h3>モック設定</h3>
+          <label>Join Match の結果
+            <select id="ctx-codeResult">
+              <option value="auto">自動 (ホストの状態に従う)</option>
+              <option value="notFound">Match not found</option>
+              <option value="expired">期限切れ</option>
+              <option value="full">満員</option>
+              <option value="connFailed">接続失敗 (サーバーに届かない)</option>
+            </select>
+          </label>
+          <label>Create Match の結果
+            <select id="ctx-createResult">
+              <option value="ok">成功</option>
+              <option value="connFailed">接続失敗 (サーバーに届かない)</option>
+            </select>
+          </label>
+        </div>
+      </section>
       <div id="current-state" class="current-state"></div>
       <nav class="tabs" role="tablist">
         <button type="button" role="tab" data-tab="table" class="active">状態遷移表</button>

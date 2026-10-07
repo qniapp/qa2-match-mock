@@ -95,7 +95,7 @@ try {
   await cleanup();
 }
 
-// ページの中で実行する。シナリオ一覧・手順一覧のボタンは押すと同期的に描画する
+// ページの中で実行する。MockApp.show は同期的に描画する
 function scan() {
   const BAD_TEXT = [[/仮/, '「仮」'], [/未決/, '「未決」'], [/決定/, '「決定」'], [/\bU\d{1,2}\b/, 'U 番号'], [/[\u3040-\u30ff\u3400-\u9fff]/, '日本語']];
   const MATCH_CODE_TEXT = 'QWERTY123';
@@ -103,17 +103,11 @@ function scan() {
   const findings = [];
   const norow = {};
   let frames = 0;
-  // 手順の移動は画面のボタン (シナリオ一覧・手順一覧・カウントダウンの 3 / 2 / 1) を押して行う。
+  // 手順の移動は MockApp.show (#s=..&step=..&cd=.. の deep link と同じ) を直接呼んで行う。
   // hash を書き換えて回すと、Chromium が短時間の大量の history.replaceState を黙って捨てるため、途中から手順が進まなくなる。
-  // 描画中の例外はクリックの外へ出てこないので error イベントで拾い、両端末の状態が遷移表の再生結果と同じかも確かめる
-  let lastError = null;
-  window.addEventListener('error', (e) => { lastError = e.error ? e.error.stack || String(e.error) : e.message; });
-  const click = (sel, where, sc, step) => {
-    lastError = null;
-    const el = document.querySelector(sel);
-    if (!el) { findings.push(`${where}: ${sel} が無い`); return false; }
-    el.click();
-    if (lastError) { findings.push(`${where}: 描画中の例外 ${lastError}`); return false; }
+  // 両端末の状態が遷移表の再生結果と同じかも確かめる
+  const show = (where, sc, step, cd) => {
+    try { MockApp.show(sc.id, step, cd); } catch (e) { findings.push(`${where}: 描画中の例外 ${e.stack || e}`); return false; }
     const st = Engine.replay(sc, step).state;
     const want = ['host', 'client'].map((d) => st[d] + Engine.extrasLabel(st, d)).join(' / ');
     const got = [...document.querySelectorAll('.device .state-name')].map((e) => e.textContent).join(' / ');
@@ -294,11 +288,10 @@ function scan() {
   SCENARIOS.forEach((sc) => {
     for (let step = 0; step <= sc.steps.length; step++) {
       const where = `s=${sc.id} step=${step}`;
-      const sel = step === 0 ? `#scenario-list [data-scenario="${sc.id}"]` : `#step-list [data-step="${step}"]`;
-      if (!click(sel, where, sc, step)) continue;
+      if (!show(where, sc, step)) continue;
       if (/\.Game\.Countdown$/.test(document.querySelector('.device .state-name').textContent)) {
         GAME_COUNTDOWN.digits.forEach((cd) => {
-          if (!click(`#cd-freeze [data-cd="${cd}"]`, `${where} cd=${cd}`, sc, step)) return;
+          if (!show(`${where} cd=${cd}`, sc, step, cd)) return;
           const frozen = document.querySelector('.g-cd.frozen');
           if (!frozen || frozen.dataset.cd !== String(cd)) findings.push(`${where} cd=${cd}: カウントダウンが ${cd} で止まっていない`);
           check(`${where} cd=${cd}`);

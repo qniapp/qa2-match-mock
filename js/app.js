@@ -5,8 +5,6 @@
 (function () {
   'use strict';
 
-  var STEP_DELAY = 1200;
-  var EVENT_DELAY = { 'vs.done': 2500, 'game.countdownDone': GAME_COUNTDOWN_MS };
   var MATCH_CODE = 'QWERTY123';
   var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
   // Ready 画面のカードの名前 (ロビーの "Client User" / "Host User" と同じ架空の名前)
@@ -26,7 +24,6 @@
     scenario: null, // null = 自由操作
     step: 0, // 再生済みの手順数
     detached: false, // シナリオの途中で手順と違う操作をした
-    failedStep: -1,
     cd: 3, // 手順で止めているとき、ゲーム本体のカウントダウンで表示しておく数字 (#...&cd=3|2|1)
     opts: Engine.defaultOpts(),
     ctx: Engine.defaultCtx(),
@@ -34,7 +31,6 @@
     lastRow: null,
     log: [],
     autoTimer: null,
-    playTimer: null,
   };
 
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
@@ -53,7 +49,7 @@
 
   // シナリオを手順で進めている間は、アニメーションを止めて決まった 1 フレームを出す
   function frozen() {
-    return !!(scenarioActive() && !app.playTimer);
+    return !!scenarioActive();
   }
 
   function inGameCountdown() {
@@ -69,7 +65,6 @@
   // ---- 状態の更新 -----------------------------------------------------------
 
   function selectScenario(id, step) {
-    stopPlay();
     var sc = SCENARIOS.filter(function (s) { return s.id === id; })[0] || null;
     app.scenario = sc;
     app.opts = Object.assign(Engine.defaultOpts(), sc && sc.opts);
@@ -81,7 +76,6 @@
   function rebuild(n) {
     clearAuto();
     app.detached = false;
-    app.failedStep = -1;
     app.log = [];
     if (!app.scenario) {
       app.state = Engine.initialState(app.opts, app.ctx);
@@ -95,7 +89,6 @@
     var res = Engine.replay(app.scenario, n, app.opts, app.ctx);
     app.state = res.state;
     app.step = res.fired.length;
-    if (res.failedAt !== -1) app.failedStep = res.failedAt;
     res.fired.forEach(function (row, i) {
       pushLog(Engine.stepEvent(app.scenario.steps[i]), row, 'step');
     });
@@ -131,11 +124,7 @@
   function nextStep() {
     if (!scenarioActive()) return false;
     var ev = Engine.stepEvent(app.scenario.steps[app.step]);
-    if (!fire(ev, 'step')) {
-      app.failedStep = app.step;
-      render();
-      return false;
-    }
+    if (!fire(ev, 'step')) return false;
     app.step++;
     render();
     return true;
@@ -144,7 +133,6 @@
   // 電話や環境イベントのボタンから: シナリオの次の手順と同じなら手順を進める
   function userFire(event) {
     if (scenarioActive() && Engine.stepEvent(app.scenario.steps[app.step]) === event) {
-      stopPlay();
       nextStep();
       return;
     }
@@ -152,10 +140,7 @@
       fire(event, 'user');
       return;
     }
-    if (app.scenario && app.step < app.scenario.steps.length) {
-      stopPlay();
-      app.detached = true;
-    }
+    if (app.scenario && app.step < app.scenario.steps.length) app.detached = true;
     fire(event, 'user');
   }
 
@@ -167,36 +152,13 @@
   // 自由操作中だけ、点線矢印 (auto 付きの行) を実時間で発火する
   function scheduleAuto() {
     clearAuto();
-    if (scenarioActive() || app.playTimer) return;
+    if (scenarioActive()) return;
     var row = Engine.nextAuto(app.state);
     if (!row) return;
     app.autoTimer = setTimeout(function () {
       app.autoTimer = null;
       if (Engine.findRow(app.state, row.event) === row) fire(row.event, 'auto');
     }, row.auto);
-  }
-
-  function startPlay() {
-    if (!scenarioActive()) return;
-    clearAuto();
-    var tick = function () {
-      if (!scenarioActive()) { stopPlay(); return; }
-      var ev = Engine.stepEvent(app.scenario.steps[app.step]);
-      app.playTimer = setTimeout(function () {
-        if (!nextStep()) { stopPlay(); return; }
-        tick();
-      }, EVENT_DELAY[ev] || STEP_DELAY);
-    };
-    app.playTimer = -1;
-    tick();
-    render();
-  }
-
-  function stopPlay() {
-    if (app.playTimer && app.playTimer !== -1) clearTimeout(app.playTimer);
-    var was = app.playTimer;
-    app.playTimer = null;
-    if (was) { render(); scheduleAuto(); }
   }
 
   function setOpt(id, value) {
@@ -476,7 +438,7 @@
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
   // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29 / U47)、ロビー (Ready 画面) では「アプリを離れる」と「切断する」(決定 U5 / U35)、
-  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。左の環境イベントと同じ)、
+  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。右パネルの環境イベントと同じ)、
   // それ以外は時間切れの決着 (勝ち / 負け / 同点、決定 U44) と、この端末の接続が切れる「切断する」(決定 U28 / U32 / U54)
   function mockControlsHtml(dev) {
     var btn = function (ev, text, cls) { return '<button type="button" class="mc-btn' + (cls ? ' ' + cls : '') + '"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
@@ -579,53 +541,6 @@
 
   // ---- パネル ---------------------------------------------------------------
 
-  function renderScenarioList() {
-    var items = [{ id: '', title: '自由操作 (シナリオなし)', diagram: '' }].concat(SCENARIOS);
-    $('#scenario-list').innerHTML = items.map(function (s) {
-      var active = (app.scenario ? app.scenario.id : '') === s.id;
-      return '<li><button type="button" data-scenario="' + esc(s.id) + '" class="' + (active ? 'active' : '') + '">' +
-        (s.id ? '<b>' + esc(s.id) + '</b> ' : '') + esc(s.title) + '</button></li>';
-    }).join('');
-  }
-
-  function renderControls() {
-    var sc = app.scenario;
-    $('#btn-prev').disabled = !sc || app.step === 0;
-    $('#btn-next').disabled = !scenarioActive();
-    $('#btn-reset').disabled = false;
-    $('#btn-auto').disabled = !scenarioActive() && !app.playTimer;
-    $('#btn-auto').textContent = app.playTimer ? '■ 停止' : '自動再生';
-    $('#btn-auto').classList.toggle('playing', !!app.playTimer);
-    var cd = $('#cd-freeze');
-    cd.hidden = !(frozen() && inGameCountdown());
-    $$('[data-cd]', cd).forEach(function (b) { b.classList.toggle('active', parseInt(b.dataset.cd, 10) === app.cd); });
-  }
-
-  function renderScenarioDetail() {
-    var sc = app.scenario;
-    var detail = $('#scenario-detail');
-    if (!sc) {
-      detail.innerHTML = '<h3>自由操作</h3><p>電話のボタンを直接押して試せます。点線矢印にあたる自動遷移は実時間で進みます。</p>';
-      $('#step-list').innerHTML = '';
-      return;
-    }
-    var status = '';
-    if (app.detached) status = '<p class="detached">シナリオから外れて自由操作中です。⟲ 最初から で戻れます。</p>';
-    else if (app.failedStep !== -1) status = '<p class="detached">手順 ' + (app.failedStep + 1) + ' に一致する行がありません (未決トグルの選択を確認してください)。</p>';
-    else if (app.step === sc.steps.length) status = '<p class="done">シナリオの最後まで再生しました。ここからは自由に操作できます。</p>';
-    detail.innerHTML = '<h3><b>' + esc(sc.id) + '</b> ' + esc(sc.title) + '</h3>' +
-      '<p class="meta">元の図: ' + esc(sc.diagram) + '</p><p>' + esc(sc.desc) + '</p>' + status;
-    $('#step-list').innerHTML = sc.steps.map(function (st, i) {
-      var cls = i < app.step ? 'done' : i === app.step ? 'next' : '';
-      if (i === app.step - 1) cls += ' current';
-      if (i === app.failedStep) cls += ' failed';
-      var ev = Engine.stepEvent(st);
-      return '<li class="' + cls + '" data-step="' + (i + 1) + '" title="' + esc(ev) + '">' + esc(label(ev)) + '</li>';
-    }).join('');
-    var cur = $('#step-list li.current') || $('#step-list li.next');
-    if (cur) cur.scrollIntoView({ block: 'nearest' });
-  }
-
   function renderEnv() {
     var evs = Engine.availableEnvEvents(app.state);
     $('#env-events').innerHTML = evs.length ? evs.map(function (ev) {
@@ -634,8 +549,8 @@
     var auto = Engine.nextAuto(app.state);
     var text = '';
     if (auto) {
-      text = scenarioActive() || app.playTimer
-        ? '次の自動遷移: ' + label(auto.event) + ' (シナリオでは手順として進めます)'
+      text = scenarioActive()
+        ? '次の自動遷移: ' + label(auto.event) + ' (シナリオでは → キーで手順として進めます)'
         : '⏱ ' + (auto.auto / 1000) + ' 秒後に自動: ' + label(auto.event);
     }
     $('#auto-next').textContent = text;
@@ -818,9 +733,6 @@
     document.body.classList.toggle('static', frozen());
     renderDevice('host');
     renderDevice('client');
-    renderScenarioList();
-    renderScenarioDetail();
-    renderControls();
     renderCurrent();
     renderTable();
     renderUndecided();
@@ -857,11 +769,16 @@
     return GAME_COUNTDOWN.digits.indexOf(n) === -1 ? GAME_COUNTDOWN.digits[0] : n;
   }
 
+  // シナリオ id ('' は自由操作) の step 手順目を開く。ゲーム本体のカウントダウン中なら cd (3 / 2 / 1) で止めて表示する
+  function show(id, step, cd) {
+    app.cd = GAME_COUNTDOWN.digits.indexOf(cd) === -1 ? GAME_COUNTDOWN.digits[0] : cd;
+    selectScenario(id, step);
+  }
+
+  // #s=<シナリオ ID>&step=<手順数>&cd=<3|2|1>。s が無いか free なら自由操作
   function applyHash() {
     var p = parseHash();
-    var id = p.s && p.s !== 'free' ? p.s : (p.s === 'free' ? '' : '1');
-    app.cd = cdParam(p);
-    selectScenario(id, parseInt(p.step, 10) || 0);
+    show(p.s && p.s !== 'free' ? p.s : '', parseInt(p.step, 10) || 0, cdParam(p));
   }
 
   document.addEventListener('click', function (e) {
@@ -889,12 +806,6 @@
     }
     var env = t.closest('[data-env]');
     if (env) { userFire(env.dataset.env); return; }
-    var sc = t.closest('[data-scenario]');
-    if (sc) { selectScenario(sc.dataset.scenario, 0); return; }
-    var cdBtn = t.closest('#cd-freeze [data-cd]');
-    if (cdBtn) { app.cd = parseInt(cdBtn.dataset.cd, 10); render(); return; }
-    var step = t.closest('[data-step]');
-    if (step) { stopPlay(); rebuild(parseInt(step.dataset.step, 10)); return; }
     var tab = t.closest('[data-tab]');
     if (tab) { showTab(tab.dataset.tab); }
   });
@@ -907,15 +818,10 @@
     else if (t.id === 'filter-available') renderTable();
   });
 
-  $('#btn-next').addEventListener('click', function () { stopPlay(); nextStep(); });
-  $('#btn-prev').addEventListener('click', function () { stopPlay(); rebuild(app.step - 1); });
-  $('#btn-reset').addEventListener('click', function () { stopPlay(); rebuild(0); });
-  $('#btn-auto').addEventListener('click', function () { if (app.playTimer) stopPlay(); else startPlay(); });
-
   document.addEventListener('keydown', function (e) {
     if (e.target.closest('input, select, textarea')) return;
-    if (e.key === 'ArrowRight') { stopPlay(); nextStep(); }
-    else if (e.key === 'ArrowLeft' && app.scenario) { stopPlay(); rebuild(app.step - 1); }
+    if (e.key === 'ArrowRight') nextStep();
+    else if (e.key === 'ArrowLeft' && app.scenario) rebuild(app.step - 1);
   });
 
   window.addEventListener('hashchange', function () {
@@ -925,6 +831,9 @@
     if (want !== cur || (parseInt(p.step, 10) || 0) !== app.step) applyHash();
     else if (cdParam(p) !== app.cd) { app.cd = cdParam(p); render(); }
   });
+
+  // 手順を 1 枚ずつ描いて確かめるテスト (tests/scan-screens.mjs) 用。hash を大量に書き換えると Chromium が history.replaceState を黙って捨てるので、直接呼ぶ
+  window.MockApp = { show: show };
 
   applyHash();
   // Web フォント (Oxanium) が読み込まれると行の高さが変わるので、描画し直して直前の行と手順を見える位置へスクロールし直す

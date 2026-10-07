@@ -109,7 +109,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .muted { color: var(--muted); font-size: 12px; }
 
 /* ---- 端末 -------------------------------------------------------------- */
-.devices { display: flex; justify-content: center; gap: 18px; padding: 10px 14px; overflow: auto; }
+/* 幅が足りないときは中央寄せをやめて左から並べる (center のままだと、はみ出した左側にスクロールで届かず、ホストの端末が切れる) */
+.devices { display: flex; justify-content: safe center; gap: 18px; padding: 10px 14px; overflow: auto; }
 .device { width: 380px; display: flex; flex-direction: column; }
 .device-head { display: flex; align-items: center; gap: 8px; height: 30px; }
 /* 状態名 (Host.FriendMatch.Lobby.Ready.WaitingForFriend など) は . の後ろで折り返し、2 行まで */
@@ -402,6 +403,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 }
 .d-title { text-align: center; font-size: 17px; font-weight: 700; }
 .d-body { margin: 0 0 6px; text-align: center; font-size: 13px; color: #B9C0D0; }
+/* ランダム対戦で相手を探すのをやめたときの通知 (決定 U13)。文だけで本文は無いので、ボタンとの間を少し空ける */
+.d-title.notice { margin-bottom: 6px; line-height: 1.4; text-wrap: balance; }
 
 /* ---- 右パネル ---------------------------------------------------------- */
 .current-state { flex: none; padding-bottom: 8px; border-bottom: 1px solid var(--line); }

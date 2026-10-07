@@ -255,6 +255,7 @@ const postMatch = {
   '15c': ['Host.WinResult / Client.LoseResult', 'Host.LoseResult / Client.WinResult'],
 };
 const pair = (st) => `${st.host} / ${st.client}`;
+const appJs = read('js', 'app.js');
 for (const [id, [afterResult, last]] of Object.entries(postMatch)) {
   const sc = SCENARIOS.find((x) => x.id === id);
   if (!sc) { fail(`シナリオ ${id} が無い`); continue; }
@@ -329,21 +330,18 @@ for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
 console.log('ok  MATCH MENU: 開いても相手は変わらない / CONTINUE / SURRENDER → 確認 → 負け + 相手に "Your opponent surrendered" (両端末)、メニュー中も Win / Lose');
 
 // 決定 (U13a): ランダム対戦は相手が見つかり次第 VS 画面へ。Ready / Start Match / Starting match… を挟まない (U31 は Friend Match だけ)。
-// 相手を探す画面は "Searching for an opponent…" と大きな Cancel で、Cancel は Online Battle へ戻る
+// 相手を探す画面は "Searching for an opponent…" と大きな Cancel
 const u13a = UNDECIDED.find((u) => u.id === 'U13a');
 if (!u13a || !u13a.decided) fail('U13a が決定済みになっていない');
-if (!openIds.has('U13')) fail('U13 (ランダム対戦の残り) が未決として残っていない');
 if (!/Friend Match/.test(u31.title)) fail('U31 の題名が Friend Match だけの決定になっていない');
 expectFire(at('Host.Matchmake', 'Client.Matchmake'), 'sys.opponentFound', 'Host.Opponent', 'Client.Opponent');
-expectFire(at('Host.Matchmake', 'Client.MultiModeSelection'), 'host.cancelSearch', 'Host.MultiModeSelection', 'Client.MultiModeSelection');
-expectFire(at('Host.MultiModeSelection', 'Client.Matchmake'), 'client.cancelSearch', 'Host.MultiModeSelection', 'Client.MultiModeSelection');
 const randomStates = ['Host.Matchmake', 'Client.Matchmake'];
 const friendStart = /\.FriendMatch\.Lobby\.(Ready|Starting|StartFailed)/;
 for (const r of TRANSITIONS) {
-  const fromRandom = Engine.DEVICES.some((d) => states(r.from[d]).some((s) => randomStates.includes(s)));
+  const fromRandom = Engine.DEVICES.some((d) => states(r.from[d]).some((s) => s.startsWith('Host.Matchmake') || s.startsWith('Client.Matchmake')));
   if (fromRandom && Engine.DEVICES.some((d) => friendStart.test(r.to[d]))) fail(`${r.id}: ランダム対戦から ${r.to.host} / ${r.to.client} (Ready / Start Match) へ進む`);
   if (r.event === 'sys.opponentFound' && !r.decided.includes('U13a')) fail(`${r.id}: 相手が見つかる行に決定 U13a が無い`);
-  if (r.decided.includes('U31') && Engine.DEVICES.some((d) => states(r.from[d]).some((s) => randomStates.includes(s)))) fail(`${r.id}: ランダム対戦の行に U31 が付いている`);
+  if (r.decided.includes('U31') && fromRandom) fail(`${r.id}: ランダム対戦の行に U31 が付いている`);
 }
 for (const name of randomStates) {
   const s = SCREENS[name];
@@ -356,13 +354,83 @@ const sc11 = SCENARIOS.find((x) => x.id === '11');
 const got11 = sc11 ? [2, 3, 4, 5].map((n) => pair(Engine.replay(sc11, n).state)).join(' → ') : 'なし';
 const want11 = 'Host.Matchmake / Client.Matchmake → Host.Opponent / Client.Opponent → Host.Game.Countdown / Client.Game.Countdown → Host.Game.Play / Client.Game.Play';
 if (got11 !== want11) fail(`シナリオ 11 の流れ ${got11} (期待: ${want11})`);
-const sc11b = SCENARIOS.find((x) => x.id === '11b');
-const got11b = sc11b ? [1, 2].map((n) => pair(Engine.replay(sc11b, n).state)).join(' → ') : 'なし';
-if (got11b !== 'Host.Matchmake / Client.MultiModeSelection → Host.MultiModeSelection / Client.MultiModeSelection') fail(`シナリオ 11b の流れ ${got11b}`);
-console.log('ok  U13a: ランダム対戦は相手が見つかり次第 VS 画面、Searching + Cancel、Cancel で Online Battle');
+console.log('ok  U13a: ランダム対戦は相手が見つかり次第 VS 画面、Searching + Cancel');
+
+// 決定 (U13、高宮さん 2026-10-07): 相手を探している間の Cancel は確認なしで Online Battle へ。‹ も Cancel とまったく同じ。
+// 探している間に行けるのは Online Battle だけ。アプリを離れると検索を止めて "Search stopped because you left the app."、
+// 見つからなければ元の画面 (Online Battle) に "No opponent found." と Search again (→ 探し直す) / Close (→ 通知を閉じる)。
+// 60 秒という長さは仮で、右パネル (説明) と README にだけ書き、端末の画面には出さない
+const u13 = UNDECIDED.find((u) => u.id === 'U13');
+if (!u13 || !u13.decided || u13.decided.by !== '高宮さん' || u13.decided.date !== '2026-10-07') fail('U13 が 高宮さん 2026-10-07 の決定になっていない');
+if (u13 && !/60 秒という長さは仮/.test(u13.desc)) fail('U13 の説明に「60 秒という長さは仮」が無い');
+if (!openIds.has('U43')) fail('U43 (検索が止まったときの通知の場所とボタン) が未決として無い');
+for (const r of TRANSITIONS) {
+  if (r.undecided.includes('U13')) fail(`${r.id}: 決定済みの U13 が未決として残っている`);
+  if (r.note && /確認を挟むかは未決|仮: ‹ も Cancel/.test(r.note)) fail(`${r.id}: U13 が未決だったころのメモが残っている`);
+}
+if (!/60 秒という長さは仮/.test(SCREENS['Host.Matchmake.NotFound'].context)) fail('"No opponent found." の右パネルの説明に「60 秒という長さは仮」が無い');
+for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Host']]) {
+  const pair3 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
+  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`, `${O}.Matchmake.NotFound`, `${O}.FriendMatch.Room`]) {
+    const st = (mine) => at(...pair3(mine, theirs));
+    const [search, stopped, notFound, online] = [`${R}.Matchmake`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`, `${R}.MultiModeSelection`];
+    for (const ev of ['cancelSearch', 'back']) {
+      const res = Engine.fire(st(search), `${dev}.${ev}`);
+      if (!res || res.state[dev + 'Dialog']) fail(`${search} の ${ev} で確認ダイアログが出る`);
+      expectFire(st(search), `${dev}.${ev}`, ...pair3(online, theirs));
+    }
+    expectFire(st(search), `${dev}.leaveApp`, ...pair3(stopped, theirs));
+    expectFire(st(search), `${dev}.searchTimeout`, ...pair3(notFound, theirs));
+    for (const notice of [stopped, notFound]) {
+      expectFire(st(notice), `${dev}.searchAgain`, ...pair3(search, theirs));
+      expectFire(st(notice), `${dev}.closeNotice`, ...pair3(online, theirs));
+    }
+  }
+  // 探している間に押せるのは Cancel / ‹ とモック操作 (アプリを離れる・60 秒たつ) だけで、行き先は Online Battle か通知
+  const devEvents = Object.keys(EVENT_LABELS).filter((ev) => ev.startsWith(dev + '.'));
+  const allowed = ['cancelSearch', 'back', 'leaveApp', 'searchTimeout'].map((e) => `${dev}.${e}`);
+  for (const ev of devEvents) {
+    const res = Engine.fire(at('Host.Matchmake', 'Client.Matchmake'), ev);
+    if (res && !allowed.includes(ev)) fail(`${R}.Matchmake で ${ev} の行がある (探している間はほかの画面へ行けない)`);
+    if (res && ![`${R}.MultiModeSelection`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`].includes(res.state[dev])) fail(`${R}.Matchmake から ${ev} で ${res.state[dev]} へ行く`);
+  }
+  // 通知を出している間に押せるのは Search again / Close だけ
+  for (const notice of [`${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`]) {
+    const st = at(...pair3(notice, `${O}.MultiModeSelection`));
+    for (const ev of devEvents) if (Engine.canFire(st, ev) && ![`${dev}.searchAgain`, `${dev}.closeNotice`].includes(ev)) fail(`${notice} で ${ev} の行がある`);
+  }
+  // 通知の画面: 元の画面 (Online Battle) の上に文言と Search again / Close。60 秒という長さは画面に出さない
+  for (const [name, text] of [[`${R}.Matchmake.Stopped`, 'Search stopped because you left the app.'], [`${R}.Matchmake.NotFound`, 'No opponent found.']]) {
+    const s = SCREENS[name];
+    if (!s || s.view !== 'online' || !s.notice) { fail(`${name} が Online Battle の上の通知になっていない`); continue; }
+    if (s.notice.text !== text) fail(`${name} の文言が "${text}" でない (${s.notice.text})`);
+    if (s.notice.buttons.map((b) => `${b.label}:${b.event}`).join() !== 'Search again:searchAgain,Close:closeNotice') fail(`${name} のボタンが Search again / Close でない`);
+    if (/\d/.test(s.notice.text)) fail(`${name} の画面に数字 (60 秒) が出る`);
+    if (!s.decided.includes('U13')) fail(`${name} に決定 U13 が無い`);
+  }
+  if (!SCREENS[`${R}.Matchmake.Stopped`].undecided.includes('U43')) fail(`${R}.Matchmake.Stopped に未決 U43 が無い`);
+  if (SCREENS[`${R}.Matchmake`].undecided.length) fail(`${R}.Matchmake に未決 ${SCREENS[`${R}.Matchmake`].undecided} が残っている`);
+}
+if (!/leaveApp/.test(appJs) || !/searchTimeout/.test(appJs) || !/mockControlsHtml/.test(appJs)) fail('app.js の端末の下のモック操作に「アプリを離れる」「60 秒たつ」が無い');
+// [手順ごとの状態] (11b〜11f)
+const u13Scenarios = {
+  '11b': ['Host.Matchmake / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection',
+    'Host.Matchmake / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection'],
+  '11c': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection', 'Host.Matchmake / Client.MultiModeSelection',
+    'Host.Matchmake / Client.Matchmake', 'Host.Opponent / Client.Opponent'],
+  '11d': ['Host.MultiModeSelection / Client.Matchmake', 'Host.MultiModeSelection / Client.Matchmake.Stopped', 'Host.MultiModeSelection / Client.MultiModeSelection'],
+  '11e': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.NotFound / Client.MultiModeSelection', 'Host.Matchmake / Client.MultiModeSelection',
+    'Host.Matchmake / Client.Matchmake', 'Host.Opponent / Client.Opponent'],
+  '11f': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.NotFound / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection'],
+};
+for (const [id, want] of Object.entries(u13Scenarios)) {
+  const sc = SCENARIOS.find((x) => x.id === id);
+  const got = sc ? want.map((_, i) => pair(Engine.replay(sc, i + 1).state)) : [];
+  if (!sc || sc.steps.length !== want.length || got.join() !== want.join()) fail(`シナリオ ${id} の流れ ${got.join(' → ')} (期待: ${want.join(' → ')})`);
+}
+console.log('ok  U13: Cancel / ‹ は確認なしで Online Battle、アプリを離れると "Search stopped…"、見つからなければ "No opponent found." (Search again / Close) (両端末)');
 
 // 端末の画面にはゲームが出すものだけ: 決定の注記や「決定」バッジは端末の中にも端末の上にも出さない (右パネルへ)
-const appJs = read('js', 'app.js');
 if (/decided-note|decidedNoteHtml|GAME_COUNTDOWN_PREMISE/.test(appJs)) fail('app.js が端末の画面に決定の注記を出している');
 if (/pillHtml\(id, 'pill-decided'/.test(appJs)) fail('app.js が端末の上に「決定」バッジを出している');
 console.log('ok  端末の画面と端末の上に決定の注記・バッジが無い');

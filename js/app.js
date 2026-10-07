@@ -8,6 +8,7 @@
   var STEP_DELAY = 1200;
   var EVENT_DELAY = { 'vs.done': 2500, 'game.countdownDone': GAME_COUNTDOWN_MS };
   var MATCH_CODE = 'QWERTY123';
+  var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
   var STAGE_TILES = [
     { label: 'H²', color: 'var(--h)' }, { label: 'X²', color: 'var(--x)' },
     { label: 'Y²', color: 'var(--y)' }, { label: 'Z²', color: 'var(--z)' },
@@ -378,11 +379,23 @@
       }).join('') + '</div></div>';
   }
 
-  // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる
+  // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
+  // ランダム対戦で相手を探している間は、勝敗の代わりに「アプリを離れる」と「60 秒たつ」を出す (決定 U13)
   function mockControlsHtml(dev) {
-    return '<span class="mc-label">モック操作 (勝敗):</span>' +
-      '<button type="button" class="mc-btn"' + attrs(dev, 'win') + '>Win</button>' +
-      '<button type="button" class="mc-btn"' + attrs(dev, 'lose') + '>Lose</button>';
+    var btn = function (ev, text) { return '<button type="button" class="mc-btn"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
+    if (MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(app.state, dev + '.' + ev); })) {
+      return '<span class="mc-label">モック操作 (検索中):</span>' + btn('leaveApp', 'アプリを離れる') + btn('searchTimeout', '60 秒たつ');
+    }
+    return '<span class="mc-label">モック操作 (勝敗):</span>' + btn('win', 'Win') + btn('lose', 'Lose');
+  }
+
+  // 相手を探すのをやめたときの通知 (決定 U13)。元の画面の上に、確認ダイアログと同じ見た目で出す
+  function noticeHtml(dev, n) {
+    if (!n) return '';
+    return '<div class="dim"><div class="dialog" role="dialog"><div class="d-title notice">' + esc(n.text) + '</div>' +
+      n.buttons.map(function (b) {
+        return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+      }).join('') + '</div></div>';
   }
 
   function dialogHtml(dev, key) {
@@ -403,7 +416,7 @@
     $('.state-name', root).innerHTML = stateName(name) + (dlg ? ' + 🗨 ' + esc(dlg) : '');
 
     var screen = $('.screen', root);
-    var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + dialogHtml(dev, dlg);
+    var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + noticeHtml(dev, spec.notice) + dialogHtml(dev, dlg);
     // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを最初からやり直させない)
     if (screen.dataset.html !== html) {
       screen.className = 'screen view-' + spec.view;

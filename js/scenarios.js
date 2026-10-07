@@ -73,11 +73,27 @@ var SCENARIOS = (function () {
       steps: clientJoins },
     { id: '11', title: 'ランダム対戦 (相手が見つかり次第 VS)', diagram: '00 + 10-03 の決定 (U13a)',
       desc: '両者が Random Match を選ぶと、相手を探す画面 ("Searching for an opponent…" と大きな Cancel)。相手が見つかったらすぐ VS 画面へ進み (Ready・Start Match は無い、U13a で決定)、ゲーム本体のカウントダウン → プレイ開始。' +
-        '両者が Start Match を押す U31 は Friend Match だけ。席を外したとき・タイムアウト・Cancel の確認は未決 (U13)。',
+        '両者が Start Match を押す U31 は Friend Match だけ。探している間の Cancel・‹・アプリを離れたとき・タイムアウトは 11b〜11f (U13 で決定)。',
       steps: ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound'].concat(toGame) },
-    { id: '11b', title: 'ランダム対戦 → Cancel で Online Battle へ', diagram: '10-03 の決定 (U13a)', clientNote: hostOnly,
-      desc: 'ホストが Random Match を選び、相手を探している間に Cancel を押すと Online Battle の画面に戻る (U13a で決定)。Cancel に確認を挟むかは未決で、モックは確認なし (U13)。',
-      steps: ['host.randomMatch', 'host.cancelSearch'] },
+    { id: '11b', title: 'ランダム対戦 → Cancel / ‹ で Online Battle へ', diagram: '10-03 / 10-07 の決定 (U13a / U13)', clientNote: hostOnly,
+      desc: 'ホストが Random Match を選び、相手を探している間に Cancel を押すと、確認ダイアログなしで Online Battle の画面に戻る (U13a / U13)。' +
+        'もう一度探し、今度は ‹ を押す。‹ も Cancel とまったく同じで Online Battle へ戻る (U13)。探している間に行けるのは Online Battle だけ。',
+      steps: ['host.randomMatch', 'host.cancelSearch', 'host.randomMatch', 'host.back'] },
+    { id: '11c', title: 'ランダム対戦 → アプリを離れて検索が止まる → Search again', diagram: '10-07 の決定 (U13)',
+      desc: 'ホストが相手を探している間にアプリを離れる (バックグラウンド・画面ロック。端末の下のモック操作「アプリを離れる」) と、検索が止まる。' +
+        '戻ると "Search stopped because you left the app." (U13)。出す場所 (Online Battle の上) と Search again / Close は仮 (U43)。' +
+        'Search again でもう一度探し、クライアントも Random Match を選ぶと相手が見つかって VS 画面へ (U13a)。',
+      steps: ['host.randomMatch', 'host.leaveApp', 'host.searchAgain', 'client.randomMatch', 'sys.opponentFound'] },
+    { id: '11d', title: 'ランダム対戦 → アプリを離れて検索が止まる → Close', diagram: '10-07 の決定 (U13)', hostNote: clientOnly,
+      desc: 'クライアントが相手を探している間にアプリを離れて戻ると "Search stopped because you left the app." (U13)。Close で通知を閉じ、Online Battle のまま (ボタンは仮、U43)。',
+      steps: ['client.randomMatch', 'client.leaveApp', 'client.closeNotice'] },
+    { id: '11e', title: 'ランダム対戦 → 60 秒で見つからない → Search again', diagram: '10-07 の決定 (U13)',
+      desc: 'ホストだけが相手を探し、見つからないまま 60 秒たつ (端末の下のモック操作「60 秒たつ」。60 秒という長さは仮) と、元の画面 (Online Battle) に "No opponent found." と Search again / Close (U13)。' +
+        'Search again でもう一度探し、クライアントも Random Match を選ぶと相手が見つかって VS 画面へ (U13a)。',
+      steps: ['host.randomMatch', 'host.searchTimeout', 'host.searchAgain', 'client.randomMatch', 'sys.opponentFound'] },
+    { id: '11f', title: 'ランダム対戦 → 60 秒で見つからない → Close', diagram: '10-07 の決定 (U13)', clientNote: hostOnly,
+      desc: 'ホストが相手を探し、見つからないまま 60 秒 (仮) たつと "No opponent found."。Close で通知を閉じ、Online Battle のまま (U13)。',
+      steps: ['host.randomMatch', 'host.searchTimeout', 'host.closeNotice'] },
     { id: '12', title: 'VS 画面中の切断', diagram: 'なし (合意事項)',
       desc: 'VS 画面中に相手が切断した場合の戻り先は未決 (U3)。未決パネルのトグルで戻り先を切り替えられる (既定: ロビーで "Connection lost.")。',
       steps: toReady.concat(bothStart, ['net.lostDuringVs']) },

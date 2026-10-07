@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // 全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 も) をヘッドレス Chromium で描画し、
 // 両端末の画面 (.screen) にゲームが出さないもの (仮・未決・決定の印、U 番号、モックの注記、日本語) が無いことを確かめる。
+// ランダム対戦の画面に 60 秒 (仮の長さ) が出ないこと、検索中のモック操作が端末の外にあることも確かめる (決定 U13)。
 // 端末の上の帯は未決バッジだけで、すべて見えていること (1280x720 で確かめる) も確かめる。
 // 遷移表に行が無いボタンの破線・半透明 ([data-norow]) はモックの操作の手がかりなので数えるだけにする。
 // 使い方: node tests/scan-screens.mjs   (Chromium の場所は環境変数 CHROMIUM で変えられる。既定は chromium)
@@ -130,6 +131,14 @@ function scan() {
         const r = el.getBoundingClientRect();
         if (r.bottom > box.bottom + 0.5 || r.right > box.right + 0.5) findings.push(`${at}: 端末の上の帯で ${el.dataset.undecided} がはみ出して見えない (${Math.max(r.bottom - box.bottom, r.right - box.right).toFixed(1)}px)`);
       });
+      // ランダム対戦 (決定 U13): 60 秒という仮の長さは端末の画面に出さない。「アプリを離れる」「60 秒たつ」は端末の外 (下のモック操作) だけ
+      if (/\.Matchmake/.test(state) && /\d/.test(text)) findings.push(`${at}: 数字がある (60 秒は端末の画面に出さない): ${text.trim().slice(0, 80)}`);
+      if (screen.querySelector('[data-ev="leaveApp"], [data-ev="searchTimeout"]')) findings.push(`${at}: 検索中のモック操作が端末の画面の中にある`);
+      if (/\.Matchmake$/.test(state)) {
+        ['leaveApp', 'searchTimeout'].forEach((ev) => {
+          if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]:not([data-norow])`)) findings.push(`${at}: 端末の下のモック操作で ${ev} を押せない`);
+        });
+      }
       const n = screen.querySelectorAll('[data-norow]').length;
       if (n) norow[state] = n;
     });

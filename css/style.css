@@ -68,9 +68,14 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .env-events button:hover { border-color: var(--h); }
 .auto-next { color: var(--muted); font-size: 11px; margin: 4px 0 0; }
 .auto-next:empty { display: none; }
-.fp-row { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; margin-top: 8px; }
-.fp-row h3 { margin: 0; }
+/* モック設定はふだん閉じておく (シナリオ 8〜10 / 13 などで値を変えるときだけ開く) */
+.mock-settings { margin-top: 6px; }
+.mock-settings summary { cursor: pointer; font-size: 13px; font-weight: 700; width: max-content; }
+.mock-settings summary small { color: var(--muted); font-weight: 400; }
+/* 開いたら 1 行に 1 つずつ並べ、2 つの選択の左端をそろえる */
+.mock-settings summary + label { margin-top: 4px; }
 .free-play label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.free-play .mock-settings label { display: grid; grid-template-columns: 10em max-content; margin-top: 2px; }
 .free-play select { background: #141B33; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
 .muted { color: var(--muted); font-size: 12px; }
 

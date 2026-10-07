@@ -32,14 +32,15 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 - **中央: 2 台の端末** - 左が `ホスト` (青)、右が `クライアント` (橙)。電話のボタンは直接押せます (押すと遷移表の同じイベントが発火します)。
   シナリオの次の手順と同じ操作ならシナリオが進み、違う操作ならシナリオを外れて自由操作になります。
   遷移表に行が無い操作は破線・半透明で表示し、押しても何も起きません (ログに「行なし」と残ります)。
-  端末の下の `モック操作` はゲーム内 UI ではない操作で、ふだんは勝敗 (`Win` / `Lose`)、ランダム対戦で相手を探している間は `アプリを離れる` / `60 秒たつ` です (「ランダム対戦の待機中の操作」を参照)。
+  端末の下の `モック操作` はゲーム内 UI ではない操作で、ふだんは決着と切断 (`Win` / `Lose` / `Draw` / `切断する`)、ランダム対戦で相手を探している間は `アプリを離れる` / `60 秒たつ`、
+  結果画面ではスタンプの `3 秒たつ` / `5 秒たつ` です (「ランダム対戦の待機中の操作」「対戦後の結果画面」を参照)。
   端末の上の黄色い `未決` バッジは、その画面や直前の遷移が未決事項に依存していることを示します。クリックすると未決一覧へ移動します
   (7 個以上のときは番号だけを出し、題名はマウスを乗せると出ます)。
   電話の画面の中には、ゲームが実際に出すものだけを描きます (決定・未決・仮の印やモックの注記は出さない。「端末の画面にはゲームが出すものだけ」を参照)。
-- **右: 状態遷移表** - 上に両端末の現在の状態、今の画面の説明 (例: ゲーム本体のカウントダウン、MATCH MENU や結果画面の仮の点、シナリオ 8〜10 の「ホストは関与しない」)、
+- **右: 状態遷移表** - 上に両端末の現在の状態、対戦のセッション (Friend Match かランダム対戦か、レートが変わるか)、今の画面の説明 (例: ゲーム本体のカウントダウン、MATCH MENU や結果画面の仮の点、シナリオ 8〜10 の「ホストは関与しない」)、
   「決定済み」の一覧 (緑の `決定` バッジ。今の画面や直前の遷移に関係する項目は題名まで明るく表示し、U2 は前提も表示。
   ほかの決定はバッジだけを「ほか:」の 1 行に並べ、題名はマウスを乗せると出る) を出します。
-  その下で、遷移表 (直前に発火した行を青、今の状態から発火できる行を緑の線で表示)、
+  この上の部分は長くなると、遷移表が見えるようにスクロールします。その下で、遷移表 (直前に発火した行を青、今の状態から発火できる行を緑の線で表示)、
   未決一覧 (トグル付き)、イベントログ (新しい順) をタブで切り替えます。
 
 シナリオを手順で進めている間は、自動遷移 (図の点線矢印) は手順として 1 つずつ進み、VS 画面やゲーム本体のカウントダウンのアニメーションも止まります
@@ -62,13 +63,16 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 - 上から順に評価し、最初に一致した行が使われます。行の ID (T01〜) は並び順から自動で振られます。
 
 - `decided`: その行に関係する決定済みの項目 (例: `['U2']`)。表では緑の `決定` バッジで表示します。
+- `set`: 行が発火したときに書き換えるセッション (`match` / `rated`) と端末ごとの付属状態 (`hostStamp` / `hostMute` など)。
+  `from` にも付属状態の条件 (例: `hostStamp: null`) を書けます。どちらも表のメモに「設定:」「条件:」と出します (「対戦後の結果画面」を参照)。
 
-ほかに `SCREENS` (状態 → 画面の描画仕様、トーストもここで決まる)、`DIALOGS`、`TOASTS`、`UNDECIDED` (未決一覧。決定済みの項目は `decided` 付き) が同じファイルにあります。
+ほかに `SCREENS` (状態 → 画面の描画仕様、トーストもここで決まる)、`DIALOGS`、`TOASTS`、`UNDECIDED` (未決一覧。決定済みの項目は `decided` 付き)、
+`DEVICE_FIELDS` (端末ごとの付属状態: ダイアログ・スタンプ・ミュート)、`SESSION_FIELDS` (対戦のセッション) が同じファイルにあります。
 シナリオは `js/scenarios.js` にイベントの列として定義しており、遷移表の行をそのまま再生します。
 
 自己テスト: `node tests/check.js` で、全シナリオが遷移表どおりに最後まで再生できること、未定義の状態や未決 ID が無いこと、
 シナリオが前提にしていない未決トグルをどれに切り替えても再生できることを確認します。
-対戦後の遷移 (Win / Lose の 4 イベント、Win / Lose が対戦中以外では押せないこと、再戦、Back to Friend Match) も個別に確認します。
+対戦後 (U20〜U30 で決定) の遷移も個別に確認します (下の段落)。
 また、モック独自の 3·2·1 (その画面 `view: 'countdown'`、イベント `countdown.done`) が残っていないこと、
 VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Host.Game.Countdown` / `Client.Game.Countdown`) になること、
 カウントダウン中は Win / Lose の行が無く、プレイ開始後 (`Host.Game.Play` / `Client.Game.Play`) にはあることも確認します。
@@ -85,18 +89,30 @@ U13 が高宮さん 2026-10-07 の決定で、説明に「60 秒という長さ�
 端末の下のモック操作に「アプリを離れる」「60 秒たつ」があること、シナリオ 11b〜11f の流れを確認します。
 MATCH MENU (U37〜U42 で決定) については、両端末とも ☰ で `Host.Game.MatchMenu` / `Client.Game.MatchMenu` が開き、相手の端末が (プレイ中・メニュー中・確認中のどれでも) 変わらないこと、
 CONTINUE でプレイに戻ること、SURRENDER で確認 (`*.Game.SurrenderConfirm`) を挟み、確認の CONTINUE でプレイに戻り、SURRENDER で
-自分は `*.LoseResult.Surrendered`、相手は `*.WinResult.OpponentSurrendered` になること、負けた側は Back to Online Battle で Online Battle に戻ることを確認します。
+自分は `*.LoseResult.Surrendered`、相手は `*.WinResult.OpponentSurrendered` になること、負けた側は Back to Online で Online Battle に戻ることを確認します。
 メニュー・確認の文言とボタン (CONTINUE / SURRENDER だけで REMATCH / QUIT は無い)、メニュー中・確認中も Win / Lose の行があること (試合は止まらない)、
 カウントダウン中・メニュー中に ☰ の行が無いこと、ポーズの状態・イベント・`timeScale` が残っていないこと、
 U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用の "Game in progress (mock)" が残っていないことも確かめます。
+対戦後 (U20〜U30 で決定) については、U20〜U30 が高宮さん 2026-10-07 の決定で遷移表に未決として残っていないこと、新しい未決 U44〜U50 があり U43 が変わっていないこと、
+決着 (Win / Lose / Draw) と「切断する」が両端末とも試合中だけ押せること、結果画面 (58 状態) の勝敗と終わった理由、No contest 以外にスコアがあること、
+レーティング (Friend Match・Elo の +12 / -12 / ±0・再戦・No contest) の文言、シナリオの途中のセッション (`match` / `rated`)、
+結果画面のボタン (Friend Match / ランダム対戦 × 再戦の段階 × 降参・切断・No contest) と、そのボタンにすべて行があること、
+戻り先と、相手に "Your opponent left. Rematch is not available." が出ること (勝敗は同じ)、Friend Match のボタンがランダム対戦に無いこと (と逆)、
+再戦の申し込み・応じる (VS 画面、レートは変わらない)・取り消す・断る・期限切れ・同時・3 秒の間は申し込めないこと (勝ち / 負け / 引き分け、両方向)、結果画面からの自動遷移が無いこと、
+スタンプ (3 種類、5 秒の間は送れない、3 秒で消える、ミュート、再戦の間はミュートが続き結果画面を抜けると戻る、送れない結果画面)、
+対戦中の切断 (20 秒で切断した側の負け、回復、両者の切断・サービス障害は No contest、待っている間は決着を押せない)、
+次の相手を探す (60 秒で "No opponent found." と Search again / Back to Online、見つかればレートが変わる対戦)、
+右パネルの説明に秒数と Elo の値が仮であることが書いてあること、結果画面の文言に数字が無いこと、シナリオ 15〜15h / 16d / 17 / 17b / 18〜18e の流れを確かめます。
 最後に、端末の画面に決定の注記を出すコードと、端末の上に `決定` バッジを出すコードが無いこと、
-結果画面の仮・未決の印 (U21、Rematch がある画面は U23、Back to Friend Match がある画面は U24、再戦待ちは U30) が端末の上の帯と右パネルの説明にあることも確認します。
+結果画面の決まっていない点 (U44 / U45 / U49 / U50) が端末の上の帯に、仮の値の説明が右パネルにあることも確認します。
 
 端末の画面の検査: `node tests/scan-screens.mjs` (ヘッドレス Chromium が必要。場所は環境変数 `CHROMIUM` で変えられます) で、
-全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 363 枚) を 1280x720 の画面で実際に描画し、
+全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 590 枚) を 1280x720 の画面で実際に描画し、
 両端末の画面 (`.screen`) に `仮`・`未決`・`決定`・U 番号・日本語・モックの注記 (`.mock-note`、`.pill-*` など) が無いこと、
 端末の上の帯が未決バッジだけで、すべて帯の中に見えていることを確認します。各手順で両端末の状態が遷移表の再生結果と同じかも確かめます。
 ランダム対戦の画面 (`*.Matchmake*`) に数字 (60 秒という仮の長さ) が無いこと、「アプリを離れる」「60 秒たつ」が端末の画面の中には無く、相手を探している間は端末の下で押せることも確かめます。
+結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒) と `----` が無いこと、No contest にスコアの行が無いこと、モック操作 (Win / Draw / 切断する / スタンプの 3 秒・5 秒) が端末の画面の中に無いこと、
+スタンプを送った端末では端末の下の「3 秒たつ」「5 秒たつ」を押せて、自分の名前の上に吹き出しがあることも確かめます。
 遷移表に行が無いボタンの破線・半透明 (`[data-norow]`) はモックの操作の手がかりとして残しているので、数を表示するだけです。
 
 ## 状態名 (案 C: Host. / Client. + 本体の画面名、2026-10-03)
@@ -115,7 +131,9 @@ U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用�
 URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名には状態名が入っていないので、どちらもそのまま使えます。
 その後、MATCH MENU の決定 (2026-10-07) で `Game.Pause` を `Game.MatchMenu` に改名し、`Game.SurrenderConfirm` と降参の結果画面 (`LoseResult.Surrendered` / `WinResult.OpponentSurrendered`) を足したので、
 73 状態・14 グループ、遷移表は 141 行になりました (「対戦中の MATCH MENU」を参照)。
-さらに、ランダム対戦の待機中の操作の決定 (U13、2026-10-07) で `Matchmake.Stopped` / `Matchmake.NotFound` を足したので、今は 77 状態・14 グループ、遷移表は 153 行です (「ランダム対戦の待機中の操作」を参照)。
+さらに、ランダム対戦の待機中の操作の決定 (U13、2026-10-07) で `Matchmake.Stopped` / `Matchmake.NotFound` を足して 77 状態・14 グループ、遷移表は 153 行になりました (「ランダム対戦の待機中の操作」を参照)。
+対戦後の結果画面の決定 (U20〜U30、2026-10-07) で結果画面を作り直したので、今は 127 状態・34 グループ、遷移表は 235 行です (「対戦後の結果画面」を参照)。
+このとき再戦の段階の名前を変えました: 自分が申し込んだ `.RematchWaiting` → `.RematchRequested`、相手から申し込まれた `.RematchRequested` → `.RematchIncoming` (下の対応表の新名は改名当時のもの)。
 `node tests/check.js` は、すべての状態名とグループ名が `Host.` / `Client.` + 大文字で始まる名前をドットでつないだ形であること、遷移表の host 欄に `Host.`、client 欄に `Client.` の状態だけがあることも確かめます。
 
 根拠にした qa2 本体のファイル (`/home/yasuhito/Work/qa2-verify` からの相対パス):
@@ -226,6 +244,11 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 (降参した側の `*.LoseResult.Surrendered` は Back to Friend Match が無いので入れていない)。
 新しいグループ `Host.Game.InPlay` / `Client.Game.InPlay` (`hostInPlay` / `clientInPlay`、3 状態ずつ) は、試合が続いている状態 (`Game.Play` / `Game.MatchMenu` / `Game.SurrenderConfirm`) です。
 
+2026-10-07 (対戦後の結果画面、U20〜U30) の変更: `Host.Result.Any` / `Client.Result.Any` は結果画面のすべて (29 状態ずつ。降参した側も含めた) になりました。
+新しいグループは、Back to Friend Match などがある結果画面 `*.Result.Leavable` (降参した側以外)、スタンプを送れる結果画面 `*.Result.Stampable`、
+試合中と切断を待つ間 `*.Game.InMatch`、相手を探している状態 `*.Matchmake.Searching` (Random Match から / Find Next Opponent から)、
+勝敗ごとの再戦できる段階 `*.WinResult.Rematchable` などと 3 秒待ちの段階 `*.WinResult.Cooldown` など (勝ち・負け・引き分け) です (計 34 グループ)。
+
 ## シナリオ一覧
 
 元の図は qniapp/qa2#1891 の ogwssk さんのコメント (09-30 の図 00、10-02 の図 01〜10) です。
@@ -257,12 +280,25 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 | 12 | VS 画面中の切断 | なし (合意事項) |
 | 13 | 接続失敗 (仮) | 00 (トーストのみ) |
 | 14 | 離席中に Create Match を押す | なし (10-01 合意) |
-| 15 | 通常対戦 → 対戦後 (ホスト勝利) | 01 + なし (対戦後) |
-| 15b | 通常対戦 → 対戦後 (ホストが Lose を押す) | 01 + なし (対戦後) |
-| 15c | 対戦後に再戦 (仮) | なし (対戦後) |
+| 15 | Friend Match の対戦後 (ホスト勝利 → 両者が抜ける) | なし (10-07 の決定 U20〜U26) |
+| 15b | Friend Match の対戦後 (ホストが Lose を押す → クライアントが先に抜ける) | なし (10-07 の決定 U20〜U26) |
+| 15c | Friend Match の再戦 (申し込み → 応じる → VS) | なし (10-07 の決定 U23 / U30) |
+| 15d | 再戦の申し込みを取り消す → 3 秒後にまた申し込める | なし (10-07 の決定 U30) |
+| 15e | 再戦を断られる (Decline) | なし (10-07 の決定 U30) |
+| 15f | 再戦の申し込みに応答がない (20 秒) → 申し込み直す | なし (10-07 の決定 U30) |
+| 15g | 引き分け → 両者が同時に Rematch | なし (10-07 の決定 U20 / U23) |
+| 15h | 結果画面のスタンプとミュート | なし (10-07 の決定 U27) |
 | 16 | 対戦中に MATCH MENU → CONTINUE (試合は続く) | なし (10-07 の決定、案A) |
 | 16b | 対戦中に降参 (SURRENDER → 確認 → 負け) | なし (10-07 の決定、案A) |
 | 16c | MATCH MENU を開いている間に試合が終わる | なし (10-07 の決定、案A) |
+| 16d | ランダム対戦で降参 (レートが変わる、再戦なし) | なし (10-07 の決定 U21 / U28 / U41) |
+| 17 | ランダム対戦の対戦後 (Elo → 再戦はレートが変わらない → 次の相手) | なし (10-07 の決定 U21 / U22 / U29) |
+| 17b | ランダム対戦の対戦後 → 次の相手が見つからない | なし (10-07 の決定 U29) |
+| 18 | 対戦中にクライアントが切断 → 20 秒で切断した側の負け | なし (10-07 の決定 U28) |
+| 18b | 対戦中にホストが切断 → 20 秒のうちに戻る | なし (10-07 の決定 U28) |
+| 18c | 両者が切断 → No contest | なし (10-07 の決定 U28) |
+| 18d | ランダム対戦でサービス障害 → No contest (レートは変わらない) | なし (10-07 の決定 U28 / U21) |
+| 18e | ランダム対戦で切断負け (レートが変わる) | なし (10-07 の決定 U28 / U21) |
 
 ## 開始は両者の Start Match (2026-10-03 決定、U31、Friend Match だけ)
 
@@ -315,7 +351,7 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 | 相手が切断した / いつまでも押さない / 押した側が取り消したい | 遷移行なし (環境イベントは出ない。押した側の Start Match は無効表示のまま) | U33 |
 | ホストの Cancel Match / クライアントの Leave Match | Ready からのキャンセル (図04)・退出 (図05) と同じ結果を仮に置く | U34 |
 | どちらかが ‹ で別画面へ移る (離席) | 遷移行なし (‹ は破線で押せない)。そのため、クライアントが押したあとにホストの "Ready to start" トーストが出る場面も無い | U35 |
-| 再戦 (Rematch) | 今までどおり両者の Rematch で VS 画面へ。ロビーの Start Match は挟まない | U23 |
+| 再戦 (Rematch) | 片方が申し込み、もう片方が応じたら VS 画面へ。ロビーの Start Match は挟まない (2026-10-07 決定) | U23 (決定) |
 | ランダム対戦 | 相手が見つかり次第 VS 画面へ。Start Match は無い (2026-10-03 決定) | U13a (決定) |
 
 Start Match を押す前 (両者 Ready) の通信不安定 (3a/3b/3c)・キャンセル (4/4b)・退出 (5)・離席 (2a/7a/7b) は今までどおりで、続きは両者の Start Match になります。
@@ -411,13 +447,13 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 | MATCH MENU の CONTINUE | メニューを閉じてプレイの画面に戻る | 変わらない | U37 |
 | MATCH MENU の SURRENDER | 降参の確認 "Surrender?" / "You will lose." を開く (試合は続く) | 変わらない | U40, U41 |
 | 確認の CONTINUE | 確認を閉じてプレイの画面に戻る | 変わらない | U40 |
-| 確認の SURRENDER | 負けの結果画面 ("LOSE"、"You surrendered"、Back to Online Battle) | 勝ちの結果画面 ("WIN!"、"Your opponent surrendered"、Back to Friend Match)。メニューや確認を開いていても同じ | U38, U40 |
-| 負けの結果画面の Back to Online Battle | Online Battle に戻る | 結果画面のまま | U41 |
+| 確認の SURRENDER | 負けの結果画面 ("LOSE"、"You surrendered"、Back to Online) | 勝ちの結果画面 ("WIN!"、"Your opponent surrendered"、Back to Friend Match。ランダム対戦なら Find Next Opponent / Back to Online)。メニューや確認を開いていても同じ | U38, U40 |
+| 負けの結果画面の Back to Online | Online Battle に戻る | 結果画面のまま | U41 |
 
 - 試合は止まらないので、メニューや確認を開いていても端末の下の Win / Lose (試合の決着) は押せます。そのときは開いていたメニューが閉じて、通常の結果画面になります (シナリオ 16c)。
-- 降参の結果画面には Rematch はありません (降参した側はすぐ Online Battle に戻るため)。勝った側の Back to Friend Match の戻り先は、通常の結果画面と同じく未決 U24 です。
-- 降参の結果画面のボタンの文言 ("Back to Online Battle") と Rank / Score の表示は、通常の結果画面と同じく仮です (U22 / U21)。
-- 引き分けと対戦中の切断は、まだ未決 U28 です (降参の部分だけ U38 / U40 / U41 で決まった)。
+- 降参の結果画面には Rematch はありません (降参した側は再戦を申し込めない、U28。勝った側から申し込めるかは未決 U45)。勝った側の戻り先は、通常の結果画面と同じです (U24)。
+- 降参の結果画面のボタンの文言は、2026-10-07 の結果画面の決定 (U22) で "Back to Online Battle" から "Back to Online" になりました。Score と Rating の表示も通常の結果画面と同じです (U20 / U21)。
+- 引き分けと対戦中の切断も 2026-10-07 に決まりました (U20 / U28、「対戦後の結果画面」を参照)。
 
 ### 状態・イベント
 
@@ -436,7 +472,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 - `index.html#s=16&step=14` - 両者が MATCH MENU
 - `index.html#s=16b&step=14` - ホストの降参の確認 "Surrender?" / "You will lose."
 - `index.html#s=16b&step=18` - ホストは負け "You surrendered"、クライアントは勝ち "Your opponent surrendered"
-- `index.html#s=16b&step=19` - ホストが Back to Online Battle で Online Battle に戻った
+- `index.html#s=16b&step=19` - ホストが Back to Online で Online Battle に戻った
 - `index.html#s=16c&step=14` - ホストが MATCH MENU を開いている間にクライアントが勝った
 
 ![ホストの MATCH MENU (クライアントはプレイ中のまま)](docs/screenshots/29-match-menu-host.png)
@@ -463,12 +499,14 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 | `Host.WinResult*` / `Host.LoseResult*` / `Client.WinResult*` / `Client.LoseResult*` (結果画面、ホスト・クライアントで 6 状態ずつ) | Rank の横の `仮` と `未決 U21`、Score の `仮`、Rematch の `未決 U23` (自分が申し込んで待っている `.RematchWaiting` では `未決 U30`)、Back to Friend Match の `未決 U24` | 端末の上の帯に `未決` U21 / U23 / U24 (`.RematchWaiting` では U30 も)。右パネルの説明に「Rank の変化と Score はどちらも仮の表示で、Score の ---- は値が決まっていないため (U21)」と U23 / U24 / U30 の説明。Score の表示は `----` のまま |
 | シナリオ 8 / 9 / 10 のホスト (`Host.MultiModeSelection`) | 注記「このシナリオではホストは関与しない」 | 右パネルの現在の状態の下 (`Host` 付きの 1 行)。ホストの端末はその時点の画面 (Online Battle) だけ |
 
+2026-10-07 に結果画面が決まったので (U20〜U30)、結果画面の帯には U21 / U23 / U24 / U30 ではなく、決まっていない点 (U44 / U45 / U49 / U50) だけを出し、Score の `----` はやめました (決まっていないスコアは行ごと出さない、U20)。
+
 これで電話の画面の中には、決定・未決・仮の印もモックの注記もありません (`node tests/scan-screens.mjs` で全シナリオの全手順を確認)。
 モックの仮置きとして画面の中に残しているのは次のものだけです。
 
 | 状態 | 画面の中にあるもの | 場所 |
 |---|---|---|
-| すべての状態 | 遷移表に行が無いボタンの破線・半透明 (例: 片方だけ押したあとの ‹、再戦待ちの Rematch) | `css/style.css` `.screen [data-norow]` |
+| すべての状態 | 遷移表に行が無いボタンの破線・半透明 (例: 片方だけ押したあとの ‹) | `css/style.css` `.screen [data-norow]` |
 | `Host.Game.*` / `Client.Game.*`、`Host.Away.StageSelection.*` / `Client.Away.StageSelection.*` | ゲーム画面 (フィールド・HUD) とステージ選択の画面そのものがプレースホルダー | `js/app.js` `VIEWS.game` / `VIEWS.stage` |
 
 ## ランダム対戦は相手が見つかり次第 VS へ (2026-10-03 決定、U13a)
@@ -575,61 +613,211 @@ Ready・Start Match・"Starting match…" は挟みません。両者が Start M
 
 ![ランダム対戦: 相手が見つからなかった](docs/screenshots/38-random-not-found.png)
 
-## 対戦後 (Win / Lose)
+## 対戦後の結果画面 (2026-10-07 決定、U20〜U30)
 
-ogwssk さんの図は「カウントダウン & ゲーム開始」で終わっていて、対戦後の画面はありません。
-そこで対戦後は、画面もボタンもすべて仮のプレースホルダーとして作り、決まっていない点を未決 U20〜U30 にしています。
+高宮さんの決定 (2026-10-07、推奨案): 以前は図が無く仮のプレースホルダーだった対戦後の画面 (未決 U20〜U30) が、すべて決まりました。
 
-### 使い方
+| ID | 決定 |
+|---|---|
+| U20 | 結果画面に Win / Lose / Draw / No contest、両者の名前、スコア、終わった理由を出す。スコアが決まっていなければ行ごと出さない ("----" は出さない) |
+| U21 | Friend Match は "No rating change (friend match)"。ランダム対戦は Elo (初期値 1000、K=24) で、例えば "1000 → 1012 (+12)"。ランダム対戦で同じ相手と続けて再戦したときは変わらない |
+| U22 | Friend Match: Rematch / Back to Friend Match。ランダム対戦: Find Next Opponent / Rematch / Back to Online |
+| U23 | どちらからでも再戦を申し込める。相手が応じたらそのまま VS 画面へ。同時に申し込んだら成立 |
+| U24 | Friend Match は Friend Match トップ (Match Code を作る・入れる画面) へ戻り、前の Match Code は使えなくなる。ランダム対戦は Online Battle へ。降参した側は Online Battle へ (U41 で決定済み) |
+| U25 | 相手が抜けたら結果画面はそのままで "Your opponent left. Rematch is not available."。勝敗とレートは変わらない |
+| U26 | 自動では次へ進まない |
+| U27 | スタンプ 3 種類: 👏 "Good game" / 🤝 "Thanks for the match" / 👍 "Nice"。1 つ 3 秒表示、送る間隔は 5 秒、ミュートできる |
+| U28 | 片方が切断したら 20 秒待ち、戻らなければ切断した側の負け。両者の切断・サービス障害は "No contest due to a connection error" でレートは変わらない。降参した側は再戦を申し込めない |
+| U29 | 次の相手は 60 秒探す。見つからなければ "No opponent found." と Search again / Back to Online |
+| U30 | 再戦の申し込みの応答期限は 20 秒。申し込んだ側に Cancel Request。取り消されたら相手に "Rematch request was cancelled"、断られたら申し込んだ側に "Your opponent declined the rematch"、期限切れなら "No response to rematch request"。どの場合も両者とも結果画面に残り、3 秒後にまた申し込める |
 
-- 各端末の下に `モック操作 (勝敗): [Win] [Lose]` があります。ゲーム内 UI ではなく、勝敗を決めるためのモック操作です (勝敗判定そのものは対象外)。
-- 押せるのは両端末が対戦中 (ゲーム本体のカウントダウンが終わったあとのゲーム画面。MATCH MENU や降参の確認を開いていても試合は続くので押せる、U37) のときだけです。カウントダウン中 (`Host.Game.Countdown` / `Client.Game.Countdown`) は押せません。
-  押せるかどうかは遷移表で決まり、行が無いときは他のボタンと同じく破線・半透明になります。
-- 片方で **Win** を押すと、その端末は "WIN!"、もう片方は自動で "LOSE" の結果画面になります。**Lose** を押すとその逆です。
+**秒数 (20 秒・3 秒・5 秒・60 秒) と Elo の値 (初期値 1000、K=24) は QA² 側の仮の値です** (変わりうる)。
+そのため、秒数と「仮の値」であることは右パネルの説明・遷移表のメモ・この README にだけ書き、電話の画面には出しません (`tests/scan-screens.mjs` で確認)。
+Elo の結果 (例: "1000 → 1012 (+12)") は決定どおり電話の画面に出します。
 
-### 結果画面 (仮)
+### 結果画面
 
-QA² の既存の 1 人用リザルト画面 ("RESULT" の見出しと大きな "WIN!" / "LOSE") と、ゲームの UI キットにある "REMATCH" ボタンにならっています。
-issue の当初のチェックリストにある「ランクアップ　ランクダウン」も仮の値で表示しています。
+上から順に次のものを出します。ゲームの UI キット ("RESULT" の見出しと大きな "WIN!" / "LOSE") にならった、これまでの結果画面を作り直しました。
 
-- 見出し "RESULT"、大きな "WIN!" / "LOSE"、対戦相手の名前 ("vs ogwssk")
-- ランクの変化 (例: 勝った側 "Rank 12 → 13"、負けた側 "Rank 9 → 9") とスコア ("----")。どちらも仮の表示ですが、`仮` の印は画面の中には付けず、右パネルの説明に書いています (U21)
-- ボタン "Rematch" / "Back to Friend Match"
-- 未決の要素 (Rank / Score は U21、Rematch は U23、待機中の Rematch は U30、Back to Friend Match は U24) は、端末の上の `未決` バッジと右パネルの説明に出します。画面の中には付けません
+| 部分 | 内容 |
+|---|---|
+| 見出し | "WIN!" (青) / "LOSE" (赤) / "DRAW" (黄) / "NO CONTEST" (灰、小さめ) |
+| 終わった理由 | "Match finished" (ゲームの決着。文言は仮、U44) / "You surrendered" / "Your opponent surrendered" / "You were disconnected" / "Your opponent disconnected" / "No contest due to a connection error" |
+| 両者の名前 | 左に自分 (`YOU` 付き)、右に相手。送ったスタンプはその人の名前の上に吹き出しで出る |
+| スコア | "3,200 – 2,750" (自分 - 相手、モックのデモ値)。No contest は決まっていないので行ごと出さない |
+| レーティング | Friend Match は "No rating change (friend match)"。ランダム対戦は "Rating 1000 → 1012 (+12)" (負けは "1000 → 988 (-12)"、引き分けは "1000 → 1000 (±0)")、再戦は "No rating change (rematch)"、No contest は "No rating change (no contest)" |
+| 再戦の一行 | 下の「再戦」を参照 |
+| スタンプ | 👏 🤝 👍 と、相手のスタンプのミュート (🔔 / ミュート中は 🔕) |
+| ボタン | 下の表 |
 
-ボタンの配線は、中立と言える範囲にとどめています。
+モックでは両者とも初期値の 1000 から Elo を計算します (同じレート同士なので、勝ちは +12、負けは -12、引き分けは ±0)。
 
-- **Back to Friend Match**: 押した端末だけ Friend Match トップへ戻ります (U24)。もう片方は結果画面のままです (U25)。
-- **Rematch**: 押した端末に "Waiting for your friend…"、もう片方に "Your friend wants a rematch" を出し、両者が押したら VS 画面からやり直します (U23)。
-  再戦でもロビーに戻って両者の Start Match (U31) を挟むかは決まっていないので、モックは挟みません (U23)。
-  再戦待ちの取り消しは未決 (U30) なので、待機中の Rematch には行が無く押せません。
+| 結果画面 | Friend Match | ランダム対戦 |
+|---|---|---|
+| ふつう (勝ち・負け・引き分け) | **Rematch** / Back to Friend Match | **Find Next Opponent** / Rematch / Back to Online |
+| 自分が申し込んだ | Cancel Request / Back to Friend Match | Find Next Opponent / Cancel Request / Back to Online |
+| 相手から申し込まれた | **Rematch** \| Decline / Back to Friend Match | Find Next Opponent / **Rematch** \| Decline / Back to Online |
+| 取り消し・辞退・期限切れのあと 3 秒 | Rematch (無効表示) / Back to Friend Match | Find Next Opponent / Rematch (無効表示) / Back to Online |
+| 相手が抜けた | **Back to Friend Match** | **Find Next Opponent** / Back to Online |
+| 降参した側 | **Back to Online** | **Back to Online** |
+| 相手が降参した・切断の勝ち負け・No contest | **Back to Friend Match** | **Find Next Opponent** / Back to Online |
 
-Rematch を行の無いボタン (破線) にするだけの案も考えましたが、配線することにしました。
-再戦の有無・同意の要否・VS 画面を挟むか・Match Code を再利用するかは、実際に両端末で動かしてみると論点が具体的になります。
-そこで「片方が申し込み、もう片方が応じる」という最小限の流れだけを置き、関係する行と画面にはすべて U23 / U30 を付けています。
+太字は主なボタン (青い枠)、`|` は横に並べた 2 つです。Online Battle に戻るボタンは、降参後のもの (以前の "Back to Online Battle") も含めて "Back to Online" にそろえました。
 
-### 追加した状態・イベント・行
+### 再戦 (U23 / U30)
 
-- 状態 (12): `Host.WinResult`, `Host.LoseResult` と、それぞれの `.RematchWaiting` (自分が申し込んで待機中) / `.RematchRequested` (相手から申し込まれた)。
-  クライアント側も同じく `Client.WinResult*` / `Client.LoseResult*`。遷移表ではグループ `Host.Result.Any` / `Client.Result.Any` として表示します。
-- イベント: `host.win` / `host.lose` / `client.win` / `client.lose` (モック操作)、`host.rematch` / `client.rematch`、
-  `host.backToFriendMatch` / `client.backToFriendMatch`
-- 行: 同じ `TRANSITIONS` の末尾に 16 行を追加しました (追加時は T111〜T126。U31 の行、MATCH MENU の行、ランダム対戦の待機中の行を足したので、今は T136〜T153)。
-  「相手は結果画面のまま」の行は `to` を `'='` (同じ状態のまま) で書いており、残された側の端末にも U25 のバッジが出ます。
+| 段階 | 申し込んだ側 | 申し込まれた側 |
+|---|---|---|
+| Rematch を押した | "Waiting for your opponent…"、Cancel Request | "Your opponent wants a rematch"、Rematch / Decline |
+| 申し込まれた側が Rematch (応じる) / 両者が同時に Rematch | VS 画面 → ゲーム本体のカウントダウン → プレイ (ロビーの Start Match は挟まない) | 同じ |
+| Cancel Request (取り消す) | (何も出さない)、3 秒は Rematch を押せない | "Rematch request was cancelled"、3 秒は押せない |
+| Decline (断る) | "Your opponent declined the rematch"、3 秒は押せない | (何も出さない)、3 秒は押せない |
+| 20 秒応答がない | "No response to rematch request"、3 秒は押せない | 申し込みの表示が消える、3 秒は押せない |
+| 3 秒たつ | どちらからでもまた申し込める (メッセージは消える) | 同じ |
+| 相手が結果画面を抜けた | "Your opponent left. Rematch is not available." (Rematch のボタンは消える) | - |
+
+- 以前の仮の流れで使っていた "Waiting for your friend…" / "Your friend wants a rematch" は、ランダム対戦でも使うので "Waiting for your opponent…" / "Your opponent wants a rematch" にしました (決定の文言 "Your opponent declined the rematch" などにそろえた)。
+- 「申し込まれた側」が応じるボタンは、申し込むボタンと同じ Rematch です (両者が Rematch を押したら成立、という U23 の決定と同じ形)。
+- 両者が同時に押すことは 1 台ずつの操作では起こせないので、左の環境イベント「両者が同時に Rematch を押す」にしました。
+- ランダム対戦の再戦の試合はレートが変わりません (再戦を続けても同じ)。Find Next Opponent で次に見つかった相手との試合は、またレートが変わります。
+
+### スタンプ (U27)
+
+- 3 つのボタン (👏 / 🤝 / 👍) で送ると、両者の画面で送った人の名前の上に吹き出し ("👏 Good game" など) が出ます。
+- 送ってから 5 秒は、送った人のスタンプのボタンが無効表示になります。吹き出しは 3 秒で消えます (相手のボタンは押せるので、両者の吹き出しが同時に出ることもある)。
+- 🔔 を押すとミュートになり (🔕)、相手のスタンプが自分の画面に出なくなります。自分が送ったスタンプは自分の画面には出ます。相手にはミュートしたことは伝えません。
+- 相手が抜けた結果画面、切断で決まった結果画面、No contest ではスタンプを送れません (相手に届かないため)。降参の結果画面では送れます。
+
+### 対戦中の切断 (U28)
+
+| 場面 | 切断した側 | 相手 |
+|---|---|---|
+| 対戦中に片方の接続が切れる | ゲーム画面の上に "Connection lost" / "Reconnecting…" | ゲーム画面の上に "Your opponent disconnected" / "Waiting for your opponent to reconnect…" |
+| 20 秒のうちに通信が回復する | プレイに戻る | プレイに戻る |
+| 20 秒たっても戻らない | "LOSE" / "You were disconnected" (ランダム対戦ではレートも変わる) | "WIN!" / "Your opponent disconnected" |
+| 両者の接続が切れる / サービス障害 | "NO CONTEST" / "No contest due to a connection error"、レートは変わらない | 同じ |
+
+待っている間の画面 (パネルの文言・試合が止まるか・待ち時間を出すか) は決定に無いので、MATCH MENU と同じパネルを使った仮の表示にし、未決 U46 にしました。モックでは待っている間は Win / Lose / Draw を押せません。
+
+### 次の相手を探す (U29)
+
+Find Next Opponent を押すと、Random Match から探すときと同じ "Searching for an opponent…" と Cancel の画面になります (Cancel と ‹ は確認なしで Online Battle へ、U13 と同じ)。
+もう一方の端末が Random Match か Find Next Opponent で探していれば、相手が見つかって VS 画面へ進みます。
+60 秒探しても見つからなければ、Random Match の画面の上に "No opponent found." と Search again / Back to Online を出します (Random Match から探したときは Online Battle の上に出すので Close)。
+
+### モック操作 (端末の外)
+
+電話の画面のボタンではないものは、端末の下のモック操作か、左の「環境イベント」で起こします。
+
+| 場所 | 操作 | 出る場面 |
+|---|---|---|
+| 端末の下 `モック操作 (対戦)` | Win / Lose / Draw (押した側が勝ち / 負け / 引き分け)、切断する (この端末の接続が切れる) | 対戦中 |
+| 端末の下 `モック操作 (スタンプ)` | 3 秒たつ (送ったスタンプが消える)、5 秒たつ (また送れる) | 結果画面 |
+| 端末の下 `モック操作 (検索中)` | アプリを離れる、60 秒たつ | 相手を探している間 (Find Next Opponent から探しているときは「アプリを離れる」は押せない、U47) |
+| 左の環境イベント | 両者の接続が切れる、サービス障害が起きる、通信が回復する、切断から 20 秒たつ | 対戦中・切断を待っている間 |
+| 左の環境イベント | 両者が同時に Rematch を押す、再戦の申し込みから 20 秒たつ、3 秒たつ | 結果画面 |
+
+どのタイマーも、U13 の「60 秒たつ」と同じ理由で自由操作中の自動遷移にはしていません (モックの自動遷移は、どちらかの端末でイベントが起きるたびにタイマーをかけ直すため)。
+
+### 状態・イベント・遷移表
+
+結果画面は `役割.勝敗Result.段階` です (例: `Host.WinResult.RematchIncoming`)。Friend Match かランダム対戦か、レートが変わる対戦かは状態名に入れず、
+両端末で共通の **セッション** (`match` = `friend` / `random`、`rated` = `true` / `false`) に持たせました。
+状態名に入れると、VS 画面・ゲーム画面・MATCH MENU まで Friend Match 用とランダム対戦用に分ける必要があり、遷移表がほぼ 2 倍になるためです。
+セッションは VS 画面へ進む行 (`sys.bothStarted` / `sys.opponentFound` / 再戦の成立) が `set` で書き、結果画面の行は `when: { match: 'friend' }` などで分けます。右パネルの「対戦:」の行に今のセッションを出します。
+
+スタンプとミュートは再戦の段階と独立しているので、状態名には入れず、確認ダイアログ (`hostDialog`) と同じ **端末ごとの付属状態** (`hostStamp` / `hostMute` など) にしました。
+端末の上の状態名の後ろに `+ 💬 gg` (送ったスタンプ)、`+ 💬 sent` (消えたが次を送れるまでの待ち)、`+ 🔕` (ミュート) と出ます。
+付属状態は `js/transitions.js` の `DEVICE_FIELDS` で決まり、その状態で続かない画面へ移ると初期値に戻ります (スタンプは結果画面を出ると、ミュートは同じ相手と対戦している間 (VS 画面・ゲーム画面・結果画面) を出ると戻る)。
+
+| 変更 | 状態 / イベント |
+|---|---|
+| 改名 | `*.WinResult.RematchWaiting` / `*.LoseResult.RematchWaiting` (自分が申し込んだ) → `*.RematchRequested`、以前の `*.RematchRequested` (相手から申し込まれた) → `*.RematchIncoming` |
+| 追加 | 状態 `*.DrawResult*`、再戦の段階 `.RematchCancelled` / `.RematchDeclined` / `.RematchExpired` / `.RematchCooldown` / `.OpponentLeft` (勝ち・負け・引き分けそれぞれ)、`*.LoseResult.Disconnected` / `*.WinResult.OpponentDisconnected` / `*.NoContestResult`、`*.Game.Disconnected` / `*.Game.OpponentDisconnected` (切断を待つ)、`*.Matchmake.NextOpponent` / `*.Matchmake.NextOpponent.NotFound` (次の相手を探す) |
+| 追加 | イベント `*.draw` / `*.disconnect` (モック操作)、`*.cancelRematch` / `*.declineRematch`、`*.findNextOpponent`、`*.stamp.gg` / `*.stamp.thanks` / `*.stamp.nice`、`*.stampShown` / `*.stampInterval` (モック操作)、`*.muteStamps` / `*.unmuteStamps`、環境 `net.bothDisconnected` / `net.serviceFailure` / `timer.disconnectTimeout` / `timer.rematchTimeout` / `timer.rematchCooldown` / `sys.rematchSimultaneous` |
+| 変更 | `*.backToOnlineBattle` のボタンの文言を "Back to Online" に。ランダム対戦の結果画面と次の相手が見つからないときにも使う。`net.recovered` を切断を待つ間にも使う |
+| 追加 | 行の `set` (セッションと付属状態を書き換える) と、`from` の付属状態の条件 (例: `hostStamp: null`)。遷移表のメモに「条件:」「設定:」として出す |
+
+遷移表は 153 行から 235 行になりました (対戦後の 18 行を書き直して 100 行に)。状態は 77 から 127、グループは 14 から 34 です。
+
+| 行 | 内容 |
+|---|---|
+| T136〜T145 | 次の相手を探す (Cancel・‹・60 秒たつ・Search again・Back to Online) |
+| T146〜T151 | 決着 (Win / Lose / Draw のモック操作) |
+| T152〜T159 | 対戦中の切断・回復・20 秒たつ・両者の切断・サービス障害 |
+| T160〜T195 | 再戦 (申し込む・応じる・取り消す・断る・期限切れ・同時・3 秒たつ。勝ち / 負け / 引き分けそれぞれ) |
+| T196〜T221 | 結果画面から抜ける (Back to Friend Match / Find Next Opponent / Back to Online。相手には "Your opponent left…") |
+| T222〜T235 | スタンプ (送る・3 秒たつ・5 秒たつ・ミュート) |
+
+### 決定に書かれていないので置いた仮定 (新しい未決)
+
+| 仮定 (モックの動き) | 未決 |
+|---|---|
+| ゲームの決着のときの終わった理由は "Match finished"。引き分けは端末の下の Draw で起こす | U44 |
+| 降参で勝った側からも再戦を申し込めない。切断で決まった試合と No contest のあとも再戦は無い。そのため、これらの結果画面では相手が抜けても "Your opponent left…" を出さない | U45 |
+| 切断を待つ間は、ゲーム画面の上にパネルを出し、Win / Lose / Draw を押せない。20 秒のうちに戻れば試合を続ける | U46 |
+| Find Next Opponent から探している間にアプリを離れたときの行は無い | U47 |
+| VS 画面の "Rank 12" / "Rank 9" はそのまま (レーティングとは別のものとして扱う) | U48 |
+| ミュートは同じ相手と対戦している間 (再戦を含む) だけ続く。送ったスタンプは本人の画面にも出し、ミュートしたことは相手に伝えない | U49 |
+| 取り消した側・断った側・申し込まれたまま期限が切れた側には何も出さない。メッセージは 3 秒たつと消える | U50 |
+| スコアはデモ値 (勝ち 3,200 / 負け 2,750 / 引き分け 2,900)。決まっていないのは No contest だけとした | (U20 の範囲) |
+| Online Battle に戻るボタンは、降参後も含めて "Back to Online" にそろえた | (U22 の範囲) |
+| Friend Match トップに戻ると Match Code の入力欄は空。前の Match Code (QWERTY123) で Join Match すると "Match not found." | (U24 の範囲) |
 
 ### シナリオ
 
 | ID | 手順 | 見られる画面 |
 |---|---|---|
-| 15 | 15 | 手順 11: ゲーム本体のカウントダウン (Win / Lose は押せない) → 12: プレイ開始 (Win / Lose が押せる) → 13: ホスト WIN! / クライアント LOSE → 14: ホストだけ Friend Match トップ (クライアントは結果画面のまま) → 15: 両者 Friend Match トップ |
-| 15b | 14 | 手順 13: ホスト LOSE / クライアント WIN! → 14: クライアントだけ Friend Match トップ |
-| 15c | 18 | 手順 13: ホスト WIN! / クライアント LOSE → 14: クライアント "Waiting for your friend…" / ホスト "Your friend wants a rematch" → 15: VS 画面 → 16: ゲーム本体のカウントダウン → 17: プレイ開始 → 18: ホスト LOSE / クライアント WIN! |
+| 15 | 15 | 13: ホスト WIN! / クライアント LOSE (Friend Match) → 14: ホストが Back to Friend Match、クライアントに "Your opponent left…" → 15: 両者 Friend Match トップ |
+| 15b | 14 | 13: ホスト LOSE / クライアント WIN! → 14: クライアントが先に抜け、ホストに "Your opponent left…" |
+| 15c | 18 | 14: クライアントが申し込んだ ("Waiting for your opponent…" / "Your opponent wants a rematch") → 15: ホストが応じて VS 画面 → 18: 再戦の結果 |
+| 15d | 18 | 14: ホストが申し込む → 15: Cancel Request (クライアントに "Rematch request was cancelled") → 16: 3 秒たつ → 18: クライアントが申し込み、ホストが応じて VS 画面 |
+| 15e | 17 | 15: ホストが Decline (クライアントに "Your opponent declined the rematch") → 17: クライアントが抜け、ホストに "Your opponent left…" |
+| 15f | 18 | 15: 20 秒たつ (ホストに "No response to rematch request") → 16: 3 秒たつ → 18: 申し込み直して VS 画面 |
+| 15g | 16 | 13: 両者 DRAW → 14: 両者が同時に Rematch で VS 画面 |
+| 15h | 20 | 14〜15: 両者がスタンプを送る → 16: ホストのスタンプが消える → 17: クライアントがミュート → 19: ホストの 👍 はクライアントに出ない → 20: ミュートを解くと出る |
+| 16d | 10 | 8: ランダム対戦で降参 (降参した側 1000 → 988 (-12)、Back to Online だけ) → 9: ホストは次の相手を探す → 10: クライアントは Online Battle |
+| 17 | 15 | 6: ランダム対戦の結果 (1000 → 1012 (+12) / 1000 → 988 (-12)) → 8: 再戦の VS 画面 → 11: 再戦の結果 ("No rating change (rematch)") → 12: ホストが Find Next Opponent、クライアントに "Your opponent left…" → 15: 新しい相手と VS 画面 |
+| 17b | 11 | 7: ホストが次の相手を探す → 8: "No opponent found." (Search again / Back to Online) → 11: Online Battle |
+| 18 | 15 | 13: クライアントの切断 (ホストは "Your opponent disconnected"、クライアントは "Reconnecting…") → 14: 20 秒たつ (ホスト WIN! / クライアント LOSE) |
+| 18b | 15 | 13: ホストの切断 → 14: 通信が回復してプレイに戻る → 15: ホストの勝ち |
+| 18c | 14 | 14: 両者の切断で NO CONTEST |
+| 18d | 8 | 6: ランダム対戦でサービス障害 → NO CONTEST ("No rating change (no contest)") |
+| 18e | 7 | 7: ランダム対戦の切断負け (1000 → 988 (-12) / 1000 → 1012 (+12)) |
 
-例: `index.html#s=15&step=13` (結果画面)、`index.html#s=15c&step=14` (再戦待ち)。
+15 / 15b / 15c は手順の数が変わらないので、既存の `#s=15&step=13`、`#s=15c&step=14` などはそのまま使えます (画面は新しい結果画面になった)。
 
-![対戦後の結果画面](docs/screenshots/17-result-win-lose.png)
+![Friend Match の結果画面](docs/screenshots/17-result-win-lose.png)
 
-![再戦待ち (仮)](docs/screenshots/18-rematch-wait.png)
+![再戦の申し込み (申し込んだ側と申し込まれた側)](docs/screenshots/18-rematch-wait.png)
+
+![ランダム対戦の結果画面 (Elo)](docs/screenshots/39-result-random-elo.png)
+
+![ランダム対戦の再戦の結果 (レートは変わらない)](docs/screenshots/49-random-rematch-no-rating.png)
+
+![再戦の申し込みが取り消された](docs/screenshots/40-rematch-cancelled.png)
+
+![再戦を断られた](docs/screenshots/41-rematch-declined.png)
+
+![再戦の申し込みに応答がない](docs/screenshots/42-rematch-expired.png)
+
+![相手が抜けた](docs/screenshots/22-host-back-client-result.png)
+
+![スタンプ](docs/screenshots/43-stamps.png)
+
+![ミュート中のスタンプ](docs/screenshots/44-stamps-muted.png)
+
+![引き分け](docs/screenshots/45-draw.png)
+
+![対戦中の切断を待つ](docs/screenshots/46-disconnect-wait.png)
+
+![切断で決まった結果](docs/screenshots/47-disconnect-result.png)
+
+![No contest](docs/screenshots/48-no-contest.png)
+
+![次の相手が見つからない](docs/screenshots/50-next-opponent-not-found.png)
+
+![ランダム対戦で降参 (レートが変わる)](docs/screenshots/51-random-surrender-elo.png)
 
 ## 合意事項の反映 (10-01 の yasuhito のコメントで合意)
 
@@ -691,18 +879,46 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
 - **U38 メニューを開いても相手には何も見えない。降参すると相手は勝ち + "Your opponent surrendered"** - 決定 (高宮さん 2026-10-07、案A)  
   MATCH MENU を開いただけでは、相手の端末には何も出さない。降参すると降参した側は負けの結果画面 ("You surrendered")、相手は勝ちの結果画面に "Your opponent surrendered" を出す (相手がメニューや確認を開いていても同じ)。
 - **U39 対戦中に REMATCH / RETRY は出さない (再戦は結果画面だけ)** - 決定 (高宮さん 2026-10-07、案A)  
-  実機のポーズポップアップの 2 番目のボタン (VsAI では REMATCH、ソロでは RETRY) は MATCH MENU に置かない。再戦は結果画面の Rematch だけ (進め方は未決 U23)。
+  実機のポーズポップアップの 2 番目のボタン (VsAI では REMATCH、ソロでは RETRY) は MATCH MENU に置かない。再戦は結果画面の Rematch だけ (進め方は U23 で決定、2026-10-07)。
 - **U40 降参の前に確認を出す ("Surrender?" / "You will lose.")** - 決定 (高宮さん 2026-10-07、案A)  
   SURRENDER を押すと確認「降参しますか？ 負けになります」(画面の英語は "Surrender?" / "You will lose.") を出す。ボタンは CONTINUE (続ける、プレイに戻る) と SURRENDER (降参する)。確認中も試合は続く。
 - **U41 ボタンは SURRENDER (QUIT ではない)。負けの結果画面のあと Online Battle へ** - 決定 (高宮さん 2026-10-07、案A)  
   MATCH MENU のボタンの文言は QUIT ではなく SURRENDER。降参して負けの結果画面を見たあとは Online Battle (`Host.MultiModeSelection` / `Client.MultiModeSelection`) に戻る。
-  モックでは負けの結果画面の "Back to Online Battle" で戻る (ボタンの文言は未決 U22 で仮)。
+  モックでは負けの結果画面の Back to Online で戻る (ボタンの文言は U22 で決定、2026-10-07)。
 - **U42 MATCH MENU 中も BGM を下げない** - 決定 (高宮さん 2026-10-07、案A)  
   実ゲームのポーズは BGM を -5dB 下げる (ダッキング) が、MATCH MENU では試合が続くので BGM を下げない。モックには音が無いので、決定の記録だけ。
+
+- **U20 結果画面: 勝敗・両者の名前・スコア・終わった理由を出す** - 決定 (高宮さん 2026-10-07)  
+  結果画面に勝敗 (Win / Lose / Draw / No contest)、両者の名前、スコア、終わった理由を出す。スコアが決まっていないときは "----" などを出さずに行ごと出さない。
+  通常の決着のときの終わった理由の文言 (モックは "Match finished") と、引き分けになる条件は決定に無いので U44 にしました。
+- **U21 レーティング: Friend Match は変わらない。ランダム対戦は Elo (初期値 1000、K=24)。同じ相手との再戦は変わらない** - 決定 (高宮さん 2026-10-07)  
+  Friend Match は "No rating change (friend match)"。ランダム対戦は Elo で、例えば "1000 → 1012 (+12)"。ランダム対戦で同じ相手と続けて再戦したときは変わらない。
+  **初期値 1000 と K=24 は QA² 側の仮の値** (変わりうる)。VS 画面の "Rank" との関係は U48 にしました。
+- **U22 結果画面のボタン** - 決定 (高宮さん 2026-10-07)  
+  Friend Match: Rematch / Back to Friend Match。ランダム対戦: Find Next Opponent / Rematch / Back to Online。降参した側は Back to Online だけ (U41)。
+- **U23 再戦: どちらからでも申し込め、相手が応じたらそのまま VS 画面へ。同時に申し込んだら成立** - 決定 (高宮さん 2026-10-07)
+- **U24 戻り先: Friend Match は Friend Match トップ (前の Match Code は無効)、ランダム対戦は Online Battle** - 決定 (高宮さん 2026-10-07)  
+  降参した側は Friend Match でも Online Battle に戻る (U41 で決定済み)。
+- **U25 相手が結果画面を抜けたら "Your opponent left. Rematch is not available."** - 決定 (高宮さん 2026-10-07)  
+  自分の結果画面はそのまま残り、勝敗とレートは変わらない。
+- **U26 結果画面から自動では次へ進まない** - 決定 (高宮さん 2026-10-07)
+- **U27 結果画面のスタンプ: 👏 Good game / 🤝 Thanks for the match / 👍 Nice。表示 3 秒、間隔 5 秒、ミュートあり** - 決定 (高宮さん 2026-10-07)  
+  **3 秒と 5 秒は QA² 側の仮の値**。ミュートの続く範囲と送った本人の画面の表示は U49 にしました。
+- **U28 対戦中の切断: 片方なら 20 秒待って切断した側の負け。両者の切断・サービス障害は No contest** - 決定 (高宮さん 2026-10-07)  
+  両者の切断・サービス障害は "No contest due to a connection error" で、レートは変わらない。降参した側は再戦を申し込めない。**20 秒は QA² 側の仮の値**。
+  以前の U28 に残っていた引き分けと対戦中の切断も、これと U20 で決まりました。待っている間の画面は U46、降参・切断のあとの再戦は U45 にしました。
+- **U29 ランダム対戦の Find Next Opponent: 60 秒探して見つからなければ "No opponent found."** - 決定 (高宮さん 2026-10-07)  
+  見つからなければ Search again / Back to Online を出す。**60 秒は QA² 側の仮の値**。探している間にアプリを離れたときは U47 にしました。
+- **U30 再戦の申し込み: 応答期限 20 秒、Cancel Request で取り消し、Decline で断る。どの場合も結果画面に残り 3 秒後にまた申し込める** - 決定 (高宮さん 2026-10-07)  
+  取り消されたら相手に "Rematch request was cancelled"、断られたら申し込んだ側に "Your opponent declined the rematch"、期限切れなら "No response to rematch request"。
+  **20 秒と 3 秒は QA² 側の仮の値**。メッセージを出さない側の表示は U50 にしました。
+
+詳しくは「対戦後の結果画面」を見てください。
 
 U37〜U42 は、2026-10-03 のモックで「オンラインでも VsAI のポーズポップアップ (CONTINUE / REMATCH / QUIT) を出す」仮の案に付けていた未決です。
 案A でまとめて決まったので、ポーズの状態・イベントは MATCH MENU に置き換えました (「対戦中の MATCH MENU」を参照)。
 U28 (引き分け・対戦中の切断・降参) のうち、オンライン対戦の降参は U38 / U40 / U41 で決まったので、U28 には引き分けと対戦中の切断だけを残しました。
+その残り (引き分け・対戦中の切断) も 2026-10-07 に U20 / U28 で決まりました。
 
 U1 (Ready トーストから VS への入り方) にも同じ決定を当てはめるか確認しましたが、U1 の論点は「トーストをタップしたあと、ロビーの Ready 画面に戻るか、直接開始するか」で、
 3·2·1 には触れていません。そのため U1 は未決のまま残し、「VS 画面のあとの流れは U2 で決定済み」という一文だけを足しました。
@@ -755,34 +971,12 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   図07 はホスト側のみ。モックではクライアントに "Match code expired" トーストを出し、タップで "Match expired." を表示している。
 - **U19 Connection lost から ‹ で戻ると青い "Waiting for your friend…" バナー**  
   図03 では Connection lost の画面から ‹ で戻ると、待機中のバナー付き Friend Match トップになる。相手が切断されたのに待機扱いでよいか。
-- **U20 対戦後の画面の内容**  
-  ogwssk さんの図は「カウントダウン & ゲーム開始」で終わり、対戦後の画面は無い。モックは QA² の既存の 1 人用リザルト画面 ("RESULT" の見出しと大きな "WIN!" / "LOSE") にならった仮の画面。WIN! / LOSE の見せ方、スコアや対戦の詳細を出すかは未定。
-- **U21 ランク変動の表示と計算**  
-  issue の当初のチェックリストにある「ランクアップ　ランクダウン」。モックの "Rank 12 → 13" (勝つと +1、負けると変わらない) は仮の値。Friend Match でランクが変わるのか、負けたら下がるのか、ランクアップ・ランクダウンの見せ方も未定。
-- **U22 対戦後のボタン構成と文言**  
-  "Rematch" / "Back to Friend Match" は仮。ゲームの UI キットには "REMATCH" ボタンがある。ほかのボタン (Online Battle へ戻るなど) が要るか、文言や大文字・小文字も未定。
-- **U23 再戦の有無と進め方**  
-  再戦できるか、両者の同意が必要か、VS 画面を挟むか、同じ Match Code (同じマッチ) を使うか。モックは中立な仮の流れとして、押した側に "Waiting for your friend…"、相手に "Your friend wants a rematch" を出し、両者が押したら VS 画面からやり直す。
-  U31 の決定 (両者が Start Match を押したら開始) は初回の開始についてのもので、再戦でもロビーに戻って両者の Start Match を挟むのか、両者の Rematch だけで開始するのかは決まっていない。
-- **U24 対戦後の戻り先**  
-  モックでは "Back to Friend Match" で Friend Match トップ (Match Code 入力欄は空) に戻る。Online Battle や、同じマッチのロビーに戻る案もありうる。
-- **U25 結果画面で相手が先に抜けた・切断したときの表示**  
-  モックでは相手が "Back to Friend Match" で抜けても、自分の結果画面は変わらない (再戦待ちの "Waiting for your friend…" や "Your friend wants a rematch" もそのまま残る)。相手が抜けた・切断したことをどう伝えるかは未定。
-- **U26 結果画面から自動で次へ進むか**  
-  タイムアウトで自動的に次の画面へ進むのか、ボタンを押すまで結果画面に留まるのか。両者の操作が必要か。モックには自動遷移が無い。
-- **U27 結果画面であいさつ絵文字を送れるか**  
-  issue の「あいさつ＋絵文字」はモックでは VS 画面に表示している。対戦後にもあいさつや絵文字を送れるか。
-- **U28 勝敗が決まらない場合 (引き分け・対戦中の切断)**  
-  端末の下の Win / Lose ボタンはモック操作で、勝敗の判定そのものと、両端末に同じ結果を出す同期は対象外。引き分け、対戦中の切断のときの扱いと画面は未定。
-  オンライン対戦の降参 (MATCH MENU の SURRENDER) は U38 / U40 / U41 で決定済み。
-- **U29 ランダム対戦の対戦後**  
-  ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。
-- **U30 再戦の申し込みの取り消し・応答待ちのタイムアウト**  
-  モックでは Rematch を押したあと取り消せない (待機中の Rematch は押せない)。相手が応じないときのタイムアウトや、申し込まれた側が断る手段も未定。
+- **U20〜U30** - 決定済み (上の「決定済み」を参照)
 - **U13a** - 決定済み (上の「決定済み」を参照)。U13 の残りも決定済み
 - **U31** - 決定済み (上の「決定済み」を参照)
 - **U32 ゲーム本体のカウントダウン中に相手が切断したとき**  
   VS 画面中の切断 (U3) と対戦中の切断 (U28) の間にある、ゲーム画面のカウントダウン (約 3.4 秒) 中に相手が切断した場合の扱いと画面は決まっていない。モックには遷移行が無い。
+  対戦中の切断は U28 で決まった (20 秒待って切断した側の負け、両者なら No contest) が、カウントダウン中にも当てはめるかは決まっていない。
 - **U33 片方だけ Start Match を押した状態で、相手が切断した / いつまでも押さないとき**  
   U31 の決定で、片方が押すと相手が押すまで待つ。その間に相手が切断した場合や、相手がいつまでも押さない場合の扱い (タイムアウトするか、キャンセルになるか、押した側が押したことを取り消せるか) は決まっていない。
   モックには遷移行が無い (片方が押したあとは「通信が不安定になる」などの環境イベントを出せず、押した側の Start Match は無効表示のまま)。
@@ -800,3 +994,26 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   U13 の決定で、相手を探している間にアプリを離れると検索を止め、戻ったときに "Search stopped because you left the app." を出す。
   どの画面の上に出すか、どんなボタンを置くかは決定に書かれていない。モックでは "No opponent found." (U13) とそろえて、Online Battle の上に Search again / Close を出している。
   Close (や OK) だけにする、"Searching for an opponent…" の画面の上に出す、などの案もありうる。
+- **U44 通常の決着のときの終わった理由の文言と、引き分けになる条件**  
+  U20 の決定で結果画面に終わった理由を出すが、降参・切断・接続エラー以外 (ゲームの決着) のときの文言は決まっていない。モックは仮に "Match finished" を出している。
+  また Draw (引き分け) が結果の 1 つになったが、どういうときに引き分けになるかはゲームのルール次第で決まっていない (モックは端末の下のモック操作 Draw)。
+- **U45 降参・切断・接続エラーで終わった試合のあとの再戦**  
+  U28 の決定は「降参した側は再戦を申し込めない」。降参で勝った側から申し込めるか (降参した側が応じられるか) は決まっていない。
+  切断で勝敗が決まった試合と No contest のあと、再戦できるかも決まっていない。モックではどれも再戦のボタンを出さない (降参した側は U41 のとおり Back to Online だけ)。
+  そのため、これらの結果画面では相手が抜けても "Your opponent left. Rematch is not available." (U25) を出していない。
+- **U46 切断を待つ 20 秒の間の両端末の画面と、試合が止まるか**  
+  U28 の決定で、片方が切断したら 20 秒待つ。その間の画面は決まっていない。モックはゲーム画面の上に、残った側には "Your opponent disconnected" / "Waiting for your opponent to reconnect…"、
+  切断した側には "Connection lost" / "Reconnecting…" を出し、20 秒のうちに戻れば試合を続ける (環境イベント「通信が回復する」)。
+  待っている間も試合 (残った側のプレイ) が続くのか止まるのか、待ち時間を画面に出すかも未定。モックでは待っている間は Win / Lose / Draw を押せない。
+- **U47 次の相手を探している間にアプリを離れたとき**  
+  U13 の決定で、Random Match から探している間にアプリを離れると検索を止める ("Search stopped because you left the app."、出す場所とボタンは U43)。
+  結果画面の Find Next Opponent から探している間 (U29) にアプリを離れたときも同じでよいか、通知をどこに出すかは決まっていない。モックには行が無い (端末の下の「アプリを離れる」は押せない)。
+- **U48 VS 画面の "Rank" とレーティング (Elo) の関係**  
+  VS 画面は 10-01 の合意で名前・ランク・あいさつを出し、モックは "Rank 12" / "Rank 9" (架空) を出している。U21 の決定でランダム対戦は Elo のレーティング (初期値 1000) になった。
+  VS 画面の "Rank" はレーティングとは別のもの (プレイヤーのレベルなど) か、レーティングを出すのか、Friend Match でも出すのかは決まっていない。
+- **U49 スタンプのミュートの続く範囲と、送った本人の画面の表示**  
+  U27 の決定でスタンプはミュートできるが、ミュートがいつまで続くか (その結果画面だけ / 同じ相手との再戦の間 / ずっと) は決まっていない。モックは同じ相手と対戦している間 (再戦を含む) だけ続く。
+  送ったスタンプを送った本人の画面にも出すか、ミュートしたことを相手に知らせるかも未定 (モックは本人の画面にも出し、相手には知らせない)。
+- **U50 再戦が取り消し・辞退・期限切れになったとき、メッセージを出さない側の表示**  
+  U30 の決定のメッセージは、取り消されたら相手 ("Rematch request was cancelled")、断られたら申し込んだ側 ("Your opponent declined the rematch")、期限切れなら申し込んだ側 ("No response to rematch request") に出す。
+  もう一方 (取り消した側・断った側・申し込まれたまま期限が切れた側) の表示は決まっていない。モックでは何も出さず、3 秒の間 Rematch を押せない表示にしている。メッセージを 3 秒たったあとも残すかも未定 (モックは 3 秒で消える)。

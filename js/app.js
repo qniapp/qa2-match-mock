@@ -9,6 +9,7 @@
   var EVENT_DELAY = { 'vs.done': 2500, 'game.countdownDone': GAME_COUNTDOWN_MS };
   var MATCH_CODE = 'QWERTY123';
   var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
+  var RESULT_HEADLINES = { Win: ['WIN!', 'win'], Lose: ['LOSE', 'lose'], Draw: ['DRAW', 'draw'], NoContest: ['NO CONTEST', 'nocontest'] };
   var STAGE_TILES = [
     { label: 'H²', color: 'var(--h)' }, { label: 'X²', color: 'var(--x)' },
     { label: 'Y²', color: 'var(--y)' }, { label: 'Z²', color: 'var(--z)' },
@@ -293,7 +294,7 @@
     },
     random: function (dev, s) {
       return header(dev, s, s.title) + '<div class="body center">' +
-        '<div class="status">' + esc(s.status) + '</div><div class="dots"><i></i><i></i><i></i></div></div>' +
+        (s.status ? '<div class="status">' + esc(s.status) + '</div><div class="dots"><i></i><i></i><i></i></div>' : '') + '</div>' +
         buttonsHtml(dev, s.buttons);
     },
     vs: function (dev) {
@@ -317,7 +318,7 @@
       var me = '<div class="g-me">' +
         '<div class="g-hud"><div class="g-time"><span>Time</span><b>0:00</b></div>' +
         '<div class="g-score"><span>Score</span><b>0</b></div></div>' +
-        (s.countdown || s.menu ? '' : '<button type="button" class="g-menu" aria-label="Match menu"' + attrs(dev, 'matchMenu') + '><i></i><i></i><i></i></button>') +
+        (s.countdown || s.menu || s.overlay ? '' : '<button type="button" class="g-menu" aria-label="Match menu"' + attrs(dev, 'matchMenu') + '><i></i><i></i><i></i></button>') +
         fieldHtml(FIELD, 'g-field') +
         (s.countdown ? countdownHtml() : '') +
         '<div class="g-bar"><span class="g-gauge"><i></i></span><span class="g-up">︽</span></div>' +
@@ -326,29 +327,72 @@
         '<div class="g-opp"><div class="g-score small"><span>Score</span><b>0</b></div>' +
         '<div class="g-opp-name">' + esc(opp.name) + '</div>' +
         fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
-        (s.menu ? matchMenuHtml(dev, s.menu) : '');
+        (s.menu ? matchMenuHtml(dev, s.menu) : '') + (s.overlay ? overlayHtml(s.overlay) : '');
     },
-    // 対戦後 (図なし)。値もボタンも仮だが、仮・未決の印は端末の上の帯と右パネルに出す (SCREENS の undecided / context)
+    // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・スコア・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
+    // ボタンと Rating の行は Friend Match かランダム対戦か (セッションの match / rated) で変わる
     result: function (dev, s) {
-      var me = PLAYERS[dev];
-      var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
-      var win = s.outcome === 'WIN';
-      var status = s.surrender ? SURRENDER_STATUS[s.surrender] : { wait: 'Waiting for your friend…', asked: 'Your friend wants a rematch' }[s.rematch];
-      var buttons = s.buttons || [{ label: 'Rematch', event: 'rematch', primary: true }, { label: 'Back to Friend Match', event: 'backToFriendMatch' }];
-      var btn = function (b) {
-        return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+      var other = dev === 'host' ? 'client' : 'host';
+      var head = RESULT_HEADLINES[s.outcome];
+      var score = s.outcome === 'NoContest' ? null : DEMO_SCORES[s.outcome];
+      var rating = ratingText(s.outcome, app.state);
+      var status = REMATCH_STATUS[s.phase];
+      // 相手が送ったスタンプは、ミュートしていなければ相手の名前の上に出す。自分が送ったものは自分の名前の上
+      var player = function (who, isMe) {
+        var stamp = stampById(app.state[who + 'Stamp']);
+        var shown = stamp && (isMe || !app.state[dev + 'Mute']);
+        return '<div class="r-player' + (isMe ? ' me' : '') + '">' +
+          (shown ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
+          (isMe ? '<span class="you">YOU</span>' : '') + '<b>' + esc(PLAYERS[who].name) + '</b></div>';
       };
+      var stats = (score ? '<div class="r-row"><span>Score</span><b>' + fmt(score[0]) + ' \u2013 ' + fmt(score[1]) + '</b></div>' : '') +
+        (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
+        (rating && !/^No /.test(rating) ? '<div class="r-row"><span>Rating</span><b>' + esc(rating) + '</b></div>' : '');
       return header(dev, s, s.title) + '<div class="result">' +
-        '<div class="r-outcome ' + (win ? 'win' : 'lose') + '">' + (win ? 'WIN!' : 'LOSE') + '</div>' +
-        '<div class="r-opp">vs ' + esc(opp.name) + '</div>' +
-        '<div class="r-stats">' +
-        '<div class="r-row"><span>Rank</span><b>' + me.rank + ' → ' + (me.rank + (win ? 1 : 0)) + '</b></div>' +
-        '<div class="r-row"><span>Score</span><b class="dim-value">----</b></div>' +
-        '</div>' +
-        '<div class="r-status ' + (s.surrender ? 'surrendered' : s.rematch || '') + '">' + (status ? esc(status) : '') + '</div>' +
-        '</div><div class="actions">' + buttons.map(btn).join('') + '</div>';
+        '<div class="r-outcome ' + head[1] + '">' + head[0] + '</div>' +
+        '<div class="r-reason">' + esc(END_REASONS[s.reason]) + '</div>' +
+        '<div class="r-players">' + player(dev, true) + '<span class="r-vs">vs</span>' + player(other, false) + '</div>' +
+        (stats ? '<div class="r-stats">' + stats + '</div>' : '') +
+        '<div class="r-status ' + (status ? status.kind : '') + '">' + (status ? esc(status.text) : '') + '</div>' +
+        (s.stamps ? stampsHtml(dev) : '') +
+        '</div>' + resultActionsHtml(dev, resultButtons(s, app.state.match));
     },
   };
+
+  function fmt(n) { return n.toLocaleString('en-US'); }
+
+  function stampById(id) {
+    return STAMPS.filter(function (st) { return st.id === id; })[0] || null;
+  }
+
+  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。🔔 / 🔕 は相手のスタンプのミュート
+  function stampsHtml(dev) {
+    var waiting = app.state[dev + 'Stamp'] !== null;
+    var muted = app.state[dev + 'Mute'];
+    return '<div class="r-stamps">' + STAMPS.map(function (st) {
+      if (waiting) return '<button type="button" class="r-stamp is-disabled" disabled aria-label="' + esc(st.text) + '">' + st.emoji + '</button>';
+      return '<button type="button" class="r-stamp" aria-label="' + esc(st.text) + '"' + attrs(dev, 'stamp.' + st.id) + '>' + st.emoji + '</button>';
+    }).join('') + '<button type="button" class="r-mute' + (muted ? ' muted' : '') + '" aria-label="' + (muted ? 'Unmute stamps' : 'Mute stamps') + '"' +
+      attrs(dev, muted ? 'unmuteStamps' : 'muteStamps') + '>' + (muted ? '\u{1F515}' : '\u{1F514}') + '</button></div>';
+  }
+
+  // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Rematch / Decline) は横に並べる
+  function resultActionsHtml(dev, buttons) {
+    var btn = function (b) {
+      if (b.disabled) return '<button type="button" class="btn is-disabled" disabled>' + esc(b.label) + '</button>';
+      return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+    };
+    var html = '';
+    for (var i = 0; i < buttons.length; i++) {
+      if (buttons[i].half && buttons[i + 1] && buttons[i + 1].half) {
+        html += '<div class="btn-row">' + btn(buttons[i]) + btn(buttons[i + 1]) + '</div>';
+        i++;
+      } else {
+        html += btn(buttons[i]);
+      }
+    }
+    return '<div class="actions result-actions">' + html + '</div>';
+  }
 
   function fieldHtml(cols, cls) {
     return '<div class="' + cls + '">' + cols.map(function (col) {
@@ -369,6 +413,13 @@
     return '<div class="g-cd">' + GAME_COUNTDOWN.digits.map(step).join('') + '</div>';
   }
 
+  // 片方が切断して待っている間の表示 (決定 U28、表示は仮 U46)。MATCH MENU と同じパネルに、ボタンの代わりに順に光る点
+  function overlayHtml(o) {
+    return '<div class="m-dim"><div class="p-panel m-panel" role="status">' +
+      '<div class="m-title">' + esc(o.title) + '</div><p class="m-body">' + esc(o.body) + '</p>' +
+      '<div class="dots"><i></i><i></i><i></i></div></div></div>';
+  }
+
   // MATCH MENU と降参の確認 (決定 U37 / U40)。パネルとボタンは実機のポーズポップアップ (Menu_Pause) にならうが、
   // 試合は止まらないので暗幕は薄くし、ゲーム画面が見えたままにする
   function matchMenuHtml(dev, m) {
@@ -380,13 +431,17 @@
   }
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
-  // ランダム対戦で相手を探している間は、勝敗の代わりに「アプリを離れる」と「60 秒たつ」を出す (決定 U13)
+  // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29)、結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、
+  // それ以外は試合の決着 (Win / Lose / Draw) と、この端末の接続が切れる「切断する」(決定 U28)
   function mockControlsHtml(dev) {
     var btn = function (ev, text) { return '<button type="button" class="mc-btn"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
     if (MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(app.state, dev + '.' + ev); })) {
       return '<span class="mc-label">モック操作 (検索中):</span>' + btn('leaveApp', 'アプリを離れる') + btn('searchTimeout', '60 秒たつ');
     }
-    return '<span class="mc-label">モック操作 (勝敗):</span>' + btn('win', 'Win') + btn('lose', 'Lose');
+    if (isResultState(app.state[dev])) {
+      return '<span class="mc-label">モック操作 (スタンプ):</span>' + btn('stampShown', '3 秒たつ') + btn('stampInterval', '5 秒たつ');
+    }
+    return '<span class="mc-label">モック操作 (対戦):</span>' + btn('win', 'Win') + btn('lose', 'Lose') + btn('draw', 'Draw') + btn('disconnect', '切断する');
   }
 
   // 相手を探すのをやめたときの通知 (決定 U13)。元の画面の上に、確認ダイアログと同じ見た目で出す
@@ -413,7 +468,7 @@
     var name = app.state[dev];
     var spec = SCREENS[name];
     var dlg = app.state[dev + 'Dialog'];
-    $('.state-name', root).innerHTML = stateName(name) + (dlg ? ' + 🗨 ' + esc(dlg) : '');
+    $('.state-name', root).innerHTML = stateName(name) + esc(Engine.extrasLabel(app.state, dev));
 
     var screen = $('.screen', root);
     var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + noticeHtml(dev, spec.notice) + dialogHtml(dev, dlg);
@@ -557,7 +612,11 @@
       if (r.when && Object.keys(r.when).some(function (k) { return /^U\d+$/.test(k) && app.opts[k] !== r.when[k]; })) cls.push('inactive');
       var memo = '<span class="ev-label">' + esc(label(r.event)) + '</span> ';
       if (r.auto) memo += '<span class="auto">⏱ 自動 ' + r.auto / 1000 + 's</span> ';
-      if (r.when) memo += '<span class="when">条件: ' + Object.keys(r.when).map(function (k) { return esc(k + '=' + r.when[k]); }).join(', ') + '</span> ';
+      var conds = Object.keys(r.when || {}).map(function (k) { return k + '=' + r.when[k]; }).concat(Object.keys(r.from).filter(function (k) {
+        return Engine.DEVICES.indexOf(k) === -1 && !/Dialog$/.test(k);
+      }).map(function (k) { return k + '=' + [].concat(r.from[k]).map(String).join('|'); }));
+      if (conds.length) memo += '<span class="when">条件: ' + esc(conds.join(', ')) + '</span> ';
+      if (r.set) memo += '<span class="when">設定: ' + esc(Object.keys(r.set).map(function (k) { return k + '=' + r.set[k]; }).join(', ')) + '</span> ';
       if (r.note) memo += esc(r.note) + ' ';
       memo += r.undecided.map(function (id) {
         return '<button type="button" class="pill-undecided small" data-undecided="' + id + '">' + id + '</button>';
@@ -581,13 +640,22 @@
 
   function renderCurrent() {
     var s = app.state;
-    var dl = function (d) { return s[d + 'Dialog'] ? ' <span class="dlg">+ 🗨 ' + esc(s[d + 'Dialog']) + '</span>' : ''; };
+    var dl = function (d) { var x = Engine.extrasLabel(s, d); return x ? ' <span class="dlg">' + esc(x.slice(1)) + '</span>' : ''; };
     var r = app.lastRow;
     $('#current-state').innerHTML =
       '<div class="cs-line"><span class="role-badge host small">Host</span> <code>' + esc(s.host) + '</code>' + dl('host') + '</div>' +
       '<div class="cs-line"><span class="role-badge client small">Client</span> <code>' + esc(s.client) + '</code>' + dl('client') + '</div>' +
+ sessionHtml() +
       '<div class="cs-last">' + (r ? '直前の遷移: <a href="#row-' + r.id + '" data-row="' + r.id + '">' + r.id + '</a> <code>' + esc(r.event) + '</code>' : '直前の遷移: なし (初期状態)') + '</div>' +
       contextHtml() + decidedHtml();
+  }
+
+  // 対戦のセッション (Friend Match かランダム対戦か、レートが変わるか)。どちらかの端末が対戦相手といる間だけ出す
+  function sessionHtml() {
+    var s = app.state;
+    if (!s.match || !Engine.DEVICES.some(function (d) { return isWithOpponent(s[d]); })) return '';
+    var text = s.match === 'friend' ? 'Friend Match (レートは変わらない)' : s.rated ? 'ランダム対戦 (レートが変わる、Elo)' : 'ランダム対戦の再戦 (レートは変わらない)';
+    return '<div class="cs-session">対戦: <code>match=' + esc(s.match) + ', rated=' + s.rated + '</code> ' + esc(text) + '</div>';
   }
 
   // 今の画面の説明 (SCREENS の context。文字列か、行ごとの配列) とシナリオの端末ごとの注記 (hostNote / clientNote)。

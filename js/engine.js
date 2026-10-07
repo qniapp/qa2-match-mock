@@ -15,12 +15,17 @@ var Engine = (function () {
     return { codeResult: 'auto', createResult: 'ok' };
   }
 
+  // 端末ごとの付属状態 (hostDialog / hostStamp / hostMute など) とセッション (match / rated) は transitions.js の
+  // DEVICE_FIELDS / SESSION_FIELDS で決まる
   function initialState(opts, ctx) {
-    return {
-      host: 'Host.MultiModeSelection', client: 'Client.MultiModeSelection', hostDialog: null, clientDialog: null,
-      opts: Object.assign(defaultOpts(), opts || {}),
-      ctx: Object.assign(defaultCtx(), ctx || {}),
-    };
+    var s = { host: 'Host.MultiModeSelection', client: 'Client.MultiModeSelection' };
+    DEVICES.forEach(function (d) {
+      Object.keys(DEVICE_FIELDS).forEach(function (f) { s[d + f] = DEVICE_FIELDS[f].initial; });
+    });
+    Object.keys(SESSION_FIELDS).forEach(function (k) { s[k] = SESSION_FIELDS[k]; });
+    s.opts = Object.assign(defaultOpts(), opts || {});
+    s.ctx = Object.assign(defaultCtx(), ctx || {});
+    return s;
   }
 
   function matchPat(pat, value) {
@@ -37,19 +42,16 @@ var Engine = (function () {
   function whenHolds(row, state) {
     if (!row.when) return true;
     return Object.keys(row.when).every(function (k) {
-      var actual = /^U\d+$/.test(k) ? state.opts[k] : state.ctx[k];
-      return actual === row.when[k];
+      var actual = /^U\d+$/.test(k) ? state.opts[k] : k in SESSION_FIELDS ? state[k] : state.ctx[k];
+      return matchPat(row.when[k], actual);
     });
   }
 
   function rowMatches(row, state, event) {
     if (row.event !== event) return false;
     if (!whenHolds(row, state)) return false;
-    return DEVICES.every(function (d) {
-      if (!matchPat(row.from[d], state[d])) return false;
-      var want = row.from[d + 'Dialog'];
-      return want === undefined || want === state[d + 'Dialog'];
-    });
+    // from の host / client 以外のキー (hostDialog, clientStamp など) は付属状態の条件
+    return Object.keys(row.from).every(function (k) { return matchPat(row.from[k], state[k]); });
   }
 
   // ダイアログが開いている端末は、ダイアログのボタン以外を操作できない
@@ -66,18 +68,30 @@ var Engine = (function () {
     return null;
   }
 
+  function has(obj, key) { return !!obj && Object.prototype.hasOwnProperty.call(obj, key); }
+
   function apply(state, row) {
     var next = Object.assign({}, state);
     DEVICES.forEach(function (d) {
       var to = row.to[d];
       if (to !== '*' && to !== '=') next[d] = to;
-      if (row.dialog && Object.prototype.hasOwnProperty.call(row.dialog, d)) {
-        next[d + 'Dialog'] = row.dialog[d];
-      } else if (next[d] !== state[d]) {
-        next[d + 'Dialog'] = null; // 画面が変わったら開いていたダイアログは閉じる
-      }
+      Object.keys(DEVICE_FIELDS).forEach(function (f) {
+        var key = d + f;
+        if (has(row.set, key)) next[key] = row.set[key];
+        else if (f === 'Dialog' && has(row.dialog, d)) next[key] = row.dialog[d];
+        // 画面が変わったら、その画面で続かない付属状態は初期値に戻す (ダイアログは必ず閉じる)
+        else if (next[d] !== state[d] && !DEVICE_FIELDS[f].keeps(next[d])) next[key] = DEVICE_FIELDS[f].initial;
+      });
     });
+    Object.keys(SESSION_FIELDS).forEach(function (k) { if (has(row.set, k)) next[k] = row.set[k]; });
     return next;
+  }
+
+  // 端末の上の状態名の後ろに付ける付属状態 (ダイアログ・送ったスタンプ・ミュート)
+  function extrasLabel(state, d) {
+    var dlg = state[d + 'Dialog'];
+    var stamp = state[d + 'Stamp'];
+    return (dlg ? ' + 🗨 ' + dlg : '') + (stamp ? ' + 💬 ' + stamp : '') + (state[d + 'Mute'] ? ' + 🔕' : '');
   }
 
   // 一致する行があれば { state, row }、無ければ null
@@ -131,7 +145,7 @@ var Engine = (function () {
 
   return {
     DEVICES: DEVICES, initialState: initialState, defaultOpts: defaultOpts, defaultCtx: defaultCtx,
-    fire: fire, canFire: canFire, findRow: findRow, nextAuto: nextAuto, deviceOf: deviceOf,
+    fire: fire, canFire: canFire, findRow: findRow, nextAuto: nextAuto, deviceOf: deviceOf, extrasLabel: extrasLabel,
     availableEnvEvents: availableEnvEvents, replay: replay, stepEvent: stepEvent,
   };
 })();

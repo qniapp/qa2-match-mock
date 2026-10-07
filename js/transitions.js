@@ -286,12 +286,18 @@ var TRANSITIONS = (function () {
       note: '確認を閉じてルームに残る (Ready はそのまま)', decided: ['U34'], undecided: ['U51'] });
   });
   // 抜けたあと (U34): クライアントが抜けるとホストは同じ Match Code で次の友だちを待つ。ホストが抜けるとルームは閉じ、クライアントは Friend Match トップへ
+  T({ from: { host: 'Host.FriendMatch.Lobby.Reconnecting', client: roomLeavable('Client'), clientDialog: 'leaveRoom' }, event: 'client.dialog.leaveRoom',
+    to: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null },
+    note: '決定 (U32 / U34): 切断中のホストを待たずに抜けた。ホストは戻ったときに "Your friend left. Waiting for another friend…" (仮、U52)', decided: ['U32', 'U34'], undecided: ['U52'] });
   T({ from: { host: '*', client: roomLeavable('Client'), clientDialog: 'leaveRoom' }, event: 'client.dialog.leaveRoom',
     to: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null },
-    note: '決定 (U34): ホストには "Your friend left. Waiting for another friend…" (Match Code は同じ)。ホストが切断中でも同じ (仮、U52)', decided: ['U34'], undecided: ['U52'] });
+    note: '決定 (U34): ホストには "Your friend left. Waiting for another friend…" (Match Code は同じ)', decided: ['U34'] });
+  T({ from: { host: roomLeavable('Host'), client: 'Client.FriendMatch.Lobby.Reconnecting', hostDialog: 'leaveRoom' }, event: 'host.dialog.leaveRoom',
+    to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Room.HostLeft' }, dialog: { host: null },
+    note: '決定 (U32 / U34): 切断中のクライアントを待たずにルームを閉じた。クライアントは戻ったときに "Room closed. The host left." の Friend Match トップ (仮、U52)', decided: ['U32', 'U34'], undecided: ['U52'] });
   T({ from: { host: roomLeavable('Host'), client: '*', hostDialog: 'leaveRoom' }, event: 'host.dialog.leaveRoom',
     to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Room.HostLeft' }, dialog: { host: null },
-    note: '決定 (U34): ルームを閉じる。クライアントは "Room closed. The host left." で Friend Match トップへ。クライアントが切断中でも同じ (仮、U52)', decided: ['U34'], undecided: ['U52'] });
+    note: '決定 (U34): ルームを閉じる。クライアントは "Room closed. The host left." で Friend Match トップへ', decided: ['U34'] });
 
   // 読み込み (U32): 両者の Ready がそろったら "Starting match…"。20 秒 (仮) で終わらなければ、両者とも Ready 画面に戻る
   T({ from: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, event: 'sys.bothStarted', auto: 1500,

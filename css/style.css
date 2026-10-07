@@ -244,6 +244,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   margin: 0; padding: 12px 14px; border-radius: 10px; background: #161C36; border: 1px solid #3A4466;
   font-size: 14px; font-weight: 600; line-height: 1.45; text-align: center; text-wrap: balance;
 }
+.rd-notice { align-self: stretch; }
 .room-notice { margin-bottom: 18px; }
 /* カウントダウン (Ready の 60 秒・再接続の 20 秒)。モックは始まった直後の秒数のまま描く */
 .rd-timer {

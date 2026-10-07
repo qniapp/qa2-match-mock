@@ -187,6 +187,13 @@ function scan() {
         ['leaveApp', 'disconnect'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]`)) findings.push(`${at}: 端末の下のモック操作に ${ev} が無い`);
         });
+        // Leave Room の確認 (決定 U34 / U35) を開いても、後ろの画面のボタンは消えない
+        if (/🗨 leaveRoom/.test(state)) {
+          const name = state.split(' + ')[0];
+          const want = SCREENS[name].buttons.map((b) => b.label).join(' / ');
+          const got = [...screen.querySelectorAll('.actions .btn')].map((b) => b.textContent).join(' / ');
+          if (got !== want) findings.push(`${at}: 確認の後ろのボタンが ${got} (期待: ${want})`);
+        }
         // カード・お知らせ・状況の一行・ボタンが端末の画面に収まり、重ならない
         const sr = screen.getBoundingClientRect();
         const parts = [...screen.querySelectorAll('.rd-cards, .rd-notice, .rd-info .status, .rd-timer, .actions')].map((el) => [el, el.getBoundingClientRect()]);

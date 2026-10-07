@@ -235,8 +235,11 @@
   }
 
   function buttonsHtml(dev, buttons) {
+    // hideIfNoRow はダイアログを開いているあいだのブロックとは別に判定する (確認ダイアログの後ろでボタンが消えないように)
+    var undimmed = Object.assign({}, app.state);
+    undimmed[dev + 'Dialog'] = null;
     var html = (buttons || []).filter(function (b) {
-      return !(b.hideIfNoRow && !Engine.canFire(app.state, dev + '.' + b.event));
+      return !(b.hideIfNoRow && !Engine.canFire(undimmed, dev + '.' + b.event));
     }).map(function (b) {
       // disabled はゲーム内の無効表示 (Ready を送っている間の "Confirming…" など)。遷移表に行が無いときの破線とは別
       if (b.disabled) return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + ' is-disabled" disabled>' + esc(b.label) + '</button>';

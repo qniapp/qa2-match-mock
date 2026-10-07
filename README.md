@@ -35,8 +35,9 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
   端末の上の黄色い `未決` バッジは、その画面や直前の遷移が未決事項に依存していることを示します。クリックすると未決一覧へ移動します
   (7 個以上のときは番号だけを出し、題名はマウスを乗せると出ます)。
   電話の画面の中には、ゲームが実際に出すものだけを描きます (決定・未決・仮の印やモックの注記は出さない。「端末の画面にはゲームが出すものだけ」を参照)。
-- **右: 状態遷移表** - 上に両端末の現在の状態、今の画面の説明 (例: ゲーム本体のカウントダウン、ポーズポップアップや結果画面の仮の点、シナリオ 8〜10 の「ホストは関与しない」)、
-  「決定済み」の一覧 (緑の `決定` バッジ。今の画面や直前の遷移に関係する項目は明るく表示し、U2 は前提も表示) を出します。
+- **右: 状態遷移表** - 上に両端末の現在の状態、今の画面の説明 (例: ゲーム本体のカウントダウン、MATCH MENU や結果画面の仮の点、シナリオ 8〜10 の「ホストは関与しない」)、
+  「決定済み」の一覧 (緑の `決定` バッジ。今の画面や直前の遷移に関係する項目は題名まで明るく表示し、U2 は前提も表示。
+  ほかの決定はバッジだけを「ほか:」の 1 行に並べ、題名はマウスを乗せると出る) を出します。
   その下で、遷移表 (直前に発火した行を青、今の状態から発火できる行を緑の線で表示)、
   未決一覧 (トグル付き)、イベントログ (新しい順) をタブで切り替えます。
 
@@ -75,14 +76,17 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Ho
 自動開始 (`sys.autoStart`・U31 のトグル・シナリオの別案) が残っていないことを確認します。
 ランダム対戦 (U13a で決定) については、相手が見つかると両端末とも直接 VS 画面になること、ランダム対戦の状態から Ready / Start Match / "Starting match…" へ進む行が無いこと、
 相手を探す画面が "Searching for an opponent…" と大きな Cancel だけ (トーストなし) であること、Cancel で Online Battle に戻ること、シナリオ 11 / 11b の流れを確認します。
-ポーズについては、両端末とも II でポーズ (`Host.Game.Pause` / `Client.Game.Pause`)、CONTINUE でプレイに戻り、QUIT で Online Battle に戻ること、
-相手の端末が変わらないこと、REMATCH・二重のポーズ・ポーズ中の Win / Lose・カウントダウン中のポーズに行が無いこと、
-モック専用の "Back to Online Battle" と "Game in progress (mock)" が残っていないことを確認します。
+MATCH MENU (U37〜U42 で決定) については、両端末とも ☰ で `Host.Game.MatchMenu` / `Client.Game.MatchMenu` が開き、相手の端末が (プレイ中・メニュー中・確認中のどれでも) 変わらないこと、
+CONTINUE でプレイに戻ること、SURRENDER で確認 (`*.Game.SurrenderConfirm`) を挟み、確認の CONTINUE でプレイに戻り、SURRENDER で
+自分は `*.LoseResult.Surrendered`、相手は `*.WinResult.OpponentSurrendered` になること、負けた側は Back to Online Battle で Online Battle に戻ることを確認します。
+メニュー・確認の文言とボタン (CONTINUE / SURRENDER だけで REMATCH / QUIT は無い)、メニュー中・確認中も Win / Lose の行があること (試合は止まらない)、
+カウントダウン中・メニュー中に ☰ の行が無いこと、ポーズの状態・イベント・`timeScale` が残っていないこと、
+U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用の "Game in progress (mock)" が残っていないことも確かめます。
 最後に、端末の画面に決定の注記を出すコードと、端末の上に `決定` バッジを出すコードが無いこと、
-結果画面の仮・未決の印 (U21 / U23 / U24 / U30) が端末の上の帯と右パネルの説明にあることも確認します。
+結果画面の仮・未決の印 (U21、Rematch がある画面は U23、Back to Friend Match がある画面は U24、再戦待ちは U30) が端末の上の帯と右パネルの説明にあることも確認します。
 
 端末の画面の検査: `node tests/scan-screens.mjs` (ヘッドレス Chromium が必要。場所は環境変数 `CHROMIUM` で変えられます) で、
-全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 321 枚) を 1280x720 の画面で実際に描画し、
+全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 341 枚) を 1280x720 の画面で実際に描画し、
 両端末の画面 (`.screen`) に `仮`・`未決`・`決定`・U 番号・日本語・モックの注記 (`.mock-note`、`.pill-*` など) が無いこと、
 端末の上の帯が未決バッジだけで、すべて帯の中に見えていることを確認します。各手順で両端末の状態が遷移表の再生結果と同じかも確かめます。
 遷移表に行が無いボタンの破線・半透明 (`[data-norow]`) はモックの操作の手がかりとして残しているので、数を表示するだけです。
@@ -94,13 +98,15 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Ho
 
 - 役割: `Host.` / `Client.` (本体の `MultiplayManager.IsHost()` / `IsClient()` [1])
 - 画面: `MultiModeSelection` (Online Battle) / `FriendMatch.Room` (Friend Match トップ) / `FriendMatch.Lobby` (Match Code を発行したあとの待機・Ready) /
-  `Matchmake` (ランダム対戦で相手を探す) / `Opponent` (VS 画面) / `Game.Countdown` / `Game.Play` / `Game.Pause` / `WinResult` / `LoseResult`、
+  `Matchmake` (ランダム対戦で相手を探す) / `Opponent` (VS 画面) / `Game.Countdown` / `Game.Play` / `Game.MatchMenu` / `Game.SurrenderConfirm` / `WinResult` / `LoseResult`、
   ホストの離席は `Host.Away.FriendMatchRoom.*` / `Host.Away.StageSelection.*`
 - 本体に 1 対 1 の名前が無いもの (Room、Lobby、Opponent (VS 画面)、Countdown、離席の Away、ステージ選択、図の段階名) には **近い名前を当てた** ので、下の表の「対応」に書いています。
 - 遷移表のグループ名も同じ形にしました (例: `Host.FriendMatch.Lobby.Cancelable`)。グループは状態名と重ならない名前 (`.Any` や形容詞) にしています。JS の変数名は `hostCancelable` などの camelCase です。
 
 改名は 67 状態と 12 グループ (計 79 個) です。遷移表の行・画面の描画仕様は改名前と同じです (改名前の遷移表を下の表で写したものと、改名後の 135 行が一致することを確認)。
 URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名には状態名が入っていないので、どちらもそのまま使えます。
+その後、MATCH MENU の決定 (2026-10-07) で `Game.Pause` を `Game.MatchMenu` に改名し、`Game.SurrenderConfirm` と降参の結果画面 (`LoseResult.Surrendered` / `WinResult.OpponentSurrendered`) を足したので、
+今は 73 状態・14 グループ、遷移表は 141 行です (「対戦中の MATCH MENU」を参照)。
 `node tests/check.js` は、すべての状態名とグループ名が `Host.` / `Client.` + 大文字で始まる名前をドットでつないだ形であること、遷移表の host 欄に `Host.`、client 欄に `Client.` の状態だけがあることも確かめます。
 
 根拠にした qa2 本体のファイル (`/home/yasuhito/Work/qa2-verify` からの相対パス):
@@ -175,8 +181,8 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 | `C_GAME_COUNTDOWN` | `Client.Game.Countdown` | `CountdownTimer` [8] (`Game` は `GameState` [6]) | 近い名前を当てた |
 | `H_GAME` | `Host.Game.Play` | `GameState.Play` [6] | 一致 |
 | `C_GAME` | `Client.Game.Play` | `GameState.Play` [6] | 一致 |
-| `H_GAME_PAUSED` | `Host.Game.Pause` | `PauseView` [9] / `GameModeTransitionScreen.Pause` [7] | 一致 |
-| `C_GAME_PAUSED` | `Client.Game.Pause` | `PauseView` [9] / `GameModeTransitionScreen.Pause` [7] | 一致 |
+| `H_GAME_PAUSED` | `Host.Game.Pause` → `Host.Game.MatchMenu` (2026-10-07) | 改名時は `PauseView` [9] / `GameModeTransitionScreen.Pause` [7]。MATCH MENU はオンライン専用の新しい画面で、本体に名前は無い (U37) | 改名時は一致。今は本体に無い |
+| `C_GAME_PAUSED` | `Client.Game.Pause` → `Client.Game.MatchMenu` (2026-10-07) | 改名時は `PauseView` [9] / `GameModeTransitionScreen.Pause` [7]。MATCH MENU はオンライン専用の新しい画面で、本体に名前は無い (U37) | 改名時は一致。今は本体に無い |
 | `H_RESULT_WIN` | `Host.WinResult` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] | 一致 |
 | `C_RESULT_WIN` | `Client.WinResult` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] | 一致 |
 | `H_RESULT_WIN_REMATCH_WAIT` | `Host.WinResult.RematchWaiting` | `GameModeTransitionScreen.WinResult` [7] / `WinView` [10] + モックの段階 `RematchWaiting` (U23) | 近い名前を当てた (段階名はモック独自) |
@@ -206,6 +212,10 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 | `C_TOP_FILLED` | `Client.FriendMatch.Room.CodeFilled` | `clientRoomFilled` | Match Code が入力済みの Room (5 状態) |
 | `H_RESULT_ANY` | `Host.Result.Any` | `hostResultAny` | ホストの結果画面のすべて (6 状態) |
 | `C_RESULT_ANY` | `Client.Result.Any` | `clientResultAny` | クライアントの結果画面のすべて (6 状態) |
+
+2026-10-07 (MATCH MENU) の変更: `Host.Result.Any` / `Client.Result.Any` に相手が降参した勝ちの結果画面 (`*.WinResult.OpponentSurrendered`) を足して 7 状態にしました
+(降参した側の `*.LoseResult.Surrendered` は Back to Friend Match が無いので入れていない)。
+新しいグループ `Host.Game.InPlay` / `Client.Game.InPlay` (`hostInPlay` / `clientInPlay`、3 状態ずつ) は、試合が続いている状態 (`Game.Play` / `Game.MatchMenu` / `Game.SurrenderConfirm`) です。
 
 ## シナリオ一覧
 
@@ -237,8 +247,9 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 | 15 | 通常対戦 → 対戦後 (ホスト勝利) | 01 + なし (対戦後) |
 | 15b | 通常対戦 → 対戦後 (ホストが Lose を押す) | 01 + なし (対戦後) |
 | 15c | 対戦後に再戦 (仮) | なし (対戦後) |
-| 16 | 対戦中にポーズ → 再開 (CONTINUE) | なし (実機の VsAI のポーズ) |
-| 16b | 対戦中にポーズ → QUIT | なし (実機の VsAI のポーズ) |
+| 16 | 対戦中に MATCH MENU → CONTINUE (試合は続く) | なし (10-07 の決定、案A) |
+| 16b | 対戦中に降参 (SURRENDER → 確認 → 負け) | なし (10-07 の決定、案A) |
+| 16c | MATCH MENU を開いている間に試合が終わる | なし (10-07 の決定、案A) |
 
 ## 開始は両者の Start Match (2026-10-03 決定、U31、Friend Match だけ)
 
@@ -319,7 +330,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 - 自分のフィールドの上の中央に、細い水色 (`#D3F7FB`) の数字と、同じ色の細い円のリング。3 → 2 → 1 だけで、"GO" / "START" の文字は出ません (ゲームでは開始は効果音だけ)。
 - タイミング: ゲーム画面が出てから 1 秒待ち、数字 1 つにつき 0.8 秒 (合計 3.4 秒)。数字は 0.5 → 0.66 倍に拡大しながら 0.15 秒で現れ、0.55 秒まで少しずつ大きくなり、
   最後の 0.25 秒で 1.6 倍に広がりながら消えます。リングも同じタイミングで 0.2 → 0.34 → 1.6 倍。
-- カウントダウン中はポーズボタンが無く、端末の下の Win / Lose も押せません (遷移表に行が無い)。"1" が消えるとポーズボタン (右上の ‖) が出てプレイ開始になり、Win / Lose が押せるようになります。
+- カウントダウン中はメニューボタンが無く、端末の下の Win / Lose も押せません (遷移表に行が無い)。"1" が消えるとメニューボタン (右上の ☰、U37) が出てプレイ開始になり、Win / Lose が押せるようになります。
 - ゲーム画面は実機にならったプレースホルダーです: 上に相手の小さなフィールド、その下に "Time 0:00" と "Score 0"、自分のフィールド、下のバー。
 - 決定 U2 とその前提 (「前提として、ゲーム側で VsPlayer の modeStartAnimationType を None から Countdown に変える（設定 1 行）」) は、
   右パネルの「決定済み」に出しています。以前はカウントダウンの画面の中に注記を出していましたが、端末の画面にはゲームが出すものだけを描くことにしたので、右パネルへ移しました。
@@ -329,8 +340,8 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 | 変更 | 状態 / イベント |
 |---|---|
 | 削除 | 状態 `H_COUNTDOWN` / `C_COUNTDOWN` (旧名、案 C への改名より前に削除したので対応表には無い。モック独自の 3·2·1 の画面)、イベント `countdown.done` |
-| 追加 | 状態 `Host.Game.Countdown` / `Client.Game.Countdown` (ゲーム画面 + ゲーム本体のカウントダウン、ポーズボタンなし)、イベント `game.countdownDone` (自動、3.4 秒) |
-| 変更なし | `Host.Game.Play` / `Client.Game.Play` (プレイ中、ポーズボタンあり、Win / Lose を押せる) |
+| 追加 | 状態 `Host.Game.Countdown` / `Client.Game.Countdown` (ゲーム画面 + ゲーム本体のカウントダウン、メニューボタンなし)、イベント `game.countdownDone` (自動、3.4 秒) |
+| 変更なし | `Host.Game.Play` / `Client.Game.Play` (プレイ中、メニューボタン ☰ あり、Win / Lose を押せる) |
 
 流れ: `Host.Opponent` / `Client.Opponent` → `vs.done` → `Host.Game.Countdown` / `Client.Game.Countdown` → `game.countdownDone` → `Host.Game.Play` / `Client.Game.Play`。
 このときの遷移表の行数は 126 行のままでした (`vs.done` の行き先を変え、`countdown.done` の行を `game.countdownDone` に置き換えた)。
@@ -343,7 +354,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 
 - `index.html#s=1&step=11&cd=3` - 両端末に "3" とリング
 - `index.html#s=1&step=11&cd=1` - 両端末に "1" とリング
-- `index.html#s=1&step=12` - カウントダウンが終わってプレイ開始 (ポーズボタンあり、Win / Lose が押せる)
+- `index.html#s=1&step=12` - カウントダウンが終わってプレイ開始 (メニューボタン ☰ あり、Win / Lose が押せる)
 
 カウントダウン中に相手が切断した場合の扱いは決まっていないので、遷移行は作らず未決 U32 にしています。
 
@@ -351,65 +362,79 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 
 ![ゲーム本体のカウントダウン: 1](docs/screenshots/24-ingame-countdown-1.png)
 
-![カウントダウン後: ポーズボタンが出て Win / Lose が押せる](docs/screenshots/25-game-started-pause.png)
+![カウントダウン後: メニューボタン (☰) が出て Win / Lose が押せる](docs/screenshots/25-game-started-menu.png)
 
-## 対戦中のポーズポップアップ (2026-10-03)
+## 対戦中の MATCH MENU (2026-10-07 決定、案A / U37〜U42)
 
-プレイ中の右上のポーズボタン (II) で、実機の VsAI と同じ見た目のポーズポップアップを開けるようにしました。
-以前のゲーム画面にあったモック専用の "Game in progress (mock)" の文字と "Back to Online Battle" ボタンは削除しました (端末の下の Win / Lose はそのまま)。
+高宮さんの決定 (2026-10-07、案A): オンライン対戦では、VsAI のポーズポップアップの代わりに **MATCH MENU (☰)** を出します。**試合は止まりません。**
+以前のモック (2026-10-03) は「オンラインでも VsAI と同じポーズポップアップ (CONTINUE / REMATCH / QUIT) を出す」仮の案でしたが、それを置き換えました。
 
-**注意: 実ゲームの VsPlayer (オンライン対戦) では、ポーズボタン自体が出ません** (`GameManager.StartGamePlay` で `HidePause()`)。
-また VsAI やソロのポーズは `Time.timeScale = 0` でゲームを止めますが、オンラインでは同じようには止められません。
-このモックは「オンラインでもポーズを出す」前提の案で、出すかどうかは未決 U37 です。
+| ID | 決定 |
+|---|---|
+| U37 | ☰ MATCH MENU。開いても試合は止まらない (オンラインでは `Time.timeScale = 0` にしない)。メニューに "The match continues while the menu is open." と出す |
+| U38 | メニューを開いただけでは相手には何も見えない。降参すると自分は負け、相手は勝ちの結果画面に "Your opponent surrendered" |
+| U39 | 対戦中に REMATCH / RETRY は出さない。再戦は結果画面だけ |
+| U40 | 降参の前に確認「降参しますか？ 負けになります」("Surrender?" / "You will lose.")。ボタンは CONTINUE (続ける) / SURRENDER (降参する)。確認中も試合は続く |
+| U41 | ボタンは QUIT ではなく SURRENDER。負けの結果画面のあとは Online Battle (`Host.MultiModeSelection` / `Client.MultiModeSelection`) へ戻る |
+| U42 | MATCH MENU 中も BGM を下げない (ダッキングしない)。モックには音が無いので記録だけ |
 
-### 見た目 (実機の `Menu_Pause` にならう)
+以前のゲーム画面にあったモック専用の "Game in progress (mock)" の文字は 2026-10-03 に削除したままです (端末の下の Win / Lose はそのまま)。
 
-実機の値は参照解像度 1170 幅の単位なので、電話の画面幅 360px に合わせて × 0.3077 で縮めています。
+### 見た目
 
-- 画面全体に黒の暗幕 (`#000000` α 0.784)。ブラーは無し。HUD のポーズボタンはポーズ中は消える
-- 中央に黒い角丸のパネル (塗り `#0B0B0B` α 0.9、白い枠線、880 x 570 → 271 x 175px)。タイトルは無い
-- 全幅のボタンが縦に 3 つ (800 x 130 → 246 x 40px、上下の余白 60 → 18.5px、間隔 30 → 9.2px)。文字は Oxanium Regular、白、中央揃え
-  - `CONTINUE`: 塗り `#020202`、白の細い枠 (α 0.31)、文字間隔 0
-  - `REMATCH`: 塗り `#6366F1` α 0.51、白の細い枠 (α 0.31)、薄い走査線、文字間隔 0.05em
-  - `QUIT`: 塗り `#EF2B2B` α 0.51、白の細い枠 (α 0.31)、薄い走査線、文字間隔 0.05em
-- 開閉のアニメーションと確認ダイアログは無い (実機と同じ)
+パネルとボタンは実機のポーズポップアップ (`Menu_Pause`) の値を、電話の画面幅 360px に合わせて × 0.3077 で縮めたものです
+(パネル 271px 幅、塗り `#0B0B0B` α 0.9、白い枠線。ボタン 246 x 40px、間隔 9.2px、文字は Oxanium Regular、文字間隔 0.05em)。ポーズと違うのは次の点です。
 
-文字間隔は TMP の characterSpacing 5 (1/100 em 単位) なので 0.05em にしました。実機のキャプチャで測った文字幅 (720 幅で REMATCH 133px、QUIT 63px) とも一致します。
+- HUD の右上のボタンは ‖ ではなく ☰ (同じ枠に横線 3 本)。プレイ中だけ出て、メニュー・確認を開いている間は消える
+- 暗幕は実機のポーズの α 0.784 より薄い α 0.35。試合が続いていることが分かるように、フィールドや HUD が見えたまま
+- パネルの上にタイトル (`MATCH MENU` / `Surrender?`) と一文 ("The match continues while the menu is open." / "You will lose.") がある
+- ボタンは 2 つだけ: `CONTINUE` (塗り `#020202`) と `SURRENDER` (実機の QUIT と同じ `#EF2B2B` α 0.51 の塗りと薄い走査線)
 
 ### 動き
 
-| ボタン | モック | 実機 (VsAI) | 未決 |
+| 操作 | 自分の端末 | 相手の端末 | 決定 |
 |---|---|---|---|
-| II (ポーズ) | ポーズポップアップを開く。相手の端末は変えない (仮置き) | ポップアップを開き、ゲームを止める | U37, U38 |
-| CONTINUE | ポップアップを閉じてプレイに戻る | 同じ | - |
-| REMATCH | 遷移行が無い (破線・半透明で押せない)。文言は VsAI のものを仮に置いた | その場で再戦 (ソロでは RETRY) | U39 |
-| QUIT | 確認なしで、その端末の Online Battle に戻る。相手の端末は変えない (仮置き) | 確認なしで AI 選択画面へ (ソロは SOLO 選択画面) | U38, U40, U41 |
+| ☰ | MATCH MENU を開く (試合は続く) | 変わらない | U37, U38 |
+| MATCH MENU の CONTINUE | メニューを閉じてプレイの画面に戻る | 変わらない | U37 |
+| MATCH MENU の SURRENDER | 降参の確認 "Surrender?" / "You will lose." を開く (試合は続く) | 変わらない | U40, U41 |
+| 確認の CONTINUE | 確認を閉じてプレイの画面に戻る | 変わらない | U40 |
+| 確認の SURRENDER | 負けの結果画面 ("LOSE"、"You surrendered"、Back to Online Battle) | 勝ちの結果画面 ("WIN!"、"Your opponent surrendered"、Back to Friend Match)。メニューや確認を開いていても同じ | U38, U40 |
+| 負けの結果画面の Back to Online Battle | Online Battle に戻る | 結果画面のまま | U41 |
 
-ポーズ中は Win / Lose を押せません (両端末がプレイ中のときだけ行がある、という今までの規則のまま)。
-片方が QUIT したあと、残された側はゲーム画面のままで、ポーズ → QUIT で抜けられます。相手に何を見せるか (勝敗の扱いを含む) は未決 U38 です。
+- 試合は止まらないので、メニューや確認を開いていても端末の下の Win / Lose (試合の決着) は押せます。そのときは開いていたメニューが閉じて、通常の結果画面になります (シナリオ 16c)。
+- 降参の結果画面には Rematch はありません (降参した側はすぐ Online Battle に戻るため)。勝った側の Back to Friend Match の戻り先は、通常の結果画面と同じく未決 U24 です。
+- 降参の結果画面のボタンの文言 ("Back to Online Battle") と Rank / Score の表示は、通常の結果画面と同じく仮です (U22 / U21)。
+- 引き分けと対戦中の切断は、まだ未決 U28 です (降参の部分だけ U38 / U40 / U41 で決まった)。
 
 ### 状態・イベント
 
 | 変更 | 状態 / イベント |
 |---|---|
-| 追加 | 状態 `Host.Game.Pause` / `Client.Game.Pause` (ゲーム画面 + ポーズポップアップ)、イベント `host.pause` / `client.pause`、`host.continue` / `client.continue`、`host.quit` / `client.quit`。REMATCH のイベント `host.pauseRematch` / `client.pauseRematch` はラベルだけで行は無い |
-| 削除 | イベント `host.backToOnline` / `client.backToOnline` (モック専用のリセット) とその 2 行 |
+| 改名 | 状態 `Host.Game.Pause` / `Client.Game.Pause` → `Host.Game.MatchMenu` / `Client.Game.MatchMenu` |
+| 追加 | 状態 `Host.Game.SurrenderConfirm` / `Client.Game.SurrenderConfirm` (降参の確認)、`Host.LoseResult.Surrendered` / `Client.LoseResult.Surrendered` (降参した側)、`Host.WinResult.OpponentSurrendered` / `Client.WinResult.OpponentSurrendered` (相手が降参した側) |
+| 追加 | イベント `*.matchMenu` (☰)、`*.matchMenu.continue`、`*.matchMenu.surrender`、`*.surrenderConfirm.continue`、`*.surrenderConfirm.surrender`、`*.backToOnlineBattle` (`*` は `host` / `client`) |
+| 削除 | イベント `*.pause` / `*.continue` / `*.quit` / `*.pauseRematch` |
+| 変更 | Win / Lose の 4 行 (T124〜T127) の `from` を `Host.Game.InPlay` / `Client.Game.InPlay` (プレイ中・メニュー中・確認中) に広げた |
 
-遷移表は 131 行から 135 行になりました (`backToOnline` の 2 行を削除し、ポーズの 6 行を同じ場所 (T30〜T35) に追加)。
-そのため、対戦後の行は T120〜T135 になりました。手順の数はどのシナリオも変わらないので、既存の `#s=..&step=..` はそのまま使えます。
+遷移表は 135 行から 141 行になりました (ポーズの 6 行 T30〜T35 を MATCH MENU の 10 行 T30〜T39 に置き換え、末尾に降参した側の Back to Online Battle の 2 行 T140 / T141 を追加)。
+そのため、対戦後の行は T124〜T139 になりました。シナリオ 16 / 16b は書き直し、16c を足しました。ほかのシナリオの手順の数は変わらないので、既存の `#s=..&step=..` はそのまま使えます。
 
-- `index.html#s=16&step=13` - ホストだけポーズ (クライアントはゲーム画面のまま)
-- `index.html#s=16&step=14` - 両者がポーズ
-- `index.html#s=16&step=15` - ホストが CONTINUE でプレイに戻った (クライアントはポーズ中)
-- `index.html#s=16b&step=14` - ホストが QUIT で Online Battle に戻った (クライアントはゲーム画面のまま)
+- `index.html#s=16&step=13` - ホストだけ MATCH MENU (クライアントはプレイ中のまま)
+- `index.html#s=16&step=14` - 両者が MATCH MENU
+- `index.html#s=16b&step=14` - ホストの降参の確認 "Surrender?" / "You will lose."
+- `index.html#s=16b&step=18` - ホストは負け "You surrendered"、クライアントは勝ち "Your opponent surrendered"
+- `index.html#s=16b&step=19` - ホストが Back to Online Battle で Online Battle に戻った
+- `index.html#s=16c&step=14` - ホストが MATCH MENU を開いている間にクライアントが勝った
 
-![ホストのポーズポップアップ](docs/screenshots/29-pause-host.png)
+![ホストの MATCH MENU (クライアントはプレイ中のまま)](docs/screenshots/29-match-menu-host.png)
 
-![両者のポーズポップアップ](docs/screenshots/30-pause-both.png)
+![両者の MATCH MENU](docs/screenshots/30-match-menu-both.png)
 
-![ホストが CONTINUE でプレイに戻る](docs/screenshots/31-pause-continue.png)
+![降参の確認](docs/screenshots/31-surrender-confirm.png)
 
-![ホストが QUIT で Online Battle に戻る](docs/screenshots/32-pause-quit.png)
+![降参の結果: 負け "You surrendered" / 勝ち "Your opponent surrendered"](docs/screenshots/32-surrender-result.png)
+
+![MATCH MENU を開いている間に試合が終わる](docs/screenshots/36-match-ends-during-menu.png)
 
 ## 端末の画面にはゲームが出すものだけ (2026-10-03)
 
@@ -417,7 +442,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 
 - カウントダウンの画面にあった決定 U2 の注記 (前提の説明と `決定 U2` バッジ) を削除し、右パネルの「決定済み」に移しました。
 - 端末の上の帯には `未決` バッジだけを出し、`決定` バッジ (U2, U31) は右パネルの「決定済み」に移しました。今の画面や直前の遷移に関係する決定は、そこで明るく表示します。
-- 画面の説明 (ゲーム本体のカウントダウン、ポーズポップアップの仮の点など) も、右パネルの現在の状態の下に出します。
+- 画面の説明 (ゲーム本体のカウントダウン、MATCH MENU の決定、結果画面の仮の点など) も、右パネルの現在の状態の下に出します。
 - 続けて、電話の画面の中に残っていた未決・仮の印とモックの注記も外へ出しました (2026-10-03)。
 
 | 状態 | 以前は画面の中にあったもの | 移した先 |
@@ -430,7 +455,7 @@ VS 画面が終わるとゲーム画面に移り、ゲーム本体の開始カ�
 
 | 状態 | 画面の中にあるもの | 場所 |
 |---|---|---|
-| すべての状態 | 遷移表に行が無いボタンの破線・半透明 (例: ポーズの REMATCH、片方だけ押したあとの ‹) | `css/style.css` `.screen [data-norow]` |
+| すべての状態 | 遷移表に行が無いボタンの破線・半透明 (例: 片方だけ押したあとの ‹、再戦待ちの Rematch) | `css/style.css` `.screen [data-norow]` |
 | `Host.Game.*` / `Client.Game.*`、`Host.Away.StageSelection.*` / `Client.Away.StageSelection.*` | ゲーム画面 (フィールド・HUD) とステージ選択の画面そのものがプレースホルダー | `js/app.js` `VIEWS.game` / `VIEWS.stage` |
 
 ## ランダム対戦は相手が見つかり次第 VS へ (2026-10-03 決定、U13a)
@@ -488,7 +513,7 @@ ogwssk さんの図は「カウントダウン & ゲーム開始」で終わっ�
 ### 使い方
 
 - 各端末の下に `モック操作 (勝敗): [Win] [Lose]` があります。ゲーム内 UI ではなく、勝敗を決めるためのモック操作です (勝敗判定そのものは対象外)。
-- 押せるのは両端末が対戦中 (ゲーム本体のカウントダウンが終わったあとのゲーム画面、`Host.Game.Play` / `Client.Game.Play`) のときだけです。カウントダウン中 (`Host.Game.Countdown` / `Client.Game.Countdown`) は押せません。
+- 押せるのは両端末が対戦中 (ゲーム本体のカウントダウンが終わったあとのゲーム画面。MATCH MENU や降参の確認を開いていても試合は続くので押せる、U37) のときだけです。カウントダウン中 (`Host.Game.Countdown` / `Client.Game.Countdown`) は押せません。
   押せるかどうかは遷移表で決まり、行が無いときは他のボタンと同じく破線・半透明になります。
 - 片方で **Win** を押すと、その端末は "WIN!"、もう片方は自動で "LOSE" の結果画面になります。**Lose** を押すとその逆です。
 
@@ -519,7 +544,7 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
   クライアント側も同じく `Client.WinResult*` / `Client.LoseResult*`。遷移表ではグループ `Host.Result.Any` / `Client.Result.Any` として表示します。
 - イベント: `host.win` / `host.lose` / `client.win` / `client.lose` (モック操作)、`host.rematch` / `client.rematch`、
   `host.backToFriendMatch` / `client.backToFriendMatch`
-- 行: 同じ `TRANSITIONS` の末尾に 16 行を追加しました (追加時は T111〜T126。U31 の行とポーズの行を足したので、今は T120〜T135)。
+- 行: 同じ `TRANSITIONS` の末尾に 16 行を追加しました (追加時は T111〜T126。U31 の行と MATCH MENU の行を足したので、今は T124〜T139)。
   「相手は結果画面のまま」の行は `to` を `'='` (同じ状態のまま) で書いており、残された側の端末にも U25 のバッジが出ます。
 
 ### シナリオ
@@ -585,6 +610,24 @@ Rematch を行の無いボタン (破線) にするだけの案も考えまし�
   相手が見つかったらすぐ VS 画面へ進む (Ready・Start Match・"Starting match…" は挟まない)。両者が Start Match を押す U31 は Friend Match だけ。
   相手を探している画面には "Searching for an opponent…" (点が順に光る) と、席を外す人のための大きな Cancel を出す。Cancel を押すと Online Battle の画面に戻る。
   Cancel に確認を挟むか、離席・タイムアウトの扱いは未決のまま U13 に残しました。詳しくは「ランダム対戦は相手が見つかり次第 VS へ」を見てください。
+- **U37 オンライン対戦は ☰ MATCH MENU。開いても試合は止まらない** - 決定 (高宮さん 2026-10-07、案A)  
+  オンライン対戦では VsAI のポーズポップアップの代わりに MATCH MENU (☰) を出す。VsAI やソロのポーズのように `Time.timeScale = 0` でゲームを止めることはせず、メニューを開いている間も試合は続く。
+  メニューには "The match continues while the menu is open." と出し、CONTINUE (閉じる) と SURRENDER (降参) を置く。メニュー中に試合が終われば、そのまま結果画面へ進む。
+- **U38 メニューを開いても相手には何も見えない。降参すると相手は勝ち + "Your opponent surrendered"** - 決定 (高宮さん 2026-10-07、案A)  
+  MATCH MENU を開いただけでは、相手の端末には何も出さない。降参すると降参した側は負けの結果画面 ("You surrendered")、相手は勝ちの結果画面に "Your opponent surrendered" を出す (相手がメニューや確認を開いていても同じ)。
+- **U39 対戦中に REMATCH / RETRY は出さない (再戦は結果画面だけ)** - 決定 (高宮さん 2026-10-07、案A)  
+  実機のポーズポップアップの 2 番目のボタン (VsAI では REMATCH、ソロでは RETRY) は MATCH MENU に置かない。再戦は結果画面の Rematch だけ (進め方は未決 U23)。
+- **U40 降参の前に確認を出す ("Surrender?" / "You will lose.")** - 決定 (高宮さん 2026-10-07、案A)  
+  SURRENDER を押すと確認「降参しますか？ 負けになります」(画面の英語は "Surrender?" / "You will lose.") を出す。ボタンは CONTINUE (続ける、プレイに戻る) と SURRENDER (降参する)。確認中も試合は続く。
+- **U41 ボタンは SURRENDER (QUIT ではない)。負けの結果画面のあと Online Battle へ** - 決定 (高宮さん 2026-10-07、案A)  
+  MATCH MENU のボタンの文言は QUIT ではなく SURRENDER。降参して負けの結果画面を見たあとは Online Battle (`Host.MultiModeSelection` / `Client.MultiModeSelection`) に戻る。
+  モックでは負けの結果画面の "Back to Online Battle" で戻る (ボタンの文言は未決 U22 で仮)。
+- **U42 MATCH MENU 中も BGM を下げない** - 決定 (高宮さん 2026-10-07、案A)  
+  実ゲームのポーズは BGM を -5dB 下げる (ダッキング) が、MATCH MENU では試合が続くので BGM を下げない。モックには音が無いので、決定の記録だけ。
+
+U37〜U42 は、2026-10-03 のモックで「オンラインでも VsAI のポーズポップアップ (CONTINUE / REMATCH / QUIT) を出す」仮の案に付けていた未決です。
+案A でまとめて決まったので、ポーズの状態・イベントは MATCH MENU に置き換えました (「対戦中の MATCH MENU」を参照)。
+U28 (引き分け・対戦中の切断・降参) のうち、オンライン対戦の降参は U38 / U40 / U41 で決まったので、U28 には引き分けと対戦中の切断だけを残しました。
 
 U1 (Ready トーストから VS への入り方) にも同じ決定を当てはめるか確認しましたが、U1 の論点は「トーストをタップしたあと、ロビーの Ready 画面に戻るか、直接開始するか」で、
 3·2·1 には触れていません。そのため U1 は未決のまま残し、「VS 画面のあとの流れは U2 で決定済み」という一文だけを足しました。
@@ -657,8 +700,9 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   タイムアウトで自動的に次の画面へ進むのか、ボタンを押すまで結果画面に留まるのか。両者の操作が必要か。モックには自動遷移が無い。
 - **U27 結果画面であいさつ絵文字を送れるか**  
   issue の「あいさつ＋絵文字」はモックでは VS 画面に表示している。対戦後にもあいさつや絵文字を送れるか。
-- **U28 勝敗が決まらない場合 (引き分け・対戦中の切断・降参)**  
-  端末の下の Win / Lose ボタンはモック操作で、勝敗の判定そのものと、両端末に同じ結果を出す同期は対象外。引き分け、対戦中の切断、降参したときの扱いと画面は未定。
+- **U28 勝敗が決まらない場合 (引き分け・対戦中の切断)**  
+  端末の下の Win / Lose ボタンはモック操作で、勝敗の判定そのものと、両端末に同じ結果を出す同期は対象外。引き分け、対戦中の切断のときの扱いと画面は未定。
+  オンライン対戦の降参 (MATCH MENU の SURRENDER) は U38 / U40 / U41 で決定済み。
 - **U29 ランダム対戦の対戦後**  
   ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。
 - **U30 再戦の申し込みの取り消し・応答待ちのタイムアウト**  
@@ -679,15 +723,4 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
 - **U36 片方が Start Match を押したあとの表示の細部**  
   U31 で決まったのは「押した側は待機表示、相手側には相手が準備完了であることを表示」まで。モックの文言 (押した側の "Waiting for your friend…"、相手側の名前の下の "Friend is ready!")、
   押した側の Start Match を無効表示にするか隠すか、ホスト・クライアントで同じ表示にするかは仮。
-- **U37 オンライン対戦でポーズを出すか・ゲームを止めるか**  
-  実ゲームの VsPlayer (オンライン対戦) では、プレイ開始時に HidePause() でポーズボタンを隠している。また VsAI やソロのポーズは Time.timeScale = 0 でゲームを止めるが、オンラインでは相手がいるので同じようには止められない。このモックは「オンラインでもポーズボタンとポーズポップアップを出す」前提の案。ポーズを出すか、出すならポーズ中もゲームが進むのか (両者を止めるのか) は決まっていない。
-- **U38 ポーズ・QUIT したとき相手側に何が見えるか・どうなるか**  
-  モックでは、片方がポーズしても QUIT しても相手の端末は変えていない (仮置き)。相手にポーズ中・退出したことをどう伝えるか、QUIT を負け (降参) 扱いにするか、残された側はどの画面へ進むかは決まっていない (対戦中の切断・降参は U28)。
-- **U39 ポーズの 2 番目のボタン (REMATCH / RETRY) をオンラインで出すか**  
-  実機のポーズポップアップの 2 番目のボタンは、VsAI では REMATCH、ソロでは RETRY (どちらも確認なしでその場でやり直す)。モックでは VsAI の文言 REMATCH を仮に置き、遷移行は作っていない (破線で押せない)。オンラインでこのボタンを出すか、出すなら何をするか (相手の同意が要る再戦の申し込みになるのかなど。対戦後の再戦は U23) は決まっていない。
-- **U40 QUIT に確認ダイアログを付けるか**  
-  実ゲームのポーズの QUIT は確認なしですぐに抜ける (モックも同じ)。オンラインでは相手がいて、抜けると対戦が終わるので、確認を挟むかは決まっていない。
-- **U41 QUIT の行き先と表記**  
-  実ゲームの QUIT は VsAI なら AI 選択画面、ソロなら SOLO 選択画面へ戻る。モックではそれにあたる画面として Online Battle に戻している (仮)。Friend Match トップや同じマッチのロビーに戻る案もありうる。ボタンの文言 (QUIT のままか) も未定。
-- **U42 ポーズ中の BGM ダッキングなどの細部**  
-  実ゲームはポーズ中に BGM を -5dB 下げ (ダッキング)、ボタンを押すとクリック音を鳴らす。オンラインでゲームを止めない場合に同じように BGM を下げるかなど、音や細かい演出は決まっていない (モックには音が無い)。
+- **U37〜U42** - 決定済み (上の「決定済み」を参照)

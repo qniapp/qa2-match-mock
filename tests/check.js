@@ -80,10 +80,21 @@ for (const r of TRANSITIONS) if (r.event === 'countdown.done') fail(`${r.id}: �
 if (EVENT_LABELS['countdown.done']) fail('countdown.done のラベルが残っている');
 for (const sc of SCENARIOS) {
   if (sc.steps.some((st) => Engine.stepEvent(st) === 'countdown.done')) fail(`シナリオ ${sc.id} に countdown.done が残っている`);
-  if (/3·2·1 → ゲーム/.test(sc.desc)) fail(`シナリオ ${sc.id} の説明が 3·2·1 → ゲーム のまま`);
 }
 if (/countdown: function|cd-nums|Match start/.test(read('js', 'app.js'))) fail('app.js にモック独自のカウントダウン画面が残っている');
 if (/\.cd-nums|\.countdown \{/.test(read('css', 'style.css'))) fail('style.css にモック独自のカウントダウンのスタイルが残っている');
+
+// シナリオの説明はページに出さず、README のシナリオ一覧に 1 シナリオ 1 行で書く (ID は公開版のそのシナリオへのリンク)
+const scenarioRows = new Map([...read('README.md').matchAll(/^\| \[([0-9a-z]+)\]\(https:\/\/qniapp\.github\.io\/qa2-match-mock\/#s=\1&step=0\) \| (.*) \|$/gm)]
+  .map((m) => [m[1], m[2].split(' | ')]));
+for (const sc of SCENARIOS) {
+  if ('desc' in sc) fail(`シナリオ ${sc.id} の説明 (desc) が js/scenarios.js に残っている`);
+  const row = scenarioRows.get(sc.id);
+  if (!row) fail(`README のシナリオ一覧にシナリオ ${sc.id} の行が無い`);
+  else if (row.length !== 3 || row[0] !== sc.title || row[2].length < 20) fail(`README のシナリオ一覧の ${sc.id} の行が「シナリオ | 元の図 | 説明」になっていない`);
+  else if (/3·2·1 → ゲーム/.test(row[2])) fail(`シナリオ ${sc.id} の説明が 3·2·1 → ゲーム のまま`);
+}
+if (scenarioRows.size !== SCENARIOS.length) fail(`README のシナリオ一覧が ${scenarioRows.size} 行 (シナリオは ${SCENARIOS.length})`);
 
 // シナリオの再生
 const used = new Set();

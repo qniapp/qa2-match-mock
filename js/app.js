@@ -248,14 +248,16 @@
     return html ? '<div class="actions">' + html + '</div>' : '';
   }
 
+  // 画面の下の帯。部屋を残したまま作り直そうとして失敗したとき (付属状態 Failed、決定 U6 / U12) は、部屋の帯の代わりに "Connection failed" を出す
   function toastHtml(dev, key) {
+    if (app.state[dev + 'Failed'] === 'create') key = 'failedCreate';
     if (!key) return '';
     var t = TOASTS[key];
     var tappable = t.tap && Engine.canFire(app.state, dev + '.' + t.tap);
     var tag = tappable ? 'button type="button"' : 'div';
     var close = tappable ? 'button' : 'div';
-    return '<' + tag + ' class="toast ' + t.kind + (tappable ? ' tappable' : '') + '"' + (tappable ? attrs(dev, t.tap) : '') + '>' +
-      esc(t.text) + (tappable ? '<span class="chev">›</span>' : '') + '</' + close + '>';
+    return '<' + tag + ' class="toast ' + t.kind + (t.sub ? ' two-line' : '') + (tappable ? ' tappable' : '') + '"' + (tappable ? attrs(dev, t.tap) : '') + '>' +
+      esc(t.text) + (t.sub ? '<span class="t-sub">' + esc(t.sub) + '</span>' : '') + (tappable ? '<span class="chev">›</span>' : '') + '</' + close + '>';
   }
 
   var VIEWS = {
@@ -286,6 +288,7 @@
         '<div class="body">' +
         '<div class="code-head"><span>Match Code</span><span class="copy">Copy</span></div>' +
         '<div class="code">' + MATCH_CODE + '</div>' +
+        (s.expiry ? '<div class="code-expiry">' + esc(CODE_EXPIRY.text) + '</div>' : '') +
         (s.cards ? readyHtml(dev, s) : '<div class="status-block">' +
           (s.name ? '<div class="peer">' + esc(s.name) + '</div>' : '') +
           '<div class="status' + (s.name ? '' : ' solo') + '">' + esc(s.status).replace(/\n/g, '<br>') + '</div></div>') +
@@ -368,12 +371,16 @@
 
   // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に "✓ Ready" / "Not ready"。
   // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、カウントダウン (秒)
+  // ホストが ‹ で部屋の画面を離れている間 (決定 U14) は、クライアントのカードのホストを "Away" にする (図02 の "Host User / Away")。
+  // 状態名ではなく、ホストの端末の状態 (Host.Away.*) で決まる表示
   function readyHtml(dev, s) {
     var other = dev === 'host' ? 'client' : 'host';
+    var peerAway = dev === 'client' && /^Host\.Away\./.test(app.state.host);
     var card = function (who, ready, isMe) {
-      return '<div class="rd-card' + (ready ? ' ready' : '') + (isMe ? ' me' : '') + '">' + (isMe ? '<span class="you">YOU</span>' : '') +
+      var away = !isMe && peerAway;
+      return '<div class="rd-card' + (ready ? ' ready' : '') + (isMe ? ' me' : '') + (away ? ' away' : '') + '">' + (isMe ? '<span class="you">YOU</span>' : '') +
         '<div class="rd-name">' + esc(LOBBY_NAMES[who]) + '</div>' +
-        '<div class="rd-state">' + (ready ? '\u2713 Ready' : 'Not ready') + '</div></div>';
+        '<div class="rd-state">' + (away ? 'Away' : ready ? '\u2713 Ready' : 'Not ready') + '</div></div>';
     };
     return '<div class="ready-block"><div class="rd-cards">' + card(dev, s.cards.me, true) + card(other, s.cards.them, false) + '</div>' +
       '<div class="rd-info">' +

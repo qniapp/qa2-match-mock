@@ -15,7 +15,7 @@ var Engine = (function () {
     return { codeResult: 'auto', createResult: 'ok' };
   }
 
-  // 端末ごとの付属状態 (hostDialog / hostStamp / hostMute など) とセッション (match / rated) は transitions.js の
+  // 端末ごとの付属状態 (hostDialog / hostStamp / hostMute / hostFailed など) とセッション (match / rated) は transitions.js の
   // DEVICE_FIELDS / SESSION_FIELDS で決まる
   function initialState(opts, ctx) {
     var s = { host: 'Host.MultiModeSelection', client: 'Client.MultiModeSelection' };
@@ -87,11 +87,11 @@ var Engine = (function () {
     return next;
   }
 
-  // 端末の上の状態名の後ろに付ける付属状態 (ダイアログ・送ったスタンプ・ミュート)
+  // 端末の上の状態名の後ろに付ける付属状態 (ダイアログ・送ったスタンプ・ミュート・作り直しの失敗)
   function extrasLabel(state, d) {
     var dlg = state[d + 'Dialog'];
     var stamp = state[d + 'Stamp'];
-    return (dlg ? ' + 🗨 ' + dlg : '') + (stamp ? ' + 💬 ' + stamp : '') + (state[d + 'Mute'] ? ' + 🔕' : '');
+    return (dlg ? ' + 🗨 ' + dlg : '') + (stamp ? ' + 💬 ' + stamp : '') + (state[d + 'Mute'] ? ' + 🔕' : '') + (state[d + 'Failed'] ? ' + ⚠ ' + state[d + 'Failed'] + 'Failed' : '');
   }
 
   // 一致する行があれば { state, row }、無ければ null

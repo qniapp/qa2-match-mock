@@ -217,6 +217,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   text-align: center; padding: 12px 0; border-radius: 8px; font-size: 24px; letter-spacing: 0.08em;
   background: rgba(95, 201, 250, 0.07); border: 1px solid rgba(95, 201, 250, 0.3);
 }
+/* Match Code の期限 (決定 U7)。モックは "30:00" のまま描く */
+.code-expiry { margin-top: 6px; text-align: center; font-size: 12px; color: #9AA3B8; letter-spacing: 0.02em; }
 .status-block { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding-bottom: 40px; }
 .peer { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
 .status { font-size: 16px; color: #C9CED8; line-height: 1.5; }
@@ -238,6 +240,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
   color: #9AA3B8; background: rgba(255, 255, 255, 0.05); border: 1px solid #3A4466;
 }
+/* ホストが部屋の画面を離れている間のクライアントのカード (決定 U14、図02 の "Away") */
+.rd-card.away .rd-state { color: #F5C26B; background: rgba(245, 194, 107, 0.1); border-color: rgba(245, 194, 107, 0.45); }
 .rd-card.ready .rd-state { color: #B8F5C8; background: rgba(74, 222, 128, 0.14); border-color: rgba(74, 222, 128, 0.55); }
 .rd-info { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
 .rd-notice, .room-notice {
@@ -273,12 +277,15 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
 }
 .toast.tappable { cursor: pointer; }
-.toast .chev { position: absolute; right: 12px; }
+.toast .chev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
 .toast.blue { background: #1E88E5; }
 .toast.green { background: #1FB57E; }
 .toast.red { background: #E5352B; box-shadow: 0 0 18px rgba(229, 53, 43, 0.55); }
 .toast.darkred { background: #5E0B0B; }
 .toast.grey { background: #3A3F4B; }
+/* 2 行のトースト ("Connection failed" と説明、決定 U6) */
+.toast.two-line { padding: 8px 28px; line-height: 1.35; }
+.toast .t-sub { display: block; font-size: 12px; font-weight: 500; letter-spacing: 0.01em; opacity: 0.9; }
 
 /* ステージ選択 (別画面の例) */
 .stage-label { padding: 0 24px 10px; font-size: 13px; color: var(--muted); }

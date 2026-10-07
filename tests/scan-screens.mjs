@@ -8,6 +8,9 @@
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
 // 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
+// 部屋の画面 (決定 U1〜U19) は、Match Code の下の "Code expires in 30:00" (U7)、ホストが離れている間だけクライアントのカードのホストが "Away" (U14)、
+// 古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
+// 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
 // 端末の上の帯は未決バッジだけで、すべて見えていること (1280x720 で確かめる) も確かめる。
 // 遷移表に行が無いボタンの破線・半透明 ([data-norow]) はモックの操作の手がかりなので数えるだけにする。
 // 使い方: node tests/scan-screens.mjs   (Chromium の場所は環境変数 CHROMIUM で変えられる。既定は chromium)
@@ -171,24 +174,51 @@ function scan() {
       }
       // 結果画面と切断を待つ画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアが決まっていなければ行ごと出さない
       if (/Result|\.Game\./.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(text)) findings.push(`${at}: 秒数がある: ${text.trim().slice(0, 80)}`);
-      // Ready 画面 (決定 U31 / U32 / U36)
-      if (/Start Match/.test(text)) findings.push(`${at}: "Start Match" が残っている`);
+      // Ready 画面 (決定 U31 / U32 / U36) と部屋の画面 (決定 U1〜U19)。古い文言は出さない
+      const OLD = text.match(/Start Match|Ready to start|Stay in Room|Go Back|Leave Match|Cancel Match|Cancel this match|Leave this match|Match expired\.|cancelled the match|left the match\./);
+      if (OLD) findings.push(`${at}: 古い文言 "${OLD[0]}" が残っている`);
+      // 部屋の画面: Match Code の下に期限 "Code expires in 30:00" (U7)。期限切れと再接続できなかった画面には出さない。数字は Match Code・期限・カウントダウンだけ
+      if (/\.FriendMatch\.Lobby\./.test(state)) {
+        const exp = screen.querySelector('.code-expiry');
+        const wantExpiry = !/\.(CodeExpired|CouldNotReconnect)\b/.test(state);
+        if (!!exp !== wantExpiry || (exp && exp.textContent !== CODE_EXPIRY.text)) findings.push(`${at}: 期限の表示が ${exp ? exp.textContent : 'なし'} (期待: ${wantExpiry ? CODE_EXPIRY.text : 'なし'})`);
+        const timerText = (screen.querySelector('.rd-timer') || { textContent: '\u0000' }).textContent;
+        const rest = text.replace(MATCH_CODE_TEXT, '').replace(CODE_EXPIRY.text, '').replace(timerText, '');
+        if (/\d/.test(rest)) findings.push(`${at}: Match Code・期限・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
+      }
+      // 画面の下の帯 (トースト): 端末の画面に収まり、ボタンや入力欄・お知らせと重ならない。作り直しに失敗したとき (⚠ createFailed) は "Connection failed" (U6 / U12)
+      const toast = screen.querySelector('.toast');
+      if (toast) {
+        const sr = screen.getBoundingClientRect();
+        const tr = toast.getBoundingClientRect();
+        if (tr.top < sr.top || tr.bottom > sr.bottom || tr.left < sr.left || tr.right > sr.right) findings.push(`${at}: 帯が画面からはみ出している`);
+        screen.querySelectorAll('.btn, .input, .room-notice, .error, .menu-item, .tile').forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.bottom > tr.top + 0.5 && tr.bottom > r.top + 0.5 && r.right > tr.left && tr.right > r.left) findings.push(`${at}: 帯 "${toast.textContent}" が ${el.textContent.trim() || el.className} と重なっている`);
+        });
+        if (toast.scrollWidth > toast.clientWidth + 1) findings.push(`${at}: 帯の文字がはみ出している (${toast.textContent})`);
+        const chev = toast.querySelector('.chev');
+        if (chev) { const cr = chev.getBoundingClientRect(); if (cr.top < tr.top || cr.bottom > tr.bottom) findings.push(`${at}: 帯の › が帯の外にある (${toast.textContent})`); }
+      }
+      if (/⚠ createFailed/.test(state) && (!toast || !/^Connection failed/.test(toast.textContent))) findings.push(`${at}: 作り直しの失敗で "Connection failed" の帯が出ていない`);
       if (screen.querySelector('[data-ev="leaveApp"], [data-ev="disconnect"]')) findings.push(`${at}: ルームのモック操作が端末の画面の中にある`);
-      if (/\.FriendMatch\.Lobby\.(Ready|Starting|Reconnecting|OpponentDisconnected)/.test(state)) {
+      if (/\.FriendMatch\.Lobby\.(Ready|Starting|Reconnecting|OpponentDisconnected|FriendJoined|Connecting|ConnectionLost|FriendDisconnected)/.test(state)) {
         const cards = [...screen.querySelectorAll('.rd-card')];
         const states = cards.map((c) => c.querySelector('.rd-state').textContent);
-        if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready") でない (${states.join(', ')})`);
+        if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready', 'Away'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready" / "Away") でない (${states.join(', ')})`);
+        // ホストが ‹ で離れている間 (決定 U14) だけ、クライアントのカードのホストは "Away"
+        const hostAway = /^Host\.Away\./.test(document.querySelector('.device[data-dev="host"] .state-name').textContent);
+        const wantAway = dev.dataset.dev === 'client' && hostAway;
+        if ((states[1] === 'Away') !== wantAway || states[0] === 'Away') findings.push(`${at}: 相手のカードの "Away" が ${states[1] === 'Away'} (期待: ${wantAway})`);
         if (!cards[0] || !cards[0].querySelector('.you') || screen.querySelectorAll('.rd-card .you').length !== 1) findings.push(`${at}: 自分のカードに YOU が無い`);
         const timer = screen.querySelector('.rd-timer');
         const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /OpponentDisconnected/.test(state) ? '20s' : null;
         if ((timer ? timer.textContent : null) !== wantTimer) findings.push(`${at}: カウントダウンが ${timer ? timer.textContent : 'なし'} (期待: ${wantTimer || 'なし'})`);
-        const digits = text.replace(MATCH_CODE_TEXT, '').replace(wantTimer || '\u0000', '');
-        if (/\d/.test(digits)) findings.push(`${at}: カウントダウンのほかに数字がある: ${digits.trim().slice(0, 80)}`);
         ['leaveApp', 'disconnect'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]`)) findings.push(`${at}: 端末の下のモック操作に ${ev} が無い`);
         });
-        // Leave Room の確認 (決定 U34 / U35) を開いても、後ろの画面のボタンは消えない
-        if (/🗨 leaveRoom/.test(state)) {
+        // Leave Room / Close Room の確認 (決定 U9 / U14 / U34) を開いても、後ろの画面のボタンは消えない
+        if (/🗨 (leaveRoom|closeRoom)/.test(state)) {
           const name = state.split(' + ')[0];
           const want = SCREENS[name].buttons.map((b) => b.label).join(' / ');
           const got = [...screen.querySelectorAll('.actions .btn')].map((b) => b.textContent).join(' / ');
@@ -196,7 +226,7 @@ function scan() {
         }
         // カード・お知らせ・状況の一行・ボタンが端末の画面に収まり、重ならない
         const sr = screen.getBoundingClientRect();
-        const parts = [...screen.querySelectorAll('.rd-cards, .rd-notice, .rd-info .status, .rd-timer, .actions')].map((el) => [el, el.getBoundingClientRect()]);
+        const parts = [...screen.querySelectorAll('.code-expiry, .rd-cards, .rd-notice, .rd-info .status, .rd-timer, .actions')].map((el) => [el, el.getBoundingClientRect()]);
         parts.forEach(([el, r]) => { if (r.top < sr.top || r.bottom > sr.bottom) findings.push(`${at}: ${el.className} が画面からはみ出している`); });
         for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
           const [a, ra] = parts[i]; const [b, rb] = parts[j];

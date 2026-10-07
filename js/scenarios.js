@@ -8,7 +8,8 @@
 var SCENARIOS = (function () {
   var hostCreates = ['host.friendMatch', 'host.createMatch'];
   var clientJoins = ['client.friendMatch', 'client.enterCode', 'client.joinMatch'];
-  var toReady = hostCreates.concat(clientJoins, ['sys.peerConnected', 'sys.readyScreen']); // Ready 画面まで (7 手順)
+  // 参加の確認 (ホスト "Friend joined!" / クライアント "Connecting…") → 両者がそろって同期が終わると Ready 画面 (決定 U4)
+  var toReady = hostCreates.concat(clientJoins, ['sys.roomSynced']); // Ready 画面まで (6 手順)
   // 決定 (U31 / U36): 両者が Ready を押したら開始。押すと "Confirming…"、届くと押した側は "Waiting for opponent…"、相手側は "Opponent is ready. Are you?"。
   // 2 人目の Ready が届くと "Starting match…" (読み込み)、自動で VS 画面
   var hostReady = ['host.ready', 'sys.readyConfirmed'];
@@ -18,7 +19,7 @@ var SCENARIOS = (function () {
   var toGame = ['vs.done', 'game.countdownDone']; // VS 画面 → ゲーム本体のカウントダウン → プレイ開始
   var clientOnly = 'このシナリオではホストは関与しない (ホストの端末は Online Battle のまま)';
   var hostOnly = 'このシナリオではクライアントは関与しない (クライアントの端末は Online Battle のまま)';
-  var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (14 手順)
+  var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (13 手順)
   var toRandomGame = ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound'].concat(toGame); // ランダム対戦でプレイ開始まで (5 手順)
   var postMatch = '結果画面は 2026-10-07 に決定 (U20〜U30)。Win / Lose / Draw と「切断する」は端末の下のモック操作で、勝敗判定そのものは対象外。' +
     '秒数 (20 秒・3 秒・5 秒・60 秒) と Elo の値 (初期値 1000、K=24) は QA² 側の仮の値で、タイマーは左の環境イベントか端末の下のモック操作で進める。';
@@ -26,11 +27,14 @@ var SCENARIOS = (function () {
     '暗幕は薄くゲーム画面が見えたまま。ボタンは CONTINUE と SURRENDER だけで、対戦中に REMATCH / RETRY は無い (U39)。';
   var beforeStart = 'Ready 画面と開始前の切断は 2026-10-07 に決定 (U31 の Ready への変更、U32〜U36)。試合が始まる (3-2-1 のあとサーバーが確認する) までは Ready を取り消せ、勝敗は記録しない。' +
     '秒数 (Ready の 60 秒・再接続の 20 秒・読み込みの 20 秒) は QA² 側の仮の値で、タイマーは左の環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。';
+  var roomNote = 'フレンド対戦の部屋は 2026-10-07 に決定 (U1〜U19)。ホストの ‹ は部屋を残して帯で示し (U14)、クライアントの ‹ は退出の確認 (U9)。' +
+    '秒数 (再接続の 20 秒・Ready の 60 秒) と Match Code の期限 30 分は QA² 側の仮の値で、タイマーは左の環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。';
 
   return [
     { id: '1', title: '通常対戦 (ホストが先に Ready)', diagram: '01',
-      desc: 'ホストが Create Match、クライアントが Match Code で Join Match。自動で Friend joined! → Ready 画面になる。Ready 画面にはプレイヤーごとのカード (どちらも "Not ready") と Ready / Leave Room (U36)。' +
-        'Ready 画面になっても自動では始まらず、両者が Ready を押したら開始 (U31。ボタンの名前は 2026-10-07 に Start Match から Ready に変更)。' +
+      desc: 'ホストが Create Match、クライアントが Match Code で Join Match。サーバーが参加を確認すると、ホストは "Friend joined!"、クライアントは "Connecting…" (どちらも Ready はまだ押せない、U4)。' +
+        '両者が部屋の画面にそろって同期が終わると Ready 画面になる (決まった待ち時間ではない、U4)。Ready 画面にはプレイヤーごとのカード (どちらも "Not ready")、Match Code の下に "Code expires in 30:00" (U7)、' +
+        'ボタンはホストが Ready / Close Room、クライアントが Ready / Leave Room (U14 / U9)。両者が Ready を押したら開始 (U31)。' +
         'ホストが Ready を押すと送っている間 "Confirming…"、届くとホストのカードが "✓ Ready" になり、ホストは "Waiting for opponent…" と 60 秒のカウントダウンと Cancel Ready、クライアントは "Opponent is ready. Are you?"。' +
         'クライアントも押すと両者 "Starting match…" → VS 画面 → ゲーム画面に移り、ゲーム本体のカウントダウン (3 → 2 → 1) のあとプレイ開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。モック独自の 3·2·1 は置かない (U2 で決定)。' + beforeStart,
       steps: toReady.concat(bothStart, toGame) },
@@ -38,47 +42,78 @@ var SCENARIOS = (function () {
       desc: 'シナリオ 1 と同じだが、クライアントが先に Ready を押す。クライアントは "Waiting for opponent…" と 60 秒のカウントダウン、ホストは "Opponent is ready. Are you?"。' +
         'ホストも押すと両者 "Starting match…" → VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (U31 / U36)。' + beforeStart,
       steps: toReady.concat(clientFirst, toGame) },
-    { id: '2a', title: '待機中にホストが別画面へ → 戻って対戦', diagram: '02', opts: { U14: 'keep', U1: 'lobby' },
-      desc: 'ホストが待機中に ‹ で戻ると、Friend Match トップに青い "Waiting for your friend…" バナー。さらに他の画面 (ステージ選択) へ行っても表示が続く。クライアントが入ると緑 "Friend joined!" → 赤 "Ready to start"。クライアント側は "Host User / Away"。ホストが赤いトーストをタップするとロビーの Ready 画面に戻り、クライアントは Friend joined! → Ready 画面。そのあと両者が Ready を押して開始 (U31 で決定)。',
+    { id: '2a', title: '待機中にホストが別画面へ → 友だちが入る → 緑の帯をタップして戻る', diagram: '02 (10-07 の決定 U4 / U14 / U16 / U17)',
+      desc: 'ホストが待機中に ‹ で戻っても部屋は残り、Friend Match トップに青い "Waiting for your friend…" の帯 (U14)。さらに他の画面 (ステージ選択) へ行っても帯が続く。' +
+        'クライアントが入ると帯は緑の "Friend joined!" (U17)。ホストが部屋の画面にいないので同期は終わらず、クライアントは "Connecting…" のまま (カードのホストは "Away"、U4)。' +
+        'ホストが緑の帯をタップすると部屋の画面に戻り (U16)、両者がそろって同期が終わると Ready 画面。そのあと両者が Ready を押して開始。' + roomNote,
+      steps: hostCreates.concat(['host.back', 'host.back'], clientJoins, ['host.tapToast', 'sys.roomSynced'], bothStart, toGame) },
+    { id: '2b', title: '待機中にホストが別画面へ → 放置して期限切れ → 作り直す', diagram: '02 (10-07 の決定 U7 / U10 / U18)',
+      desc: 'ホストが別画面のまま放置すると Match Code の期限 (30 分、仮) が切れ、濃い赤の "Match code expired." の帯 (U7)。クライアントは別の画面へ移されず、部屋の画面のまま "Match code expired." と Join Match (U18 / U10)。' +
+        'ホストが帯をタップすると部屋の画面に "Match code expired." と Create Match (Ready は出さない、U10)。ホストが Create Match で新しい部屋を作り、クライアントは Join Match で Friend Match トップへ戻って新しい Match Code を入れる。' + roomNote,
       steps: hostCreates.concat(['host.back', 'host.back'], clientJoins,
-        ['sys.readyScreen', 'host.tapToast', 'sys.readyScreen'], bothStart, toGame) },
-    { id: '2b', title: '待機中にホストが別画面へ → 放置して期限切れ', diagram: '02', opts: { U14: 'keep' },
-      desc: 'ホストが別画面のまま放置すると Match Code の有効期限が切れ、濃い赤の "Match code expired" トースト。タップすると "Match code expired." のロビー。クライアントは "Match expired."。',
-      steps: hostCreates.concat(['host.back', 'host.back'], clientJoins,
-        ['sys.readyScreen', 'timer.codeExpired', 'host.tapToast']) },
-    { id: '3a', title: 'Ready 画面で通信不安定 → 回復', diagram: '03',
-      desc: 'Ready を押す前に、何らかの理由で通信が不安定になり "Connecting…"。通信が回復すると Ready 画面に戻り、両者が Ready を押して開始。図03 はホスト側のみで、クライアント側は仮表示 (未決 U5)。' +
-        '片方の接続が切れたとき (開始前) は U32 で決まった別の流れ (19c / 19d / 12)。',
-      steps: toReady.concat(['net.unstable', 'net.recovered'], bothStart, toGame) },
-    { id: '3b', title: 'Ready 画面で通信不安定 → 切断 → キャンセル', diagram: '03',
-      desc: '通信が回復しないと "Connection lost."。Cancel Match → "Cancel this match?" → Cancel Match で Friend Match トップへ。クライアントは U34 にそろえて "Room closed. The host left." で Friend Match トップへ (仮、U51)。' +
-        'しばらく待つかキャンセルのみかは未決 (U5)。',
-      steps: toReady.concat(['net.unstable', 'net.lost', 'host.cancelMatch', 'host.dialog.cancelMatch']) },
-    { id: '3c', title: 'Ready 後に通信不安定 → 切断 → ‹ で戻る', diagram: '03', opts: { U14: 'keep' },
-      desc: '図03 では Connection lost の画面から ‹ で戻ると、青い "Waiting for your friend…" バナー付きの Friend Match トップになる (未決 U19)。',
-      steps: toReady.concat(['net.unstable', 'net.lost', 'host.back']) },
-    { id: '4', title: 'Ready 画面でホストが Leave Room (ルームを閉じる)', diagram: '04 (10-07 の決定 U34 で変更)',
-      desc: 'ホストが Leave Room を押すと、確認 "No match has started. No win or loss will be recorded." (U34。題名 "Leave this room?" と Stay in Room は仮、U51)。' +
-        'Leave Room でルームを閉じ、ホストは Friend Match トップ、クライアントは "Room closed. The host left." で Friend Match トップへ (U34)。図04 の "cancelled the match." と ‹ だけの画面は無くなった (U8 も解消)。' + beforeStart,
-      steps: toReady.concat(['host.leaveRoom', 'host.dialog.leaveRoom']) },
-    { id: '4b', title: 'Leave Room の確認で Stay in Room', diagram: '04 (10-07 の決定 U34 で変更)',
-      desc: 'ホストが Ready を押したあと Leave Room を押し、確認で Stay in Room を選ぶとルームに残る (Ready もそのまま)。そのあとクライアントも Ready を押して開始。' + beforeStart,
-      steps: toReady.concat(hostReady, ['host.leaveRoom', 'host.dialog.stay'], clientReady, ['sys.bothStarted']) },
-    { id: '5', title: 'Ready 画面でクライアントが Leave Room → 同じ Match Code で入り直す', diagram: '05 (10-07 の決定 U34 で変更)',
-      desc: 'クライアントが Leave Room → 確認 "No match has started. No win or loss will be recorded." → Leave Room。クライアントは Match Code が残った Friend Match トップへ。' +
-        'ホストは "Your friend left. Waiting for another friend…" (U34)。Match Code は変わらないので、クライアントが Join Match で入り直すとホストは Friend joined! になる。' +
-        '図05 の "left the match." → 自動で待機に戻る流れは、この 1 画面にまとめた。' + beforeStart,
-      steps: toReady.concat(['client.leaveRoom', 'client.dialog.leaveRoom', 'client.joinMatch']) },
+        ['timer.codeExpired', 'host.tapToast', 'host.createMatch', 'client.joinMatch', 'client.enterCode', 'client.joinMatch', 'sys.roomSynced']) },
+    { id: '2c', title: 'Ready 画面でホストが ‹ → 友だちが Ready → "Friend is ready!" をタップして戻る', diagram: '02 (10-07 の決定 U1 / U14)',
+      desc: 'ホストが Ready を押したあと ‹ で離れると、部屋は残るがホストの Ready は消え (U14)、クライアントには "Opponent is no longer ready." (カードのホストは "Away")。ホストの帯は青い "Waiting for your friend…" (仮、U55)。' +
+        'クライアントが Ready を押すと、ホストの帯は赤い "Friend is ready!" (U1)。タップすると部屋の画面に戻るだけで、Ready は押さない (U1 / U16)。戻った画面で Ready を押して開始。' + roomNote,
+      steps: toReady.concat(hostReady, ['host.back'], clientReady, ['host.tapToast'], hostReady, ['sys.bothStarted'], toGame) },
+    { id: '2d', title: 'ホストの離席中に友だちが抜ける → "Your friend left." を一度 → 入り直す', diagram: '02 (10-07 の決定 U17)',
+      desc: 'Ready 画面でホストが ‹ で離れている間に、クライアントが Leave Room → 確認 "Leave this room?" → Leave Room で抜ける (U9)。' +
+        'ホストの帯に "Your friend left." を一度だけ出し、そのあと青い "Waiting for your friend…" に戻る (U17。出す長さは仮、U55)。' +
+        'クライアントが同じ Match Code で入り直すと、本当に入り直したので帯は緑の "Friend joined!" (U17)。ホストがタップして戻ると同期して Ready 画面。' + roomNote,
+      steps: toReady.concat(['host.back', 'client.leaveRoom', 'client.dialog.leaveRoom', 'sys.friendLeftShown', 'client.joinMatch', 'host.tapToast', 'sys.roomSynced']) },
+    { id: '2e', title: 'ホストの離席中に友だちが切断 → "Reconnecting…" → 20 秒で "Waiting for your friend…"', diagram: '02 / 03 (10-07 の決定 U5 / U19)',
+      desc: 'Ready 画面でホストが ‹ で離れている間に、クライアントの接続が切れる (端末の下のモック操作「切断する」)。ホストの帯は青い "Waiting for your friend…" ではなく "Reconnecting…" (U19)、' +
+        'クライアントは "Connection lost. Reconnecting…" (U5)。ホストがステージ選択へ移っても帯は続く。20 秒 (仮) たっても戻らない (左の環境イベント) と、ホストの帯は "Waiting for your friend…" に戻り、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。' +
+        'クライアントが Retry してつながると部屋に入り直し、ホストの帯は緑の "Friend joined!" (U17)。ホストがタップして戻ると同期して Ready 画面。' + roomNote,
+      steps: toReady.concat(['host.back', 'client.disconnect', 'host.back', 'timer.disconnectTimeout', 'client.retry', 'net.recovered', 'host.tapToast', 'sys.roomSynced']) },
+    { id: '3a', title: 'Ready 画面でホストが切断 → 20 秒のうちに戻る → もう一度 Ready', diagram: '03 (10-07 の決定 U5 で置き換え)',
+      desc: 'クライアントが Ready を押して待っている間にホストの接続が切れる (端末の下のモック操作「切断する」)。両者の Ready は消え、20 秒 (仮) まで自動で再接続する (U5)。' +
+        'ホストは "Connection lost. Reconnecting…"、クライアントは "Your friend disconnected. Waiting for them to reconnect…"。' +
+        '20 秒のうちに戻る (左の環境イベント「通信が回復する」) と、両者とも Ready していない Ready 画面に戻る (入り直しではないので "Friend joined!" は出さない、U17)。両者が Ready を押して開始。' +
+        '図03 の「両者が "Connecting…" → "Connection lost." → Cancel Match」の流れは、この決定で置き換えた。' + roomNote,
+      steps: toReady.concat(clientReady, ['host.disconnect', 'net.recovered'], bothStart, toGame) },
+    { id: '3b', title: 'Ready 画面でクライアントが切断 → 戻らない → Could not reconnect → Leave Room', diagram: '03 (10-07 の決定 U5 で置き換え)',
+      desc: 'クライアントの接続が切れ、20 秒 (仮) たっても戻らない (左の環境イベント) と、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。' +
+        'ホストは空の部屋を残して "Waiting for your friend…" (同じ Match Code)。クライアントが Leave Room → 確認 → Leave Room で Friend Match トップへ戻る (U5 / U9)。' + roomNote,
+      steps: toReady.concat(['client.disconnect', 'timer.disconnectTimeout', 'client.leaveRoom', 'client.dialog.leaveRoom']) },
+    { id: '3c', title: 'Ready 画面でホストが切断 → 戻らない → Retry → 空の部屋に戻る', diagram: '03 (10-07 の決定 U5 で置き換え)',
+      desc: 'ホストの接続が切れ、20 秒 (仮) たっても戻らないと、ホストは "Could not reconnect." と Retry / Leave Room、クライアントは Friend Match トップへ戻る (Match Code は入力欄に残す。お知らせは仮、U52)。' +
+        'ホストが Retry してつながる (左の環境イベント「通信が回復する」) と、残しておいた空の部屋に戻る ("Waiting for your friend…"、U5)。クライアントが同じ Match Code で入り直すと "Friend joined!" (U17)。' + roomNote,
+      steps: toReady.concat(['host.disconnect', 'timer.disconnectTimeout', 'host.retry', 'net.recovered', 'client.joinMatch', 'sys.roomSynced']) },
+    { id: '3d', title: '友だちの切断を待っている間にホストが ‹ → "Reconnecting…" の帯 → 戻ってくる', diagram: '03 (10-07 の決定 U14 / U19)',
+      desc: 'クライアントの接続が切れ、ホストが "Your friend disconnected…" で待っている間に ‹ で離れる。部屋は残り、帯は青い "Waiting for your friend…" ではなく "Reconnecting…" (U19、図03 の「‹ で青い待機の帯」を置き換えた)。' +
+        '20 秒のうちにクライアントが戻ると、クライアントは Ready 画面に戻り、ホストの帯は友だちがいるときの青い帯 (仮、U55)。ホストがタップして Ready 画面に戻る (U16)。' + roomNote,
+      steps: toReady.concat(['client.disconnect', 'host.back', 'net.recovered', 'host.tapToast']) },
+    { id: '4', title: 'ホストが Close Room (部屋を閉じる)', diagram: '04 (10-07 の決定 U14 / U34 で変更)',
+      desc: 'ホストが Close Room を押すと確認 (題名 "Close this room?" は仮、U51。本文 "No match has started. No win or loss will be recorded."、U34。ボタン Close Room / Keep Waiting、U11)。' +
+        'Close Room で部屋を閉じ、ホストは Friend Match トップ、クライアントは "Room closed. The host left." で Friend Match トップへ (U34)。部屋を閉じるのは Close Room だけで、‹ では閉じない (U14)。' + roomNote,
+      steps: toReady.concat(['host.closeRoom', 'host.dialog.closeRoom']) },
+    { id: '4b', title: 'Close Room の確認で Keep Waiting', diagram: '04 (10-07 の決定 U11 / U14)',
+      desc: 'ホストが Ready を押したあと Close Room を押し、確認で Keep Waiting (以前の "Go Back"、U11) を選ぶと部屋に残る (Ready もそのまま)。そのあとクライアントも Ready を押して開始。' + roomNote,
+      steps: toReady.concat(hostReady, ['host.closeRoom', 'host.dialog.keepWaiting'], clientReady, ['sys.bothStarted']) },
+    { id: '5', title: 'Ready 画面でクライアントが Leave Room → 同じ Match Code で入り直す', diagram: '05 (10-07 の決定 U9 / U34 で変更)',
+      desc: 'クライアントが Leave Room → 確認 "Leave this room?" / "No match has started. No win or loss will be recorded." → Leave Room (U9 / U34)。クライアントは Match Code が残った Friend Match トップへ。' +
+        'ホストは "Your friend left. Waiting for another friend…" (U34)。Match Code は変わらないので、クライアントが Join Match で入り直すとホストは "Friend joined!" (本当に入り直したので、U17)。' +
+        '図05 の "left the match." → 自動で待機に戻る流れは、この 1 画面にまとめた。' + roomNote,
+      steps: toReady.concat(['client.leaveRoom', 'client.dialog.leaveRoom', 'client.joinMatch', 'sys.roomSynced']) },
+    { id: '5b', title: '同期の前 ("Connecting…") のクライアントが ‹ → Keep Waiting → Leave Room', diagram: 'なし (10-07 の決定 U9 / U11)',
+      desc: '部屋に入った直後 (同期の前) のクライアントは "Connecting…"。以前はボタンが無かったが、Leave Room を出す (U9)。' +
+        '‹ を押すと Leave Room と同じ確認 "Leave this room?" (U9)。Keep Waiting で残り (U11)、Leave Room → Leave Room で抜けると、ホストは "Your friend left. Waiting for another friend…"。' + roomNote,
+      steps: hostCreates.concat(clientJoins, ['client.back', 'client.dialog.keepWaiting', 'client.leaveRoom', 'client.dialog.leaveRoom']) },
     { id: '6', title: '読み込みが 20 秒で終わらない → もう一度 Ready', diagram: '06 (10-07 の決定 U32 で変更)',
       desc: '両者が Ready を押し ("Starting match…")、読み込みが 20 秒 (仮) で終わらない (左の環境イベント) と、両者に "Match could not start. Please try again." を出して Ready 画面に戻る (U32)。両者の Ready は消える。' +
-        'もう一度両者が Ready を押して VS 画面へ。図06 の "Unable to start the match." と、片方だけ再試行したとき (U15) の扱いを置き換えた。' + beforeStart,
+        'もう一度両者が Ready を押して VS 画面へ。' + beforeStart,
       steps: toReady.concat(bothStart.slice(0, 4), ['timer.loadTimeout'], bothStart, toGame) },
-    { id: '7a', title: 'Ready 画面でクライアントが ‹ → 確認 → 抜ける', diagram: '07 (10-07 の決定 U35 で置き換え)',
-      desc: 'クライアントが Ready を押したあと ‹ (別の画面へ移る) を押すと、Leave Room と同じ確認 "No match has started. No win or loss will be recorded." (U35)。Stay in Room で残り、もう一度 ‹ → Leave Room で抜ける。' +
-        'ホストは "Your friend left. Waiting for another friend…" (U34)。図07 の「別画面へ移ってもマッチを残し、赤い "Ready to start" トーストで戻る」流れは無くなった (U10 / U18 も解消)。' + beforeStart,
-      steps: toReady.concat(clientReady, ['client.back', 'client.dialog.stay', 'client.back', 'client.dialog.leaveRoom']) },
+    { id: '6b', title: '開始の同期に失敗 → もう一度 Ready', diagram: '06 (10-07 の決定 U15 で変更)',
+      desc: '両者が Ready を押したあと、開始の同期に失敗する (左の環境イベント) と、両者の Ready を消して "Couldn’t start the match. Please ready up again." (U15)。' +
+        'ふつうの Ready の流れ (60 秒の期限つき) からやり直し、両者が Ready を押して VS 画面へ。Match Code が有効な間は何度でもやり直せる。図06 の "Unable to start the match." を置き換えた。' + beforeStart,
+      steps: toReady.concat(bothStart.slice(0, 4), ['sys.syncFailed'], clientFirst, toGame) },
+    { id: '7a', title: 'Ready 画面でクライアントが ‹ → 確認 → Keep Waiting → ‹ → 抜ける', diagram: '07 (10-07 の決定 U9 / U35 で置き換え)',
+      desc: 'クライアントが Ready を押したあと ‹ (別の画面へ移る) を押すと、Leave Room と同じ確認 "Leave this room?" (U9 / U35)。Keep Waiting で残り (Ready もそのまま、U11)、もう一度 ‹ → Leave Room で抜ける。' +
+        'ホストは "Your friend left. Waiting for another friend…" (U34)。図07 の「別画面へ移ってもマッチを残し、赤いトーストで戻る」流れは無くなった (クライアントは部屋に入ったまま別の画面へは移れない)。' + roomNote,
+      steps: toReady.concat(clientReady, ['client.back', 'client.dialog.keepWaiting', 'client.back', 'client.dialog.leaveRoom']) },
     { id: '7b', title: 'Ready のあとアプリを離れる → Ready が消える', diagram: '07 (10-07 の決定 U35 で置き換え)',
-      desc: 'ホストが Ready を押したあと、アプリを離れる (バックグラウンド・画面ロック。端末の下のモック操作「アプリを離れる」) と、ホストの Ready は消えてルームには残る (U35)。' +
+      desc: 'ホストが Ready を押したあと、アプリを離れる (バックグラウンド・画面ロック。端末の下のモック操作「アプリを離れる」) と、ホストの Ready は消えて部屋には残る (U35)。' +
         'クライアントには "Opponent is no longer ready." (Cancel Ready と同じ表示、仮、U53)。そのあと両者が Ready を押して開始。' + beforeStart,
       steps: toReady.concat(hostReady, ['host.leaveApp'], bothStart, toGame) },
     { id: '8', title: '無効な Match Code', diagram: '08', ctx: { codeResult: 'notFound' }, hostNote: clientOnly,
@@ -119,16 +154,20 @@ var SCENARIOS = (function () {
       steps: ['host.randomMatch', 'host.searchTimeout', 'host.closeNotice'] },
     { id: '12', title: 'VS 画面中にクライアントが切断 → 戻らない → 同じ Match Code で入り直す', diagram: 'なし (10-07 の決定 U32)',
       desc: 'VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」) と、試合はまだ始まっていないので両者の Ready を消して止める (U32)。' +
-        'ホストは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Leave Room、クライアントは "Reconnecting…" (切断した側の画面は仮、U52)。' +
-        '20 秒 (仮) たっても戻らない (左の環境イベント) と、ホストは "Match cancelled. Opponent did not reconnect." (結果なし) で同じ Match Code のままルームに残る。クライアントがもう一度 Join Match で入ると Friend joined!。' +
-        '以前の U3 (VS 画面中の切断の戻り先) のトグルは、この決定で無くなった。' + beforeStart,
+        'ホストは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Close Room、クライアントは "Reconnecting…" (切れた側の画面は仮、U52)。' +
+        '20 秒 (仮) たっても戻らない (左の環境イベント) と、ホストは "Match cancelled. Opponent did not reconnect." (結果なし) で同じ Match Code のまま部屋に残る。クライアントがもう一度 Join Match で入ると "Friend joined!"。' +
+        '部屋 (Ready 画面・読み込み) での切断は U5 で、文言と流れが違う (3a〜3d)。' + beforeStart,
       steps: toReady.concat(bothStart, ['client.disconnect', 'timer.disconnectTimeout', 'client.joinMatch']) },
-    { id: '13', title: '接続失敗 (仮)', diagram: '00 (トーストのみ)', ctx: { createResult: 'connFailed', codeResult: 'connFailed' },
-      desc: '"Connection failed" トーストは図00 にあるが発生条件が描かれていない (U6)。モックでは Create Match / Join Match の接続失敗として仮に表示する。',
-      steps: hostCreates.concat(clientJoins) },
-    { id: '14', title: '離席中に Create Match を押す', diagram: 'なし (10-01 合意)', opts: { U14: 'keep' },
-      desc: 'ホストが待機中に Friend Match トップへ戻り、もう一度 Create Match を押すと "Create a new match?"。[Keep Current Match] で今のマッチを維持、[Create Match] で作り直す。本文は未決 (U12)。',
-      steps: hostCreates.concat(['host.back', 'host.createMatch', 'host.dialog.keepCurrent', 'host.createMatch', 'host.dialog.createMatch']) },
+    { id: '13', title: 'Create / Join がサーバーに届かない (Connection failed)', diagram: '00 (トーストのみ、10-07 の決定 U6)', ctx: { createResult: 'connFailed', codeResult: 'connFailed' },
+      desc: '"Connection failed" のトーストは、Create Match / Join Match がサーバーに届かないときだけ出す (U6)。ホストは "Couldn’t create a room. Try again."、クライアントは "Couldn’t join the room. Try again."。' +
+        'Match Code の誤り・期限切れ・満員 (8〜10) や閉じた部屋の表示とは別。モックではモック設定の「接続失敗」で再現する。トーストはタップで閉じる。',
+      steps: hostCreates.concat(clientJoins, ['host.tapToast', 'client.tapToast']) },
+    { id: '14', title: '離席中に Create Match → 確認 → 古い部屋は新しい部屋を作れてから閉じる', diagram: 'なし (10-01 合意、10-07 の決定 U12)',
+      desc: 'Ready 画面でホストが ‹ で Friend Match トップへ戻り (部屋は残る、U14)、もう一度 Create Match を押すと "Create a new match?"。' +
+        '本文はホスト向けの "This will close your current room. Your friend will return to Friend Match." (U12)。[Keep Current Match] で今の部屋のまま、[Create Match] で作り直す。' +
+        '新しい部屋を作れたときだけ古い部屋を閉じ、クライアントは "Room closed. The host left." で Friend Match トップへ (U12 / U34)。' +
+        '作れなかったとき (モック設定「Create Match の結果 = 接続失敗」、自由操作で試せる) は古い部屋も帯もそのままで、"Connection failed" のトーストを出す (U6)。' + roomNote,
+      steps: toReady.concat(['host.back', 'host.createMatch', 'host.dialog.keepCurrent', 'host.createMatch', 'host.dialog.createMatch']) },
     { id: '15', title: 'Friend Match の対戦後 (ホスト勝利 → 両者が抜ける)', diagram: 'なし (10-07 の決定 U20〜U26)',
       desc: '通常対戦でゲームまで進み、ホストの下の Win を押すと、ホストは "WIN!"、クライアントは自動で "LOSE" の結果画面。両者の名前・スコア・終わった理由と "No rating change (friend match)" (U20 / U21)。' +
         'ボタンは Rematch と Back to Friend Match (U22)。ホストが Back to Friend Match で Friend Match トップへ抜けると、クライアントの結果画面はそのまま "Your opponent left. Rematch is not available." (U24 / U25)。続けてクライアントも抜ける。' + postMatch,
@@ -205,26 +244,31 @@ var SCENARIOS = (function () {
     { id: '18e', title: 'ランダム対戦で切断負け (レートが変わる)', diagram: 'なし (10-07 の決定 U28 / U21)',
       desc: 'ランダム対戦でホストの接続が切れ、20 秒 (仮) たっても戻らないと、ホストの負け: ホストは 1000 → 988 (-12)、クライアントは 1000 → 1012 (+12) (U28 / U21)。' + postMatch,
       steps: toRandomGame.concat(['host.disconnect', 'timer.disconnectTimeout']) },
-    { id: '19', title: 'Cancel Ready (Ready を取り消してもルームに残る)', diagram: 'なし (10-07 の決定 U34 / U36)',
-      desc: 'クライアントが Ready を押したあと、Cancel Ready で取り消す。クライアントはルームに残って "Not ready" に戻り、ホストには "Opponent is no longer ready." (U34)。' +
+    { id: '19', title: 'Cancel Ready (Ready を取り消しても部屋に残る)', diagram: 'なし (10-07 の決定 U34 / U36)',
+      desc: 'クライアントが Ready を押したあと、Cancel Ready で取り消す。クライアントは部屋に残って "Not ready" に戻り、ホストには "Opponent is no longer ready." (U34)。' +
         'そのあとホストが Ready を押すと、今度はホストが "Waiting for opponent…" になる。' + beforeStart,
       steps: toReady.concat(clientReady, ['client.cancelReady'], hostReady) },
     { id: '19b', title: 'Ready のタイムアウト (60 秒)', diagram: 'なし (10-07 の決定 U33)',
       desc: 'ホストが Ready を押し、クライアントが 60 秒 (仮) 押さない (左の環境イベント) と、両者の Ready を消して両者に "Ready check timed out. Press Ready when you’re ready." (U33)。' +
-        '罰はなく、どちらもルームに残る。もう一度両者が Ready を押して開始。' + beforeStart,
+        '罰はなく、どちらも部屋に残る。もう一度両者が Ready を押して開始。' + beforeStart,
       steps: toReady.concat(hostReady, ['timer.readyTimeout'], clientFirst, toGame) },
     { id: '19c', title: 'カウントダウン中にホストが切断 → 20 秒のうちに戻る → もう一度 Ready', diagram: 'なし (10-07 の決定 U32)',
       desc: 'ゲーム本体のカウントダウン中にホストの接続が切れる (端末の下のモック操作「切断する」)。3-2-1 のあとサーバーが確認するまでは試合開始ではないので、勝敗はつけず、両者の Ready を消して止める (U32)。' +
         'クライアントは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Leave Room、ホストは "Reconnecting…" (仮、U52)。' +
         '20 秒 (仮) のうちに戻る (左の環境イベント「通信が回復する」) と、両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。' + beforeStart,
       steps: toReady.concat(bothStart, ['vs.done', 'host.disconnect', 'net.recovered'], bothStart, toGame) },
-    { id: '19d', title: 'Ready 画面でホストが切断 → 戻らない → Room closed', diagram: 'なし (10-07 の決定 U32 / U33)',
-      desc: 'クライアントが Ready を押して待っている間にホストの接続が切れると、両者の Ready を消して止める (U32 / U33)。クライアントは "Opponent disconnected…" で 20 秒 (仮) 待つ。' +
-        'ホストが戻らないと、クライアントは "Room closed. The host disconnected." で Friend Match トップへ (U32)。ホストは Friend Match トップ (仮、U52)。' + beforeStart,
-      steps: toReady.concat(clientReady, ['host.disconnect', 'timer.disconnectTimeout']) },
-    { id: '19e', title: '相手の切断を待っている間に Leave Room', diagram: 'なし (10-07 の決定 U32 / U34)',
-      desc: 'Ready 画面でクライアントの接続が切れ、ホストが "Opponent disconnected…" で待っている間に Leave Room を押す。確認 "No match has started. No win or loss will be recorded." のあと Leave Room でルームを閉じる (U32 / U34)。' +
-        '切断中のクライアントは、戻ったときに "Room closed. The host left." の Friend Match トップ (仮、U52)。' + beforeStart,
-      steps: toReady.concat(['client.disconnect', 'host.leaveRoom', 'host.dialog.leaveRoom']) },
+    { id: '19d', title: 'VS 画面中にホストが切断 → 戻らない → Room closed', diagram: 'なし (10-07 の決定 U32)',
+      desc: 'VS 画面中にホストの接続が切れると、両者の Ready を消して止める (U32)。クライアントは "Opponent disconnected…" で 20 秒 (仮) 待つ。' +
+        'ホストが戻らないと、クライアントは "Room closed. The host disconnected." で Friend Match トップへ (U32)。ホストは Friend Match トップ (仮、U52)。' +
+        '部屋での切断 (U5) では、ホストが戻らなくても部屋は残る (3c)。' + beforeStart,
+      steps: toReady.concat(bothStart, ['host.disconnect', 'timer.disconnectTimeout']) },
+    { id: '19e', title: '友だちの切断を待っている間に Close Room', diagram: 'なし (10-07 の決定 U5 / U14 / U34)',
+      desc: 'Ready 画面でクライアントの接続が切れ、ホストが "Your friend disconnected. Waiting for them to reconnect…" で待っている間に Close Room を押す (U5 / U14)。確認のあと Close Room で部屋を閉じる (U34)。' +
+        '切断中のクライアントは、戻ったときに "Room closed. The host left." の Friend Match トップ (仮、U52)。' + roomNote,
+      steps: toReady.concat(['client.disconnect', 'host.closeRoom', 'host.dialog.closeRoom']) },
+    { id: '20', title: '両者が Ready 画面にいる間に期限切れ → Create Match / Join Match', diagram: 'なし (10-07 の決定 U7 / U10 / U18)',
+      desc: '両者が Ready 画面にいる間に Match Code の期限 (30 分、仮) が切れる (左の環境イベント) と、両者に "Match code expired." (U7)。Ready は消え、Ready のボタンも出さない (U10)。' +
+        'ホストには Create Match、クライアントには Join Match。クライアントは別の画面へ移されず、今の画面のまま (U18)。ホストが Create Match で新しい部屋を作り、クライアントが Join Match → 新しい Match Code を入れて入る。' + roomNote,
+      steps: toReady.concat(clientReady, ['timer.codeExpired', 'host.createMatch', 'client.joinMatch', 'client.enterCode', 'client.joinMatch', 'sys.roomSynced']) },
   ];
 })();

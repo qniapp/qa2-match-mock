@@ -9,6 +9,8 @@
   var EVENT_DELAY = { 'vs.done': 2500, 'game.countdownDone': GAME_COUNTDOWN_MS };
   var MATCH_CODE = 'QWERTY123';
   var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
+  // Ready 画面のカードの名前 (ロビーの "Client User" / "Host User" と同じ架空の名前)
+  var LOBBY_NAMES = { host: 'Host User', client: 'Client User' };
   var RESULT_HEADLINES = { Win: ['WIN!', 'win'], Lose: ['LOSE', 'lose'], Draw: ['DRAW', 'draw'], NoContest: ['NO CONTEST', 'nocontest'] };
   var STAGE_TILES = [
     { label: 'H²', color: 'var(--h)' }, { label: 'X²', color: 'var(--x)' },
@@ -236,7 +238,7 @@
     var html = (buttons || []).filter(function (b) {
       return !(b.hideIfNoRow && !Engine.canFire(app.state, dev + '.' + b.event));
     }).map(function (b) {
-      // disabled はゲーム内の無効表示 (押したあとの Start Match)。遷移表に行が無いときの破線とは別
+      // disabled はゲーム内の無効表示 (Ready を送っている間の "Confirming…" など)。遷移表に行が無いときの破線とは別
       if (b.disabled) return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + ' is-disabled" disabled>' + esc(b.label) + '</button>';
       return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + (b.big ? ' big' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
     }).join('');
@@ -265,6 +267,7 @@
         : '<span class="placeholder">Match Code</span>';
       return header(dev, s, s.title) +
         '<div class="body">' +
+        (s.roomNotice ? '<p class="room-notice" role="status">' + esc(s.roomNotice) + '</p>' : '') +
         '<div class="sec-label">Create Match</div>' +
         '<button type="button" class="btn big"' + attrs(dev, 'createMatch') + '>Create Match</button>' +
         '<div class="sec-label second">Enter Match Code</div>' +
@@ -280,11 +283,10 @@
         '<div class="body">' +
         '<div class="code-head"><span>Match Code</span><span class="copy">Copy</span></div>' +
         '<div class="code">' + MATCH_CODE + '</div>' +
-        '<div class="status-block">' +
-        (s.name ? '<div class="peer">' + esc(s.name) + '</div>' : '') +
-        (s.peerReady ? '<div class="peer-ready">Friend is ready!</div>' : '') +
-        '<div class="status' + (s.name ? '' : ' solo') + '">' + esc(s.status).replace(/\n/g, '<br>') + '</div>' +
-        '</div></div>' + buttonsHtml(dev, s.buttons);
+        (s.cards ? readyHtml(dev, s) : '<div class="status-block">' +
+          (s.name ? '<div class="peer">' + esc(s.name) + '</div>' : '') +
+          '<div class="status' + (s.name ? '' : ' solo') + '">' + esc(s.status).replace(/\n/g, '<br>') + '</div></div>') +
+        '</div>' + buttonsHtml(dev, s.buttons);
     },
     stage: function (dev, s) {
       return header(dev, s, '') + '<div class="stage-label">Stage Select</div><div class="stage-grid">' +
@@ -361,6 +363,23 @@
 
   function fmt(n) { return n.toLocaleString('en-US'); }
 
+  // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に "✓ Ready" / "Not ready"。
+  // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、カウントダウン (秒)
+  function readyHtml(dev, s) {
+    var other = dev === 'host' ? 'client' : 'host';
+    var card = function (who, ready, isMe) {
+      return '<div class="rd-card' + (ready ? ' ready' : '') + (isMe ? ' me' : '') + '">' + (isMe ? '<span class="you">YOU</span>' : '') +
+        '<div class="rd-name">' + esc(LOBBY_NAMES[who]) + '</div>' +
+        '<div class="rd-state">' + (ready ? '\u2713 Ready' : 'Not ready') + '</div></div>';
+    };
+    return '<div class="ready-block"><div class="rd-cards">' + card(dev, s.cards.me, true) + card(other, s.cards.them, false) + '</div>' +
+      '<div class="rd-info">' +
+      (s.readyNotice ? '<p class="rd-notice" role="status">' + esc(s.readyNotice) + '</p>' : '') +
+      (s.status ? '<div class="status">' + esc(s.status).replace(/\n/g, '<br>') + '</div>' : '') +
+      (s.timer ? '<div class="rd-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div>' : '') +
+      '</div></div>';
+  }
+
   function stampById(id) {
     return STAMPS.filter(function (st) { return st.id === id; })[0] || null;
   }
@@ -431,12 +450,16 @@
   }
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
-  // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29)、結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、
-  // それ以外は試合の決着 (Win / Lose / Draw) と、この端末の接続が切れる「切断する」(決定 U28)
+  // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29)、ロビー (Ready 画面) では「アプリを離れる」と「切断する」(決定 U32 / U35)、
+  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、それ以外は試合の決着 (Win / Lose / Draw) と、この端末の接続が切れる「切断する」(決定 U28 / U32)
   function mockControlsHtml(dev) {
     var btn = function (ev, text) { return '<button type="button" class="mc-btn"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
-    if (MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(app.state, dev + '.' + ev); })) {
+    var state = app.state[dev];
+    if (/\.Matchmake/.test(state) && MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(app.state, dev + '.' + ev); })) {
       return '<span class="mc-label">モック操作 (検索中):</span>' + btn('leaveApp', 'アプリを離れる') + btn('searchTimeout', '60 秒たつ');
+    }
+    if (/\.FriendMatch\.Lobby\./.test(state)) {
+      return '<span class="mc-label">モック操作 (ルーム):</span>' + btn('leaveApp', 'アプリを離れる') + btn('disconnect', '切断する');
     }
     if (isResultState(app.state[dev])) {
       return '<span class="mc-label">モック操作 (スタンプ):</span>' + btn('stampShown', '3 秒たつ') + btn('stampInterval', '5 秒たつ');
@@ -584,7 +607,7 @@
     $('#ctx-createResult').value = app.ctx.createResult;
   }
 
-  // 状態名 (Host.FriendMatch.Lobby.Ready.WaitingForFriend など) は . の後ろで折り返す。
+  // 状態名 (Host.FriendMatch.Lobby.Ready.WaitingForOpponent など) は . の後ろで折り返す。
   // . で区切った部分ごとに inline-block にし、1 つの部分が幅に収まらないときだけ CamelCase の切れ目で折る
   function stateName(name) {
     var parts = name.split('.');

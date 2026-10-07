@@ -10,6 +10,7 @@ const ctx = vm.createContext({});
 for (const f of ['transitions.js', 'engine.js', 'scenarios.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 }
+const eachSideAll = [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']];
 const { TRANSITIONS, SCREENS, DIALOGS, UNDECIDED, SCENARIOS, EVENT_LABELS, TOASTS, GAME_COUNTDOWN_MS, MATCH_MENU, SURRENDER_CONFIRM, Engine } = ctx;
 const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
 
@@ -112,25 +113,35 @@ for (const sc of SCENARIOS) {
   }
 }
 
-// 決定 (U31): 開始は両者の Start Match だけ。Ready 後の自動開始 (sys.autoStart・U31 トグル・シナリオ 1b の別案) は残っていない
+// 決定 (U31、2026-10-07 にボタンの名前を Start Match から Ready に変更): 開始は両者の Ready だけ。Ready 画面になっても自動では開始しない
 const u31 = UNDECIDED.find((u) => u.id === 'U31');
 if (!u31 || !u31.decided) fail('U31 が決定済みになっていない');
-for (const id of ['U33', 'U34', 'U35', 'U36']) if (!openIds.has(id)) fail(`未決 ${id} が無い`);
-if (EVENT_LABELS['sys.autoStart']) fail('sys.autoStart のラベルが残っている');
+if (u31 && (!/Ready/.test(u31.title) || !/2026-10-07/.test(u31.decided.date))) fail('U31 の題名・日付が Ready への変更 (2026-10-07) になっていない');
+const OLD_EVENTS = ['sys.autoStart', 'host.startMatch', 'client.startMatch', 'sys.startFailed', 'sys.resetWaiting', 'net.lostDuringVs', 'sys.ready'];
+for (const ev of OLD_EVENTS) if (EVENT_LABELS[ev]) fail(`古いイベント ${ev} のラベルが残っている`);
 for (const r of TRANSITIONS) {
-  if (r.event === 'sys.autoStart') fail(`${r.id}: 自動開始の sys.autoStart が残っている`);
-  if (r.when && 'U31' in r.when) fail(`${r.id}: U31 のトグル条件が残っている`);
+  if (OLD_EVENTS.includes(r.event)) fail(`${r.id}: 古いイベント ${r.event} が残っている`);
+  if (r.when && ('U31' in r.when || 'U3' in r.when)) fail(`${r.id}: 決定済みの U31 / U3 のトグル条件が残っている`);
   if (r.event === 'sys.bothStarted' && (r.from.host !== 'Host.FriendMatch.Lobby.Starting' || r.from.client !== 'Client.FriendMatch.Lobby.Starting')) fail(`${r.id}: 両者が押す前に開始する`);
 }
 for (const sc of SCENARIOS) {
-  if (sc.opts && 'U31' in sc.opts) fail(`シナリオ ${sc.id} が U31 のトグルを前提にしている`);
-  if (sc.steps.some((st) => Engine.stepEvent(st) === 'sys.autoStart')) fail(`シナリオ ${sc.id} に sys.autoStart が残っている`);
-  if (/自動開始|自動で開始/.test(sc.title)) fail(`シナリオ ${sc.id} が自動開始の別案のまま`);
+  if (sc.opts && ('U31' in sc.opts || 'U3' in sc.opts)) fail(`シナリオ ${sc.id} が決定済みのトグルを前提にしている`);
+  if (sc.steps.some((st) => OLD_EVENTS.includes(Engine.stepEvent(st)))) fail(`シナリオ ${sc.id} に古いイベントが残っている`);
+  if (/Start Match|自動開始|自動で開始/.test(sc.title)) fail(`シナリオ ${sc.id} の題名が Start Match / 自動開始のまま`);
 }
-// Ready のまま、または片方だけ押した状態からは、自動遷移でも環境イベントでも VS 画面に進まない
+// 古い状態 (片方だけ押した .WaitingForFriend / .FriendReady、図04 の HostCancelled、図07 の ClientAway / Client.Away.* / Match expired.、図06 の StartFailed) が残っていない
+for (const name of Object.keys(SCREENS)) {
+  if (/WaitingForFriend$|\.FriendReady$|HostCancelled|ClientAway|^Client\.Away\.|^Host\.FriendMatch\.Lobby\.(MatchExpired|StartFailed)$|^Client\.FriendMatch\.Lobby\.StartFailed$/.test(name)) fail(`古い状態 ${name} が残っている`);
+}
+// "Start Match" はどこにも出さない (画面・ダイアログ・アプリ)
+// (右パネルの説明 context は経緯を書くので除く)
+const shownText = JSON.stringify([SCREENS, DIALOGS, TOASTS], (k, v) => (k === 'context' ? undefined : v));
+if (/Start Match|Friend is ready!|cancelled the match|left the match\./.test(shownText + read('js', 'app.js'))) fail('画面に Start Match / "Friend is ready!" / "cancelled the match." / "left the match." が残っている');
+// Ready 画面からは、自動遷移でも環境イベントでも VS 画面に進まない (読み込みの "Starting match…" を経る)
+const { readyScreen, preStart } = ctx;
 const toVs = (r) => r.to.host === 'Host.Opponent' || r.to.client === 'Client.Opponent';
-for (const h of ['Host.FriendMatch.Lobby.Ready', 'Host.FriendMatch.Lobby.Ready.WaitingForFriend', 'Host.FriendMatch.Lobby.Ready.FriendReady']) {
-  for (const c of ['Client.FriendMatch.Lobby.Ready', 'Client.FriendMatch.Lobby.Ready.WaitingForFriend', 'Client.FriendMatch.Lobby.Ready.FriendReady']) {
+for (const h of readyScreen('Host')) {
+  for (const c of readyScreen('Client')) {
     for (const r of TRANSITIONS) {
       const st = Object.assign(Engine.initialState(), { host: h, client: c });
       if (toVs(r) && Engine.findRow(st, r.event) === r) fail(`${h} / ${c} から ${r.id} (${r.event}) で VS 画面へ進む`);
@@ -171,51 +182,166 @@ for (const sc of SCENARIOS) {
 }
 console.log('ok  VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (両端末)');
 
-// 決定 (U31): どちらが先に押しても、1 回目で「押した側は待機 / 相手側は Friend is ready!」、2 回目で開始 → VS 画面
-const startOrders = [
-  ['host', 'client', 'Host.FriendMatch.Lobby.Ready.WaitingForFriend', 'Client.FriendMatch.Lobby.Ready.FriendReady'],
-  ['client', 'host', 'Host.FriendMatch.Lobby.Ready.FriendReady', 'Client.FriendMatch.Lobby.Ready.WaitingForFriend'],
-];
-for (const [first, second, h1, c1] of startOrders) {
-  const s1 = expectFire(at('Host.FriendMatch.Lobby.Ready', 'Client.FriendMatch.Lobby.Ready'), `${first}.startMatch`, h1, c1);
-  if (!s1) continue;
-  if (Engine.canFire(s1, `${first}.startMatch`)) fail(`${first} が押したあとも Start Match を押せる`);
-  for (const ev of ['net.unstable', 'host.back', 'client.back', 'timer.codeExpired']) {
-    if (Engine.canFire(s1, ev)) fail(`片方だけ押した状態 ${h1} / ${c1} で ${ev} の行がある (U33 / U35 で未決)`);
-  }
-  const s2 = expectFire(s1, `${second}.startMatch`, 'Host.FriendMatch.Lobby.Starting', 'Client.FriendMatch.Lobby.Starting');
-  if (s2) expectFire(s2, 'sys.bothStarted', 'Host.Opponent', 'Client.Opponent');
-}
-const presserScreens = { 'Host.FriendMatch.Lobby.Ready.WaitingForFriend': 'host', 'Client.FriendMatch.Lobby.Ready.WaitingForFriend': 'client' };
-for (const [name, dev] of Object.entries(presserScreens)) {
-  const s = SCREENS[name];
-  if (s.status !== 'Waiting for your friend…') fail(`${name} の表示が "Waiting for your friend…" でない`);
-  const startBtn = s.buttons.find((b) => b.label === 'Start Match');
-  if (!startBtn || !startBtn.disabled || startBtn.event) fail(`${name} の Start Match が無効表示になっていない`);
-  if (!s.buttons.some((b) => b.label === (dev === 'host' ? 'Cancel Match' : 'Leave Match'))) fail(`${name} にキャンセル / 退出のボタンが無い`);
-}
-for (const name of ['Host.FriendMatch.Lobby.Ready.FriendReady', 'Client.FriendMatch.Lobby.Ready.FriendReady']) {
-  const s = SCREENS[name];
-  if (!s.peerReady) fail(`${name} に "Friend is ready!" の表示が無い`);
-  if (!s.buttons.some((b) => b.event === 'startMatch' && !b.disabled)) fail(`${name} で Start Match を押せない`);
-}
-if (!/Friend is ready!/.test(read('js', 'app.js'))) fail('app.js に "Friend is ready!" の描画が無い');
-// シナリオ 1 (ホストが先) と 1b (クライアントが先): 1 回目・2 回目の押下と VS 画面
-for (const [id, afterFirst] of [['1', 'Host.FriendMatch.Lobby.Ready.WaitingForFriend / Client.FriendMatch.Lobby.Ready.FriendReady'], ['1b', 'Host.FriendMatch.Lobby.Ready.FriendReady / Client.FriendMatch.Lobby.Ready.WaitingForFriend']]) {
-  const sc = SCENARIOS.find((x) => x.id === id);
-  if (!sc) { fail(`シナリオ ${id} が無い`); continue; }
-  const i = sc.steps.findIndex((st) => /\.startMatch$/.test(Engine.stepEvent(st)));
-  const got = [i + 1, i + 2, i + 3].map((n) => { const st = Engine.replay(sc, n).state; return `${st.host} / ${st.client}`; });
-  const want = [afterFirst, 'Host.FriendMatch.Lobby.Starting / Client.FriendMatch.Lobby.Starting', 'Host.Opponent / Client.Opponent'];
-  if (got.join() !== want.join()) fail(`シナリオ ${id} の開始の流れ ${got.join(' → ')} (期待: ${want.join(' → ')})`);
-}
-console.log('ok  U31: 両者の Start Match で開始 (ホストが先 / クライアントが先)、自動開始なし');
-
+// 決定 (U31 / U36): どちらが先に押しても、"Confirming…" → 届くと押した側は "Waiting for opponent…"、相手側は "Opponent is ready. Are you?" →
+// もう一方も押して "Confirming…" → 届くと "Starting match…" → VS 画面
+const L = (R, s) => `${R}.FriendMatch.Lobby.${s}`;
 const pair = (st) => `${st.host} / ${st.client}`;
 const appJs = read('js', 'app.js');
-// ホストのキャンセル (図04): クライアントには "cancelled the match." (Ready からでも、片方が Start Match を押したあとでも)
-const sc4 = SCENARIOS.find((x) => x.id === '4');
-if (pair(Engine.replay(sc4).state) !== 'Host.FriendMatch.Room / Client.FriendMatch.Lobby.HostCancelled') fail(`シナリオ 4 の最後の状態 ${pair(Engine.replay(sc4).state)}`);
+for (const [first, second, F, S2] of [['host', 'client', 'Host', 'Client'], ['client', 'host', 'Client', 'Host']]) {
+  const side = (mine, theirs) => (first === 'host' ? [mine, theirs] : [theirs, mine]);
+  const s1 = expectFire(at(L('Host', 'Ready'), L('Client', 'Ready')), `${first}.ready`, ...side(L(F, 'Ready.Confirming'), L(S2, 'Ready')));
+  if (!s1) continue;
+  for (const ev of [`${first}.ready`, `${first}.leaveRoom`, `${first}.back`, `${first}.cancelReady`]) if (Engine.canFire(s1, ev)) fail(`送っている間 (${pair(s1)}) に ${ev} の行がある`);
+  const s2 = expectFire(s1, 'sys.readyConfirmed', ...side(L(F, 'Ready.WaitingForOpponent'), L(S2, 'Ready.OpponentReady')));
+  if (!s2) continue;
+  if (Engine.canFire(s2, `${first}.ready`)) fail(`${first} が押したあとも Ready を押せる`);
+  for (const ev of ['net.unstable', 'timer.codeExpired', 'timer.loadTimeout']) if (Engine.canFire(s2, ev)) fail(`片方だけ Ready の ${pair(s2)} で ${ev} の行がある`);
+  const s3 = expectFire(s2, `${second}.ready`, ...side(L(F, 'Ready.WaitingForOpponent'), L(S2, 'Ready.OpponentReady.Confirming')));
+  const s4 = s3 && expectFire(s3, 'sys.readyConfirmed', L('Host', 'Starting'), L('Client', 'Starting'));
+  if (s4) {
+    for (const d of ['host', 'client']) for (const ev of ['ready', 'cancelReady', 'leaveRoom', 'back', 'leaveApp']) if (Engine.canFire(s4, `${d}.${ev}`)) fail(`読み込み中に ${d}.${ev} の行がある`);
+    expectFire(s4, 'sys.bothStarted', 'Host.Opponent', 'Client.Opponent');
+  }
+  // U34: Cancel Ready はルームに残り、相手に "Opponent is no longer ready."。U35: アプリを離れても同じ。Ready していない側が離れても何も変わらない
+  expectFire(s2, `${first}.cancelReady`, ...side(L(F, 'Ready'), L(S2, 'Ready.OpponentNotReady')));
+  expectFire(s2, `${first}.leaveApp`, ...side(L(F, 'Ready'), L(S2, 'Ready.OpponentNotReady')));
+  expectFire(s2, `${second}.leaveApp`, ...side(L(F, 'Ready.WaitingForOpponent'), L(S2, 'Ready.OpponentReady')));
+  expectFire(s1, `${first}.leaveApp`, ...side(L(F, 'Ready'), L(S2, 'Ready')));
+  if (s3) expectFire(s3, `${second}.leaveApp`, ...side(L(F, 'Ready.WaitingForOpponent'), L(S2, 'Ready.OpponentReady')));
+  // U33: 片方が Ready のまま 60 秒で両者の Ready を消す (どちらもルームに残る)
+  expectFire(s2, 'timer.readyTimeout', L('Host', 'Ready.TimedOut'), L('Client', 'Ready.TimedOut'));
+  // U34 / U35: Leave Room と ‹ は同じ確認。Stay in Room で残り (Ready はそのまま)、Leave Room で抜ける
+  for (const d of [first, second]) {
+    for (const ev of ['leaveRoom', 'back']) {
+      const res = Engine.fire(s2, `${d}.${ev}`);
+      if (!res || res.state[`${d}Dialog`] !== 'leaveRoom' || res.state[d] !== s2[d]) { fail(`${pair(s2)} で ${d}.${ev} が Leave Room の確認にならない`); continue; }
+      const stay = Engine.fire(res.state, `${d}.dialog.stay`);
+      if (!stay || pair(stay.state) !== pair(s2) || stay.state[`${d}Dialog`] !== null) fail(`${d} の Stay in Room でルームに残らない`);
+      if (d === 'host') expectFire(res.state, 'host.dialog.leaveRoom', 'Host.FriendMatch.Room', 'Client.FriendMatch.Room.HostLeft');
+      else expectFire(res.state, 'client.dialog.leaveRoom', 'Host.FriendMatch.Lobby.ClientLeft', 'Client.FriendMatch.Room.CodeEntered');
+    }
+  }
+}
+// 両者がほぼ同時に押した (どちらも送っている間) → 両方届いたら開始
+{
+  const a = Engine.fire(at(L('Host', 'Ready'), L('Client', 'Ready')), 'host.ready');
+  const b = a && expectFire(a.state, 'client.ready', L('Host', 'Ready.Confirming'), L('Client', 'Ready.Confirming'));
+  if (b) expectFire(b, 'sys.readyConfirmed', L('Host', 'Starting'), L('Client', 'Starting'));
+}
+// お知らせ付きの Ready 画面 (タイムアウト・相手が取り消した・読み込みの失敗) からも Ready を押せ、お知らせは消える
+const READY_NOTICES_WANT = { TimedOut: 'Ready check timed out. Press Ready when you\u2019re ready.', OpponentNotReady: 'Opponent is no longer ready.', StartFailed: 'Match could not start. Please try again.' };
+for (const [k, text] of Object.entries(READY_NOTICES_WANT)) {
+  for (const R of ['Host', 'Client']) {
+    const s = SCREENS[L(R, `Ready.${k}`)];
+    if (!s || s.readyNotice !== text) fail(`${L(R, `Ready.${k}`)} のお知らせが "${text}" でない`);
+    if (s && (s.cards.me || s.cards.them)) fail(`${L(R, `Ready.${k}`)} で Ready が消えていない`);
+  }
+  expectFire(at(L('Host', `Ready.${k}`), L('Client', `Ready.${k}`)), 'host.ready', L('Host', 'Ready.Confirming'), L('Client', `Ready.${k}`));
+}
+// U36: Ready 画面の表示 (カード、押した側の "Waiting for opponent…"・60 秒・Cancel Ready、相手側の "Opponent is ready. Are you?"、送っている間の "Confirming…")
+const btns = (s) => s.buttons.map((b) => b.label + (b.disabled ? '(無効)' : '')).join(' / ');
+const readyWant = {
+  Ready: [false, false, null, null, 'Ready / Leave Room'],
+  'Ready.Confirming': [false, false, null, null, 'Confirming…(無効) / Leave Room(無効)'],
+  'Ready.WaitingForOpponent': [true, false, 'Waiting for opponent…', 60, 'Cancel Ready / Leave Room'],
+  'Ready.OpponentReady': [false, true, 'Opponent is ready. Are you?', null, 'Ready / Leave Room'],
+  'Ready.OpponentReady.Confirming': [false, true, 'Opponent is ready. Are you?', null, 'Confirming…(無効) / Leave Room(無効)'],
+  Starting: [true, true, 'Starting match…', null, ''],
+  OpponentDisconnected: [false, false, 'Opponent disconnected.\nWaiting for them to reconnect…', 20, 'Leave Room'],
+};
+for (const R of ['Host', 'Client']) {
+  for (const [k, [me, them, status, timer, buttons]] of Object.entries(readyWant)) {
+    const s = SCREENS[L(R, k)];
+    if (!s || !s.cards) { fail(`${L(R, k)} が Ready 画面 (カード付き) でない`); continue; }
+    const got = [s.cards.me, s.cards.them, s.status || null, s.timer || null, btns(s)];
+    if (JSON.stringify(got) !== JSON.stringify([me, them, status, timer, buttons])) fail(`${L(R, k)} の表示 ${JSON.stringify(got)} (期待: ${JSON.stringify([me, them, status, timer, buttons])})`);
+  }
+}
+if (!/\\u2713 Ready/.test(appJs) || !/Not ready/.test(appJs) || !/rd-card/.test(appJs) || !/rd-timer/.test(appJs)) fail('app.js に Ready 画面のカード ("✓ Ready" / "Not ready") とカウントダウンの描画が無い');
+if (DIALOGS.leaveRoom.body !== 'No match has started. No win or loss will be recorded.') fail('Leave Room の確認の本文が決定の文言でない');
+console.log('ok  U31 / U33〜U36: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト、Leave Room と ‹ の確認 (両端末)');
+
+// 決定 (U32): 開始前 (Ready 画面・読み込み・Friend Match の VS 画面・カウントダウン) の切断は Ready を消して止め、相手は 20 秒待つ。勝敗は記録しない
+for (const [d, R, , O] of eachSideAll) {
+  const side = (mine, theirs) => (d === 'host' ? [mine, theirs] : [theirs, mine]);
+  const waiting = side(L(R, 'Reconnecting'), L(O, 'OpponentDisconnected'));
+  for (const mine of preStart(R)) {
+    for (const theirs of preStart(O)) expectFire(at(...side(mine, theirs)), `${d}.disconnect`, ...waiting);
+  }
+  for (const [mine, theirs] of [[`${R}.Opponent`, `${O}.Opponent`], [`${R}.Game.Countdown`, `${O}.Game.Countdown`]]) {
+    expectFire(at(...side(mine, theirs), { match: 'friend', rated: false }), `${d}.disconnect`, ...waiting);
+    if (Engine.canFire(at(...side(mine, theirs), { match: 'random', rated: true }), `${d}.disconnect`)) fail(`ランダム対戦の ${mine} で ${d}.disconnect の行がある (U54)`);
+  }
+  const w = at(...waiting);
+  expectFire(w, 'net.recovered', L('Host', 'Ready'), L('Client', 'Ready'));
+  if (d === 'client') expectFire(w, 'timer.disconnectTimeout', L('Host', 'MatchCancelled'), 'Client.FriendMatch.Room.CodeEntered');
+  else expectFire(w, 'timer.disconnectTimeout', 'Host.FriendMatch.Room', 'Client.FriendMatch.Room.HostDisconnected');
+  for (const ev of [`${O.toLowerCase()}.leaveRoom`, `${O.toLowerCase()}.back`]) {
+    const res = Engine.fire(w, ev);
+    if (!res || res.state[`${O.toLowerCase()}Dialog`] !== 'leaveRoom') fail(`${L(O, 'OpponentDisconnected')} で ${ev} が Leave Room の確認にならない`);
+  }
+  // 開始前の切断からは、どのイベントでも結果画面 (勝敗) へ行かない
+  for (const ev of Object.keys(EVENT_LABELS)) {
+    const res = Engine.fire(w, ev);
+    if (res && (ctx.isResultState(res.state.host) || ctx.isResultState(res.state.client))) fail(`開始前の切断 ${pair(w)} から ${ev} で結果画面へ行く`);
+  }
+}
+expectFire(at(L('Host', 'Starting'), L('Client', 'Starting')), 'timer.loadTimeout', L('Host', 'Ready.StartFailed'), L('Client', 'Ready.StartFailed'));
+// 同じ Match Code で次の友だちを待つ (U32 の Match cancelled、U34 の Your friend left) と、ルームが閉じた Friend Match トップ
+expectFire(at(L('Host', 'MatchCancelled'), 'Client.FriendMatch.Room.CodeEntered'), 'client.joinMatch', L('Host', 'FriendJoined'), L('Client', 'Waiting'));
+expectFire(at(L('Host', 'ClientLeft'), 'Client.FriendMatch.Room.CodeEntered'), 'client.joinMatch', L('Host', 'FriendJoined'), L('Client', 'Waiting'));
+for (const r of TRANSITIONS) if (r.event === 'sys.resetWaiting' || (r.auto && [].concat(r.from.host).includes(L('Host', 'ClientLeft')))) fail(`${r.id}: "Your friend left…" から自動で進む`);
+const roomTexts = { [L('Host', 'ClientLeft')]: 'Your friend left.\nWaiting for another friend…', [L('Host', 'MatchCancelled')]: 'Match cancelled.\nOpponent did not reconnect.' };
+for (const [name, text] of Object.entries(roomTexts)) if (!SCREENS[name] || SCREENS[name].status !== text) fail(`${name} の表示が "${text}" でない`);
+for (const [name, text] of [['Client.FriendMatch.Room.HostLeft', 'Room closed. The host left.'], ['Client.FriendMatch.Room.HostDisconnected', 'Room closed. The host disconnected.']]) {
+  const s = SCREENS[name];
+  if (!s || s.view !== 'friendTop' || s.roomNotice !== text || s.input !== '') fail(`${name} が "${text}" の Friend Match トップ (入力欄は空) でない`);
+  expectFire(at('Host.FriendMatch.Room', name), 'client.enterCode', 'Host.FriendMatch.Room', 'Client.FriendMatch.Room.CodeEntered');
+}
+// ゲーム本体のカウントダウンが終わったら (サーバーが確認したら) 試合開始。そこからは対戦中のルール (切断は 20 秒で負け、U28)
+expectFire(at('Host.Game.Play', 'Client.Game.Play'), 'host.disconnect', 'Host.Game.Disconnected', 'Client.Game.OpponentDisconnected');
+console.log('ok  U32: 開始前の切断は Ready を消して 20 秒待つ (戻る / 戻らない: Match cancelled・Room closed)、読み込みは 20 秒で "Match could not start."、勝敗なし (両端末)');
+
+// 決定 U32〜U36 (高宮さん 2026-10-07)。U3 / U8 / U10 / U18 はこの決定で解消。決まっていない点は新しい未決 U51〜U54
+for (const id of ['U32', 'U33', 'U34', 'U35', 'U36', 'U3', 'U8', 'U10', 'U18']) {
+  const u = UNDECIDED.find((x) => x.id === id);
+  if (!u || !u.decided || u.decided.by !== '高宮さん' || u.decided.date !== '2026-10-07') fail(`${id} が 高宮さん 2026-10-07 の決定になっていない`);
+  for (const r of TRANSITIONS) if (r.undecided.includes(id)) fail(`${r.id}: 決定済みの ${id} が未決として残っている`);
+}
+for (const id of ['U3', 'U8', 'U10', 'U18']) if (!/解消/.test(UNDECIDED.find((x) => x.id === id).desc)) fail(`${id} の説明に、どの決定で解消したかが無い`);
+for (const id of ['U51', 'U52', 'U53', 'U54']) if (!openIds.has(id)) fail(`未決 ${id} が無い`);
+// 60 秒・20 秒が仮の値であることは右パネル (説明) に書く
+for (const [k, want] of [['Ready.WaitingForOpponent', /60 秒は QA² 側の仮の値/], ['OpponentDisconnected', /20 秒は QA² 側の仮の値/], ['Starting', /20 秒 \(仮\)/]]) {
+  if (!want.test([].concat(SCREENS[L('Host', k)].context).join())) fail(`${L('Host', k)} の右パネルに ${want} が無い`);
+}
+// シナリオの流れ
+const readyFlows = {
+  '1': [[8, `${L('Host', 'Ready.Confirming')} / ${L('Client', 'Ready')}`], [9, `${L('Host', 'Ready.WaitingForOpponent')} / ${L('Client', 'Ready.OpponentReady')}`],
+    [10, `${L('Host', 'Ready.WaitingForOpponent')} / ${L('Client', 'Ready.OpponentReady.Confirming')}`], [11, `${L('Host', 'Starting')} / ${L('Client', 'Starting')}`], [12, 'Host.Opponent / Client.Opponent']],
+  '1b': [[9, `${L('Host', 'Ready.OpponentReady')} / ${L('Client', 'Ready.WaitingForOpponent')}`], [12, 'Host.Opponent / Client.Opponent']],
+  '4': [[9, `Host.FriendMatch.Room / Client.FriendMatch.Room.HostLeft`]],
+  '4b': [[11, `${L('Host', 'Ready.WaitingForOpponent')} / ${L('Client', 'Ready.OpponentReady')}`], [14, 'Host.Opponent / Client.Opponent']],
+  '5': [[9, `${L('Host', 'ClientLeft')} / Client.FriendMatch.Room.CodeEntered`], [10, `${L('Host', 'FriendJoined')} / ${L('Client', 'Waiting')}`]],
+  '6': [[12, `${L('Host', 'Ready.StartFailed')} / ${L('Client', 'Ready.StartFailed')}`], [17, 'Host.Opponent / Client.Opponent']],
+  '7a': [[10, `${L('Host', 'Ready.OpponentReady')} / ${L('Client', 'Ready.WaitingForOpponent')}`], [13, `${L('Host', 'ClientLeft')} / Client.FriendMatch.Room.CodeEntered`]],
+  '7b': [[10, `${L('Host', 'Ready')} / ${L('Client', 'Ready.OpponentNotReady')}`]],
+  '12': [[13, `${L('Host', 'OpponentDisconnected')} / ${L('Client', 'Reconnecting')}`], [14, `${L('Host', 'MatchCancelled')} / Client.FriendMatch.Room.CodeEntered`]],
+  '19': [[10, `${L('Host', 'Ready.OpponentNotReady')} / ${L('Client', 'Ready')}`], [12, `${L('Host', 'Ready.WaitingForOpponent')} / ${L('Client', 'Ready.OpponentReady')}`]],
+  '19b': [[10, `${L('Host', 'Ready.TimedOut')} / ${L('Client', 'Ready.TimedOut')}`]],
+  '19c': [[13, 'Host.Game.Countdown / Client.Game.Countdown'], [14, `${L('Host', 'Reconnecting')} / ${L('Client', 'OpponentDisconnected')}`],
+    [15, `${L('Host', 'Ready')} / ${L('Client', 'Ready')}`], [21, 'Host.Game.Countdown / Client.Game.Countdown']],
+  '19d': [[10, `${L('Host', 'Reconnecting')} / ${L('Client', 'OpponentDisconnected')}`], [11, 'Host.FriendMatch.Room / Client.FriendMatch.Room.HostDisconnected']],
+  '19e': [[8, `${L('Host', 'OpponentDisconnected')} / ${L('Client', 'Reconnecting')}`], [10, 'Host.FriendMatch.Room / Client.FriendMatch.Room.HostLeft']],
+};
+for (const [id, checks] of Object.entries(readyFlows)) {
+  const sc = SCENARIOS.find((x) => x.id === id);
+  if (!sc) { fail(`シナリオ ${id} が無い`); continue; }
+  for (const [n, want] of checks) {
+    const got = pair(Engine.replay(sc, n).state);
+    if (got !== want) fail(`シナリオ ${id} の手順 ${n}: ${got} (期待: ${want})`);
+  }
+}
+console.log('ok  シナリオ 1 / 1b / 4 / 4b / 5 / 6 / 7a / 7b / 12 / 19〜19e の Ready と開始前の切断の流れ');
 
 // 対戦後 (決定 U20〜U30、高宮さん 2026-10-07)
 const friend = { match: 'friend', rated: false };
@@ -246,7 +372,8 @@ if (hostStates.length + clientStates.length !== Object.keys(SCREENS).length) fai
 for (const h of hostStates) {
   for (const c of clientStates) {
     for (const ev of ['host.win', 'host.lose', 'host.draw', 'client.win', 'client.lose', 'client.draw', 'host.disconnect', 'client.disconnect']) {
-      const want = hostInPlay.includes(h) && clientInPlay.includes(c);
+      // 「切断する」は開始前 (Ready 画面・読み込み、U32) にもある。VS 画面・カウントダウンは Friend Match のときだけなので、セッションの無いここでは行が無い
+      const want = (hostInPlay.includes(h) && clientInPlay.includes(c)) || (/disconnect$/.test(ev) && preStart('Host').includes(h) && preStart('Client').includes(c));
       if (Engine.canFire(at(h, c), ev) !== want) fail(`${h} / ${c} で ${ev} の行が${want ? '無い' : 'ある'}`);
     }
   }
@@ -288,7 +415,7 @@ const ratings = [
 for (const [o, session, want] of ratings) if (ratingText(o, session) !== want) fail(`レート ${o} ${JSON.stringify(session)}: ${ratingText(o, session)} (期待: ${want})`);
 // セッション: Friend Match は rated=false、ランダム対戦は rated=true、再戦で rated=false、次のランダム対戦でまた rated=true
 const sessionAt = (id, n) => { const st = Engine.replay(SCENARIOS.find((x) => x.id === id), n).state; return `${st.match}/${st.rated}`; };
-for (const [id, n, want] of [['15', 13, 'friend/false'], ['15c', 18, 'friend/false'], ['17', 6, 'random/true'], ['17', 11, 'random/false'], ['17', 15, 'random/true'], ['18e', 7, 'random/true']]) {
+for (const [id, n, want] of [['15', 15, 'friend/false'], ['15c', 20, 'friend/false'], ['17', 6, 'random/true'], ['17', 11, 'random/false'], ['17', 15, 'random/true'], ['18e', 7, 'random/true']]) {
   if (sessionAt(id, n) !== want) fail(`シナリオ ${id} の手順 ${n} のセッション ${sessionAt(id, n)} (期待: ${want})`);
 }
 
@@ -460,20 +587,20 @@ for (const [k, v] of Object.entries(Object.assign({}, END_REASONS, ...Object.val
 
 // シナリオの流れ (手順ごとの両端末の状態)
 const flows = {
-  '15': [[13, 'Host.WinResult / Client.LoseResult'], [14, 'Host.FriendMatch.Room / Client.LoseResult.OpponentLeft'], [15, 'Host.FriendMatch.Room / Client.FriendMatch.Room']],
-  '15b': [[13, 'Host.LoseResult / Client.WinResult'], [14, 'Host.LoseResult.OpponentLeft / Client.FriendMatch.Room']],
-  '15c': [[14, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [15, 'Host.Opponent / Client.Opponent'], [18, 'Host.LoseResult / Client.WinResult']],
-  '15d': [[15, 'Host.WinResult.RematchCooldown / Client.LoseResult.RematchCancelled'], [16, 'Host.WinResult / Client.LoseResult'], [18, 'Host.Opponent / Client.Opponent']],
-  '15e': [[15, 'Host.WinResult.RematchCooldown / Client.LoseResult.RematchDeclined'], [17, 'Host.WinResult.OpponentLeft / Client.FriendMatch.Room']],
-  '15f': [[15, 'Host.WinResult.RematchExpired / Client.LoseResult.RematchCooldown'], [16, 'Host.WinResult / Client.LoseResult'], [18, 'Host.Opponent / Client.Opponent']],
-  '15g': [[13, 'Host.DrawResult / Client.DrawResult'], [14, 'Host.Opponent / Client.Opponent'], [16, 'Host.Game.Play / Client.Game.Play']],
+  '15': [[15, 'Host.WinResult / Client.LoseResult'], [16, 'Host.FriendMatch.Room / Client.LoseResult.OpponentLeft'], [17, 'Host.FriendMatch.Room / Client.FriendMatch.Room']],
+  '15b': [[15, 'Host.LoseResult / Client.WinResult'], [16, 'Host.LoseResult.OpponentLeft / Client.FriendMatch.Room']],
+  '15c': [[16, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [17, 'Host.Opponent / Client.Opponent'], [20, 'Host.LoseResult / Client.WinResult']],
+  '15d': [[17, 'Host.WinResult.RematchCooldown / Client.LoseResult.RematchCancelled'], [18, 'Host.WinResult / Client.LoseResult'], [20, 'Host.Opponent / Client.Opponent']],
+  '15e': [[17, 'Host.WinResult.RematchCooldown / Client.LoseResult.RematchDeclined'], [19, 'Host.WinResult.OpponentLeft / Client.FriendMatch.Room']],
+  '15f': [[17, 'Host.WinResult.RematchExpired / Client.LoseResult.RematchCooldown'], [18, 'Host.WinResult / Client.LoseResult'], [20, 'Host.Opponent / Client.Opponent']],
+  '15g': [[15, 'Host.DrawResult / Client.DrawResult'], [16, 'Host.Opponent / Client.Opponent'], [18, 'Host.Game.Play / Client.Game.Play']],
   '16d': [[8, 'Host.WinResult.OpponentSurrendered / Client.LoseResult.Surrendered'], [10, 'Host.Matchmake.NextOpponent / Client.MultiModeSelection']],
   '17': [[6, 'Host.WinResult / Client.LoseResult'], [8, 'Host.Opponent / Client.Opponent'], [11, 'Host.LoseResult / Client.WinResult'],
     [12, 'Host.Matchmake.NextOpponent / Client.WinResult.OpponentLeft'], [15, 'Host.Opponent / Client.Opponent']],
   '17b': [[8, 'Host.Matchmake.NextOpponent.NotFound / Client.WinResult.OpponentLeft'], [9, 'Host.Matchmake.NextOpponent / Client.WinResult.OpponentLeft'], [11, 'Host.MultiModeSelection / Client.WinResult.OpponentLeft']],
-  '18': [[13, 'Host.Game.OpponentDisconnected / Client.Game.Disconnected'], [14, 'Host.WinResult.OpponentDisconnected / Client.LoseResult.Disconnected']],
-  '18b': [[13, 'Host.Game.Disconnected / Client.Game.OpponentDisconnected'], [14, 'Host.Game.Play / Client.Game.Play'], [15, 'Host.WinResult / Client.LoseResult']],
-  '18c': [[14, 'Host.NoContestResult / Client.NoContestResult']],
+  '18': [[15, 'Host.Game.OpponentDisconnected / Client.Game.Disconnected'], [16, 'Host.WinResult.OpponentDisconnected / Client.LoseResult.Disconnected']],
+  '18b': [[15, 'Host.Game.Disconnected / Client.Game.OpponentDisconnected'], [16, 'Host.Game.Play / Client.Game.Play'], [17, 'Host.WinResult / Client.LoseResult']],
+  '18c': [[16, 'Host.NoContestResult / Client.NoContestResult']],
   '18d': [[6, 'Host.NoContestResult / Client.NoContestResult'], [8, 'Host.MultiModeSelection / Client.Matchmake.NextOpponent']],
   '18e': [[7, 'Host.LoseResult.Disconnected / Client.WinResult.OpponentDisconnected']],
 };
@@ -487,7 +614,7 @@ for (const [id, checks] of Object.entries(flows)) {
 }
 // 15h: スタンプとミュート (手順ごとの hostStamp / clientStamp / clientMute)
 const sc15h = SCENARIOS.find((x) => x.id === '15h');
-const stampFlow = [13, 14, 15, 16, 17, 18, 19, 20].map((n) => { const st = Engine.replay(sc15h, n).state; return `${st.hostStamp},${st.clientStamp},${st.clientMute}`; }).join(' → ');
+const stampFlow = [15, 16, 17, 18, 19, 20, 21, 22].map((n) => { const st = Engine.replay(sc15h, n).state; return `${st.hostStamp},${st.clientStamp},${st.clientMute}`; }).join(' → ');
 const stampWantFlow = 'null,null,false → gg,null,false → gg,thanks,false → sent,thanks,false → sent,thanks,true → null,thanks,true → nice,thanks,true → nice,thanks,false';
 if (stampFlow !== stampWantFlow) fail(`シナリオ 15h のスタンプ ${stampFlow} (期待: ${stampWantFlow})`);
 console.log('ok  対戦後 (U20〜U30): 結果画面の中身・レート・ボタン・戻り先・再戦・スタンプ・切断・次の相手 (両端末)');
@@ -542,9 +669,9 @@ for (const r of TRANSITIONS) if (/backToOnline$/.test(r.event)) fail(`${r.id}: �
 if (/Game in progress/.test(read('js', 'app.js'))) fail('app.js にモック専用のゲーム画面の表示が残っている');
 // [手順の途中, 最後] の状態
 const menuScenarios = {
-  '16': [14, 'Host.Game.MatchMenu / Client.Game.MatchMenu', 'Host.Game.Play / Client.Game.Play'],
-  '16b': [18, 'Host.LoseResult.Surrendered / Client.WinResult.OpponentSurrendered', 'Host.MultiModeSelection / Client.WinResult.OpponentSurrendered'],
-  '16c': [13, 'Host.Game.MatchMenu / Client.Game.Play', 'Host.LoseResult / Client.WinResult'],
+  '16': [16, 'Host.Game.MatchMenu / Client.Game.MatchMenu', 'Host.Game.Play / Client.Game.Play'],
+  '16b': [20, 'Host.LoseResult.Surrendered / Client.WinResult.OpponentSurrendered', 'Host.MultiModeSelection / Client.WinResult.OpponentSurrendered'],
+  '16c': [15, 'Host.Game.MatchMenu / Client.Game.Play', 'Host.LoseResult / Client.WinResult'],
 };
 for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
   const sc = SCENARIOS.find((x) => x.id === id);
@@ -554,7 +681,7 @@ for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
 }
 console.log('ok  MATCH MENU: 開いても相手は変わらない / CONTINUE / SURRENDER → 確認 → 負け + 相手に "Your opponent surrendered" (両端末)、メニュー中も Win / Lose');
 
-// 決定 (U13a): ランダム対戦は相手が見つかり次第 VS 画面へ。Ready / Start Match / Starting match… を挟まない (U31 は Friend Match だけ)。
+// 決定 (U13a): ランダム対戦は相手が見つかり次第 VS 画面へ。Ready 画面 / Starting match… を挟まない (U31 は Friend Match だけ)。
 // 相手を探す画面は "Searching for an opponent…" と大きな Cancel
 const u13a = UNDECIDED.find((u) => u.id === 'U13a');
 if (!u13a || !u13a.decided) fail('U13a が決定済みになっていない');
@@ -564,7 +691,7 @@ const randomStates = ['Host.Matchmake', 'Client.Matchmake'];
 const friendStart = /\.FriendMatch\.Lobby\.(Ready|Starting|StartFailed)/;
 for (const r of TRANSITIONS) {
   const fromRandom = Engine.DEVICES.some((d) => states(r.from[d]).some((s) => s.startsWith('Host.Matchmake') || s.startsWith('Client.Matchmake')));
-  if (fromRandom && Engine.DEVICES.some((d) => friendStart.test(r.to[d]))) fail(`${r.id}: ランダム対戦から ${r.to.host} / ${r.to.client} (Ready / Start Match) へ進む`);
+  if (fromRandom && Engine.DEVICES.some((d) => friendStart.test(r.to[d]))) fail(`${r.id}: ランダム対戦から ${r.to.host} / ${r.to.client} (Ready 画面) へ進む`);
   if (r.event === 'sys.opponentFound' && !r.decided.includes('U13a')) fail(`${r.id}: 相手が見つかる行に決定 U13a が無い`);
   if (r.decided.includes('U31') && fromRandom) fail(`${r.id}: ランダム対戦の行に U31 が付いている`);
 }

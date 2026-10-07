@@ -5,6 +5,9 @@
 // アプリを離れて検索が止まった通知がモーダルではなく、メニューをさまたげないことも確かめる (決定 U43)。
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
 // No contest にスコアの行が無いこと (値が決まっていないスコアは "----" ではなく行ごと出さない) も確かめる (決定 U20 / U27 / U28 / U30)。
+// Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
+// 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
+// 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
 // 端末の上の帯は未決バッジだけで、すべて見えていること (1280x720 で確かめる) も確かめる。
 // 遷移表に行が無いボタンの破線・半透明 ([data-norow]) はモックの操作の手がかりなので数えるだけにする。
 // 使い方: node tests/scan-screens.mjs   (Chromium の場所は環境変数 CHROMIUM で変えられる。既定は chromium)
@@ -89,6 +92,7 @@ try {
 // ページの中で実行する。シナリオ一覧・手順一覧のボタンは押すと同期的に描画する
 function scan() {
   const BAD_TEXT = [[/仮/, '「仮」'], [/未決/, '「未決」'], [/決定/, '「決定」'], [/\bU\d{1,2}\b/, 'U 番号'], [/[\u3040-\u30ff\u3400-\u9fff]/, '日本語']];
+  const MATCH_CODE_TEXT = 'QWERTY123';
   const BAD_SEL = '.mock-note, .tmp, .decided-note, [class*="pill-"], [data-undecided]';
   const findings = [];
   const norow = {};
@@ -166,7 +170,33 @@ function scan() {
         scroller.scrollTo(sx, sy);
       }
       // 結果画面と切断を待つ画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアが決まっていなければ行ごと出さない
-      if (/Result|Disconnected$/.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(text)) findings.push(`${at}: 秒数がある: ${text.trim().slice(0, 80)}`);
+      if (/Result|\.Game\./.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(text)) findings.push(`${at}: 秒数がある: ${text.trim().slice(0, 80)}`);
+      // Ready 画面 (決定 U31 / U32 / U36)
+      if (/Start Match/.test(text)) findings.push(`${at}: "Start Match" が残っている`);
+      if (screen.querySelector('[data-ev="leaveApp"], [data-ev="disconnect"]')) findings.push(`${at}: ルームのモック操作が端末の画面の中にある`);
+      if (/\.FriendMatch\.Lobby\.(Ready|Starting|Reconnecting|OpponentDisconnected)/.test(state)) {
+        const cards = [...screen.querySelectorAll('.rd-card')];
+        const states = cards.map((c) => c.querySelector('.rd-state').textContent);
+        if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready") でない (${states.join(', ')})`);
+        if (!cards[0] || !cards[0].querySelector('.you') || screen.querySelectorAll('.rd-card .you').length !== 1) findings.push(`${at}: 自分のカードに YOU が無い`);
+        const timer = screen.querySelector('.rd-timer');
+        const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /OpponentDisconnected/.test(state) ? '20s' : null;
+        if ((timer ? timer.textContent : null) !== wantTimer) findings.push(`${at}: カウントダウンが ${timer ? timer.textContent : 'なし'} (期待: ${wantTimer || 'なし'})`);
+        const digits = text.replace(MATCH_CODE_TEXT, '').replace(wantTimer || '\u0000', '');
+        if (/\d/.test(digits)) findings.push(`${at}: カウントダウンのほかに数字がある: ${digits.trim().slice(0, 80)}`);
+        ['leaveApp', 'disconnect'].forEach((ev) => {
+          if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]`)) findings.push(`${at}: 端末の下のモック操作に ${ev} が無い`);
+        });
+        // カード・お知らせ・状況の一行・ボタンが端末の画面に収まり、重ならない
+        const sr = screen.getBoundingClientRect();
+        const parts = [...screen.querySelectorAll('.rd-cards, .rd-notice, .rd-info .status, .rd-timer, .actions')].map((el) => [el, el.getBoundingClientRect()]);
+        parts.forEach(([el, r]) => { if (r.top < sr.top || r.bottom > sr.bottom) findings.push(`${at}: ${el.className} が画面からはみ出している`); });
+        for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
+          const [a, ra] = parts[i]; const [b, rb] = parts[j];
+          if (a.contains(b) || b.contains(a)) continue;
+          if (ra.bottom > rb.top + 0.5 && rb.bottom > ra.top + 0.5 && ra.right > rb.left && rb.right > ra.left) findings.push(`${at}: ${a.className} と ${b.className} が重なっている`);
+        }
+      }
       if (/----/.test(text)) findings.push(`${at}: 値の決まっていない ---- がある`);
       if (screen.querySelector('[data-ev="stampShown"], [data-ev="stampInterval"], [data-ev="disconnect"], [data-ev="win"], [data-ev="draw"]')) findings.push(`${at}: モック操作が端末の画面の中にある`);
       if (/NoContestResult/.test(state) && /Score/.test(text)) findings.push(`${at}: No contest にスコアの行がある`);

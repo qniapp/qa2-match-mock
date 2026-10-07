@@ -220,10 +220,38 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .status-block { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding-bottom: 40px; }
 .peer { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
 .status { font-size: 16px; color: #C9CED8; line-height: 1.5; }
-.peer-ready {
-  margin: -2px 0 12px; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
-  color: #B8F5C8; background: rgba(74, 222, 128, 0.14); border: 1px solid rgba(74, 222, 128, 0.55);
+/* Ready 画面 (決定 U36): プレイヤーごとのカード。Ready なら緑のチップ "✓ Ready"、まだなら灰色の "Not ready" */
+.ready-block { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 22px 0 16px; }
+.rd-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rd-card {
+  position: relative; padding: 20px 6px 14px; border-radius: 12px; text-align: center;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid #3A4466;
 }
+.rd-card.me { border-color: rgba(95, 201, 250, 0.55); }
+.rd-card.ready { border-color: rgba(74, 222, 128, 0.6); box-shadow: 0 0 14px rgba(74, 222, 128, 0.16); }
+.rd-card .you {
+  position: absolute; top: -8px; left: 50%; transform: translateX(-50%); padding: 0 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; line-height: 16px; background: var(--text); color: var(--navy);
+}
+.rd-name { font-size: 16px; font-weight: 700; margin-bottom: 10px; white-space: nowrap; }
+.rd-state {
+  display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  color: #9AA3B8; background: rgba(255, 255, 255, 0.05); border: 1px solid #3A4466;
+}
+.rd-card.ready .rd-state { color: #B8F5C8; background: rgba(74, 222, 128, 0.14); border-color: rgba(74, 222, 128, 0.55); }
+.rd-info { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+.rd-notice, .room-notice {
+  margin: 0; padding: 12px 14px; border-radius: 10px; background: #161C36; border: 1px solid #3A4466;
+  font-size: 14px; font-weight: 600; line-height: 1.45; text-align: center; text-wrap: balance;
+}
+.room-notice { margin-bottom: 18px; }
+/* カウントダウン (Ready の 60 秒・再接続の 20 秒)。モックは始まった直後の秒数のまま描く */
+.rd-timer {
+  display: flex; align-items: baseline; justify-content: center; width: 64px; height: 64px; box-sizing: border-box; padding-top: 15px;
+  border-radius: 50%; border: 2px solid rgba(95, 201, 250, 0.6); box-shadow: 0 0 12px rgba(95, 201, 250, 0.2);
+  font-size: 14px; color: #B9C0D0;
+}
+.rd-timer b { font-size: 24px; line-height: 1; color: var(--text); }
 .status.solo { font-size: 16px; }
 
 .actions { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 0 28px 76px; }

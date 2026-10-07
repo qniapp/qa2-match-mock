@@ -83,17 +83,21 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Ho
 相手を探す画面が "Searching for an opponent…" と大きな Cancel だけ (トーストなし) であること、シナリオ 11 の流れを確認します。
 相手を探している間の操作 (U13 で決定) については、両端末とも (相手の端末がどの状態でも) Cancel と ‹ が確認ダイアログなしで Online Battle に戻ること、
 探している間に行が有るのは Cancel / ‹ / アプリを離れる / 60 秒たつ の 4 つだけで、行き先は Online Battle か通知だけであること、
-アプリを離れると `*.Matchmake.Stopped` ("Search stopped because you left the app.")、60 秒たつと `*.Matchmake.NotFound` ("No opponent found.") になり、
-どちらも Online Battle の上に Search again (→ `*.Matchmake`) / Close (→ `*.MultiModeSelection`) だけを出すこと、通知の文言に数字 (60 秒) が無いこと、
-U13 が高宮さん 2026-10-07 の決定で、説明に「60 秒という長さは仮」があること、遷移表に U13 が未決として残っていないこと、U43 が未決にあること、
+アプリを離れると `*.Matchmake.Stopped` ("Search stopped while the app was in the background.")、60 秒たつと `*.Matchmake.NotFound` ("No opponent found.") になり、
+どちらも Search again (→ `*.Matchmake`) / Close (→ `*.MultiModeSelection`) を出すこと、通知の文言に数字 (60 秒) が無いこと、
+U13 が高宮さん 2026-10-07 の決定で、説明に「60 秒という長さは仮」があること、遷移表に U13 が未決として残っていないこと、
 端末の下のモック操作に「アプリを離れる」「60 秒たつ」があること、シナリオ 11b〜11f の流れを確認します。
+検索停止のお知らせ (U43 で決定) については、U43 が高宮さん 2026-10-07 の決定で遷移表・画面に未決として残っていないこと、古い文言 "…because you left the app." が残っていないこと、
+`*.Matchmake.Stopped` の通知が Online Battle の中 (モーダルではない) で、"No opponent found." だけがモーダルのままであること、
+通知を出したまま Random Match / Friend Match が Online Battle と同じ行き先へ行けること (両端末、相手の端末がどの状態でも)、
+通知から出ていく行はすべてその端末のユーザー操作で、行き先に通知が無いこと (自動遷移・環境イベントでは消えない)、シナリオ 11g の流れを確認します。
 MATCH MENU (U37〜U42 で決定) については、両端末とも ☰ で `Host.Game.MatchMenu` / `Client.Game.MatchMenu` が開き、相手の端末が (プレイ中・メニュー中・確認中のどれでも) 変わらないこと、
 CONTINUE でプレイに戻ること、SURRENDER で確認 (`*.Game.SurrenderConfirm`) を挟み、確認の CONTINUE でプレイに戻り、SURRENDER で
 自分は `*.LoseResult.Surrendered`、相手は `*.WinResult.OpponentSurrendered` になること、負けた側は Back to Online で Online Battle に戻ることを確認します。
 メニュー・確認の文言とボタン (CONTINUE / SURRENDER だけで REMATCH / QUIT は無い)、メニュー中・確認中も Win / Lose の行があること (試合は止まらない)、
 カウントダウン中・メニュー中に ☰ の行が無いこと、ポーズの状態・イベント・`timeScale` が残っていないこと、
 U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用の "Game in progress (mock)" が残っていないことも確かめます。
-対戦後 (U20〜U30 で決定) については、U20〜U30 が高宮さん 2026-10-07 の決定で遷移表に未決として残っていないこと、新しい未決 U44〜U50 があり U43 が変わっていないこと、
+対戦後 (U20〜U30 で決定) については、U20〜U30 が高宮さん 2026-10-07 の決定で遷移表に未決として残っていないこと、新しい未決 U44〜U50 があること、
 決着 (Win / Lose / Draw) と「切断する」が両端末とも試合中だけ押せること、結果画面 (58 状態) の勝敗と終わった理由、No contest 以外にスコアがあること、
 レーティング (Friend Match・Elo の +12 / -12 / ±0・再戦・No contest) の文言、シナリオの途中のセッション (`match` / `rated`)、
 結果画面のボタン (Friend Match / ランダム対戦 × 再戦の段階 × 降参・切断・No contest) と、そのボタンにすべて行があること、
@@ -107,12 +111,14 @@ U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用�
 結果画面の決まっていない点 (U44 / U45 / U49 / U50) が端末の上の帯に、仮の値の説明が右パネルにあることも確認します。
 
 端末の画面の検査: `node tests/scan-screens.mjs` (ヘッドレス Chromium が必要。場所は環境変数 `CHROMIUM` で変えられます) で、
-全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 590 枚) を 1280x720 の画面で実際に描画し、
+全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 595 枚) を 1280x720 の画面で実際に描画し、
 両端末の画面 (`.screen`) に `仮`・`未決`・`決定`・U 番号・日本語・モックの注記 (`.mock-note`、`.pill-*` など) が無いこと、
 端末の上の帯が未決バッジだけで、すべて帯の中に見えていることを確認します。各手順で両端末の状態が遷移表の再生結果と同じかも確かめます。
 ランダム対戦の画面 (`*.Matchmake*`) に数字 (60 秒という仮の長さ) が無いこと、「アプリを離れる」「60 秒たつ」が端末の画面の中には無く、相手を探している間は端末の下で押せることも確かめます。
 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒) と `----` が無いこと、No contest にスコアの行が無いこと、モック操作 (Win / Draw / 切断する / スタンプの 3 秒・5 秒) が端末の画面の中に無いこと、
 スタンプを送った端末では端末の下の「3 秒たつ」「5 秒たつ」を押せて、自分の名前の上に吹き出しがあることも確かめます。
+アプリを離れて検索が止まった画面 (`*.Matchmake.Stopped`) では、通知のボックスが Online Battle のメニューの中にあって暗幕 (`.dim`) が無いこと、
+ボックスが端末の画面に収まっていること、Random Match / Friend Match と通知のボタンの真ん中を押すとそのボタン自身に当たる (上に何も重なっていない) ことも確かめます (U43)。
 遷移表に行が無いボタンの破線・半透明 (`[data-norow]`) はモックの操作の手がかりとして残しているので、数を表示するだけです。
 
 ## 状態名 (案 C: Host. / Client. + 本体の画面名、2026-10-03)
@@ -132,7 +138,8 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 その後、MATCH MENU の決定 (2026-10-07) で `Game.Pause` を `Game.MatchMenu` に改名し、`Game.SurrenderConfirm` と降参の結果画面 (`LoseResult.Surrendered` / `WinResult.OpponentSurrendered`) を足したので、
 73 状態・14 グループ、遷移表は 141 行になりました (「対戦中の MATCH MENU」を参照)。
 さらに、ランダム対戦の待機中の操作の決定 (U13、2026-10-07) で `Matchmake.Stopped` / `Matchmake.NotFound` を足して 77 状態・14 グループ、遷移表は 153 行になりました (「ランダム対戦の待機中の操作」を参照)。
-対戦後の結果画面の決定 (U20〜U30、2026-10-07) で結果画面を作り直したので、今は 127 状態・34 グループ、遷移表は 235 行です (「対戦後の結果画面」を参照)。
+対戦後の結果画面の決定 (U20〜U30、2026-10-07) で結果画面を作り直したので、127 状態・34 グループ、遷移表は 235 行になりました (「対戦後の結果画面」を参照)。
+検索停止のお知らせの決定 (U43、2026-10-07) で通知から Random Match / Friend Match へ行く行を足したので、今は 127 状態・34 グループ、遷移表は 239 行です (「検索停止のお知らせ」を参照)。
 このとき再戦の段階の名前を変えました: 自分が申し込んだ `.RematchWaiting` → `.RematchRequested`、相手から申し込まれた `.RematchRequested` → `.RematchIncoming` (下の対応表の新名は改名当時のもの)。
 `node tests/check.js` は、すべての状態名とグループ名が `Host.` / `Client.` + 大文字で始まる名前をドットでつないだ形であること、遷移表の host 欄に `Host.`、client 欄に `Client.` の状態だけがあることも確かめます。
 
@@ -564,7 +571,7 @@ Ready・Start Match・"Starting match…" は挟みません。両者が Start M
 |---|---|---|
 | Cancel を押す | 確認ダイアログを出さずに Online Battle へ戻る | `*.Matchmake` → `*.MultiModeSelection` |
 | ‹ を押す | Cancel とまったく同じ (確認なしで Online Battle へ)。探している間は、ほかの画面へは行けない (出口は Cancel と ‹ だけ) | `*.Matchmake` → `*.MultiModeSelection` |
-| アプリを離れる (バックグラウンドへ移る・画面ロック) | 検索を止める。戻ると "Search stopped because you left the app." (アプリを離れたので検索を止めました) | `*.Matchmake` → `*.Matchmake.Stopped` |
+| アプリを離れる (バックグラウンドへ移る・画面ロック) | 検索を止める。戻ると通知を出す (文言・出す場所・ボタンは U43 で決定。「検索停止のお知らせ」を参照) | `*.Matchmake` → `*.Matchmake.Stopped` |
 | 60 秒探しても相手が見つからない | 元の画面 (Online Battle) に戻り、"No opponent found." と Search again / Close | `*.Matchmake` → `*.Matchmake.NotFound` |
 
 **60 秒という長さは仮です** (変わりうる)。そのため、60 秒は右パネルの説明・遷移表のメモ・この README にだけ書き、端末の画面には出しません (`tests/scan-screens.mjs` で確認)。
@@ -576,9 +583,9 @@ Ready・Start Match・"Starting match…" は挟みません。両者が Start M
 | Search again | もう一度相手を探す ("Searching for an opponent…" の画面に戻る)。相手も探していれば、すぐ VS 画面へ (U13a) | `*.Matchmake.NotFound` / `*.Matchmake.Stopped` → `*.Matchmake` |
 | Close | 通知を閉じる。画面は元の Online Battle のまま (もう一度 Random Match / Friend Match を選べる) | `*.Matchmake.NotFound` / `*.Matchmake.Stopped` → `*.MultiModeSelection` |
 
-- 通知は、確認ダイアログ (Cancel this match? など) と同じ見た目で、Online Battle の上に出します。Search again を主なボタン (青い枠) にしました。
-- "Search stopped because you left the app." をどの画面の上に出すか、どんなボタンを置くかは決定に書かれていません。
-  モックでは "No opponent found." とそろえて Online Battle の上に Search again / Close を出し、新しい未決 **U43** にしました (端末の上の帯と、右パネルの説明に出ます)。
+- "No opponent found." は、確認ダイアログ (Cancel this match? など) と同じ見た目で、Online Battle の上に出します。Search again を主なボタン (青い枠) にしました。
+- U13 の決定のときは "Search stopped because you left the app." の出す場所とボタンが決まっておらず、未決 U43 にしていました。
+  U43 も 2026-10-07 に決まり、Online Battle の中のモーダルではない通知になりました (下の「検索停止のお知らせ」を参照)。
 
 ### モック操作 (端末の外)
 
@@ -593,7 +600,7 @@ Ready・Start Match・"Starting match…" は挟みません。両者が Start M
 
 | 変更 | 状態 / イベント |
 |---|---|
-| 追加 | 状態 `Host.Matchmake.Stopped` / `Client.Matchmake.Stopped` (アプリを離れて検索が止まった。Online Battle の上に "Search stopped because you left the app.")、`Host.Matchmake.NotFound` / `Client.Matchmake.NotFound` (見つからなかった。Online Battle の上に "No opponent found.") |
+| 追加 | 状態 `Host.Matchmake.Stopped` / `Client.Matchmake.Stopped` (アプリを離れて検索が止まった。当時は Online Battle の上に "Search stopped because you left the app."、今は U43 の通知)、`Host.Matchmake.NotFound` / `Client.Matchmake.NotFound` (見つからなかった。Online Battle の上に "No opponent found.") |
 | 追加 | イベント `*.leaveApp` (モック操作: アプリを離れて戻る)、`*.searchTimeout` (モック操作: 60 秒たっても見つからない)、`*.searchAgain` (Search again)、`*.closeNotice` (Close) (`*` は `host` / `client`) |
 | 未決 → 決定 | `*.cancelSearch` と、相手を探している間の `*.back` の行から未決 U13 を外し、決定 U13 を付けた (動きは前と同じ: 確認なしで Online Battle へ) |
 
@@ -603,7 +610,7 @@ Ready・Start Match・"Starting match…" は挟みません。両者が Start M
 シナリオ 11b に ‹ の手順を足し (「ランダム対戦 → Cancel / ‹ で Online Battle へ」、2 手順 → 4 手順。前の 2 手順は同じなので `#s=11b&step=1` / `step=2` はそのまま使えます)、11c〜11f を足しました。
 
 - `index.html#s=11b&step=4` - もう一度探して ‹ を押し、Online Battle に戻った
-- `index.html#s=11c&step=2` - ホストがアプリを離れて戻った: "Search stopped because you left the app."
+- `index.html#s=11c&step=2` - ホストがアプリを離れて戻った: Online Battle の中に "Search stopped while the app was in the background." (U43)
 - `index.html#s=11c&step=5` - Search again のあと、クライアントも探して VS 画面
 - `index.html#s=11d&step=3` - クライアントが通知を Close して Online Battle
 - `index.html#s=11e&step=2` - ホストが 60 秒たっても見つからない: "No opponent found."
@@ -612,6 +619,51 @@ Ready・Start Match・"Starting match…" は挟みません。両者が Start M
 ![ランダム対戦: アプリを離れて検索が止まった](docs/screenshots/37-random-search-stopped.png)
 
 ![ランダム対戦: 相手が見つからなかった](docs/screenshots/38-random-not-found.png)
+
+## 検索停止のお知らせ (2026-10-07 決定、U43)
+
+高宮さんの決定 (2026-10-07): 相手を探している間にアプリを離れて (バックグラウンドへ移る・画面ロック) 検索が止まったとき、戻ったプレイヤーに出す通知が決まりました。
+
+| 項目 | 決定 |
+|---|---|
+| 出す場所 | Online Battle の画面 (`Host.MultiModeSelection` / `Client.MultiModeSelection`) の **中** に、通知のボックスとして出す。**モーダルではなく**、操作をさまたげない |
+| 文言 | "Search stopped while the app was in the background." (以前の "Search stopped because you left the app." から変更) |
+| ボタン | Search again (新しく相手を探す) と Close |
+| 消えるとき | **自動では消えない**。Close を押すか、ほかの画面へ移ると消える (Online Battle のほかの操作もそのまま使える) |
+
+60 秒探しても見つからなかったときの "No opponent found." (U13) は、これまでどおり Online Battle の上のダイアログ (Search again / Close) です。
+
+### モックでの見せ方
+
+- 通知のボックスは、Random Match / Friend Match のメニューの **下** に置きました。上に置くとメニューの位置がずれて、押そうとした場所が変わるためです。
+  見た目は確認ダイアログと同じ紺の枠で、暗幕は重ねません。ボタンは横並びで、Search again を主なボタン (青い枠) にしました。
+- 通知を出したまま、Random Match (新しく探す) と Friend Match (Friend Match トップへ) を押せます。行き先はどちらも、通知を出していない Online Battle から押したときと同じです。
+- ほかの画面へ移ると通知は消え、‹ で Online Battle に戻っても出ません。通知を出している状態からの自動遷移は無く、相手の端末の操作や環境イベントでも消えません。
+
+| 操作 | 動き | モックの状態 |
+|---|---|---|
+| Search again | 新しく相手を探す ("Searching for an opponent…") | `*.Matchmake.Stopped` → `*.Matchmake` |
+| Close | 通知を閉じる。Online Battle のまま | `*.Matchmake.Stopped` → `*.MultiModeSelection` |
+| Random Match (通知の上のメニュー) | 新しく相手を探す (Search again と同じ行き先)。通知は消える | `*.Matchmake.Stopped` → `*.Matchmake` |
+| Friend Match (通知の上のメニュー) | Friend Match トップへ。通知は消える | `*.Matchmake.Stopped` → `*.FriendMatch.Room` |
+
+### 状態・イベント
+
+| 変更 | 状態 / イベント |
+|---|---|
+| 意味を変更 | `Host.Matchmake.Stopped` / `Client.Matchmake.Stopped` の画面: Online Battle の上のダイアログ → Online Battle の中の通知 (モーダルではない)。画面の仕様は `notice` ではなく `inlineNotice` |
+| 追加 | 行 `*.Matchmake.Stopped` + `*.randomMatch` → `*.Matchmake`、`*.Matchmake.Stopped` + `*.friendMatch` → `*.FriendMatch.Room` (両端末で 4 行) |
+| 未決 → 決定 | アプリを離れる行と、通知の Search again / Close の行から未決 U43 を外し、決定 U43 を付けた |
+
+遷移表は 235 行から 239 行になりました (状態は 127 のまま)。新しい 4 行はランダム対戦の待機中の行の中に入るので、それより後ろの行 (次の相手を探す・対戦中・対戦後) の番号は 4 つずつずれました。
+シナリオ 11c / 11d の説明を新しい文言にし、11g を足しました (ほかのシナリオの手順の数は変わらないので、既存の `#s=..&step=..` はそのまま使えます)。
+
+- `index.html#s=11c&step=2` - ホストがアプリを離れて戻った: Online Battle の中に通知
+- `index.html#s=11d&step=2` - クライアントがアプリを離れて戻った: Online Battle の中に通知
+- `index.html#s=11g&step=3` - 通知を出したまま Friend Match を押した (Friend Match トップ)
+- `index.html#s=11g&step=4` - ‹ で Online Battle に戻った (通知は出ない)
+
+![ランダム対戦: アプリを離れて検索が止まった (Online Battle の中の通知)](docs/screenshots/37-random-search-stopped.png)
 
 ## 対戦後の結果画面 (2026-10-07 決定、U20〜U30)
 
@@ -739,15 +791,16 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 | 追加 | 行の `set` (セッションと付属状態を書き換える) と、`from` の付属状態の条件 (例: `hostStamp: null`)。遷移表のメモに「条件:」「設定:」として出す |
 
 遷移表は 153 行から 235 行になりました (対戦後の 18 行を書き直して 100 行に)。状態は 77 から 127、グループは 14 から 34 です。
+下の行番号は、そのあと U43 (検索停止のお知らせ) でランダム対戦の待機中に 4 行足したあとの、今の番号です (U20〜U30 の決定のときより 4 つ後ろ)。
 
 | 行 | 内容 |
 |---|---|
-| T136〜T145 | 次の相手を探す (Cancel・‹・60 秒たつ・Search again・Back to Online) |
-| T146〜T151 | 決着 (Win / Lose / Draw のモック操作) |
-| T152〜T159 | 対戦中の切断・回復・20 秒たつ・両者の切断・サービス障害 |
-| T160〜T195 | 再戦 (申し込む・応じる・取り消す・断る・期限切れ・同時・3 秒たつ。勝ち / 負け / 引き分けそれぞれ) |
-| T196〜T221 | 結果画面から抜ける (Back to Friend Match / Find Next Opponent / Back to Online。相手には "Your opponent left…") |
-| T222〜T235 | スタンプ (送る・3 秒たつ・5 秒たつ・ミュート) |
+| T140〜T149 | 次の相手を探す (Cancel・‹・60 秒たつ・Search again・Back to Online) |
+| T150〜T155 | 決着 (Win / Lose / Draw のモック操作) |
+| T156〜T163 | 対戦中の切断・回復・20 秒たつ・両者の切断・サービス障害 |
+| T164〜T199 | 再戦 (申し込む・応じる・取り消す・断る・期限切れ・同時・3 秒たつ。勝ち / 負け / 引き分けそれぞれ) |
+| T200〜T225 | 結果画面から抜ける (Back to Friend Match / Find Next Opponent / Back to Online。相手には "Your opponent left…") |
+| T226〜T239 | スタンプ (送る・3 秒たつ・5 秒たつ・ミュート) |
 
 ### 決定に書かれていないので置いた仮定 (新しい未決)
 
@@ -870,9 +923,13 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   Cancel に確認を挟むか、離席・タイムアウトの扱いは U13 に残しました (U13 も 2026-10-07 に決定、下)。詳しくは「ランダム対戦は相手が見つかり次第 VS へ」を見てください。
 - **U13 ランダム対戦の待機中: Cancel と ‹ は確認なしで戻る。アプリを離れたら検索を止める。見つからなければ "No opponent found."** - 決定 (高宮さん 2026-10-07)  
   相手を探している間 ("Searching for an opponent…") の操作。Cancel を押すと、確認ダイアログを出さずに Online Battle へ戻る。‹ も Cancel とまったく同じ (Online Battle へ)。探している間は、ほかの画面へは行けない。
-  アプリを離れる (バックグラウンドへ移る・画面ロック) と検索を止め、戻ったときに "Search stopped because you left the app." (アプリを離れたので検索を止めました) を出す。
+  アプリを離れる (バックグラウンドへ移る・画面ロック) と検索を止め、戻ったときに通知を出す (文言・出す場所・ボタンは U43 で決定、下)。
   60 秒探しても相手が見つからなければ、元の画面 (Online Battle) に戻って "No opponent found." と Search again / Close を出す。Search again でもう一度探し、Close で通知を閉じる。
-  **60 秒という長さは仮** (変わりうる)。"Search stopped…" の通知の場所とボタンは決定に無いので、未決 U43 にしました。詳しくは「ランダム対戦の待機中の操作」を見てください。
+  **60 秒という長さは仮** (変わりうる)。"Search stopped…" の通知の場所とボタンは決定に無かったので未決 U43 にし、U43 も同じ日に決まりました。詳しくは「ランダム対戦の待機中の操作」を見てください。
+- **U43 アプリを離れて検索が止まったら、Online Battle の中に通知 (Search again / Close)。自動では消えない** - 決定 (高宮さん 2026-10-07)  
+  戻ったときに Online Battle の画面の中に通知のボックスを出す。モーダルではなく、Online Battle のほかの操作 (Random Match / Friend Match) をさまたげない。
+  文言は "Search stopped while the app was in the background." (以前の "Search stopped because you left the app." から変更)。ボタンは Search again (新しく探す) と Close。
+  通知は自動では消えず、ほかの画面へ移ると消える。60 秒で見つからなかったときの "No opponent found." (U13) はこれまでどおり。詳しくは「検索停止のお知らせ」を見てください。
 - **U37 オンライン対戦は ☰ MATCH MENU。開いても試合は止まらない** - 決定 (高宮さん 2026-10-07、案A)  
   オンライン対戦では VsAI のポーズポップアップの代わりに MATCH MENU (☰) を出す。VsAI やソロのポーズのように `Time.timeScale = 0` でゲームを止めることはせず、メニューを開いている間も試合は続く。
   メニューには "The match continues while the menu is open." と出し、CONTINUE (閉じる) と SURRENDER (降参) を置く。メニュー中に試合が終われば、そのまま結果画面へ進む。
@@ -990,10 +1047,7 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   U31 で決まったのは「押した側は待機表示、相手側には相手が準備完了であることを表示」まで。モックの文言 (押した側の "Waiting for your friend…"、相手側の名前の下の "Friend is ready!")、
   押した側の Start Match を無効表示にするか隠すか、ホスト・クライアントで同じ表示にするかは仮。
 - **U37〜U42** - 決定済み (上の「決定済み」を参照)
-- **U43 アプリを離れて検索が止まったときの通知の場所とボタン**  
-  U13 の決定で、相手を探している間にアプリを離れると検索を止め、戻ったときに "Search stopped because you left the app." を出す。
-  どの画面の上に出すか、どんなボタンを置くかは決定に書かれていない。モックでは "No opponent found." (U13) とそろえて、Online Battle の上に Search again / Close を出している。
-  Close (や OK) だけにする、"Searching for an opponent…" の画面の上に出す、などの案もありうる。
+- **U43** - 決定済み (上の「決定済み」を参照)
 - **U44 通常の決着のときの終わった理由の文言と、引き分けになる条件**  
   U20 の決定で結果画面に終わった理由を出すが、降参・切断・接続エラー以外 (ゲームの決着) のときの文言は決まっていない。モックは仮に "Match finished" を出している。
   また Draw (引き分け) が結果の 1 つになったが、どういうときに引き分けになるかはゲームのルール次第で決まっていない (モックは端末の下のモック操作 Draw)。
@@ -1006,7 +1060,7 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
   切断した側には "Connection lost" / "Reconnecting…" を出し、20 秒のうちに戻れば試合を続ける (環境イベント「通信が回復する」)。
   待っている間も試合 (残った側のプレイ) が続くのか止まるのか、待ち時間を画面に出すかも未定。モックでは待っている間は Win / Lose / Draw を押せない。
 - **U47 次の相手を探している間にアプリを離れたとき**  
-  U13 の決定で、Random Match から探している間にアプリを離れると検索を止める ("Search stopped because you left the app."、出す場所とボタンは U43)。
+  U13 / U43 の決定で、Random Match から探している間にアプリを離れると検索を止め、戻ると Online Battle の中に "Search stopped while the app was in the background." を出す。
   結果画面の Find Next Opponent から探している間 (U29) にアプリを離れたときも同じでよいか、通知をどこに出すかは決まっていない。モックには行が無い (端末の下の「アプリを離れる」は押せない)。
 - **U48 VS 画面の "Rank" とレーティング (Elo) の関係**  
   VS 画面は 10-01 の合意で名前・ランク・あいさつを出し、モックは "Rank 12" / "Rank 9" (架空) を出している。U21 の決定でランダム対戦は Elo のレーティング (初期値 1000) になった。

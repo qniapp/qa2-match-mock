@@ -101,17 +101,10 @@ for (const sc of SCENARIOS) {
   console.log(`ok  ${sc.id.padEnd(3)} ${sc.title} (${sc.steps.length} 手順) → ${res.state.host} / ${res.state.client}`);
 }
 
-// シナリオが前提にしていない未決トグルは、どの選択肢にしても最後まで再生できること
-for (const sc of SCENARIOS) {
-  for (const u of UNDECIDED.filter((x) => x.options && !(sc.opts && x.id in sc.opts))) {
-    for (const o of u.options) {
-      const res = Engine.replay(sc, undefined, { [u.id]: o.value });
-      if (res.failedAt !== -1) {
-        fail(`シナリオ ${sc.id}: ${u.id}=${o.value} だと手順 ${res.failedAt + 1} (${Engine.stepEvent(sc.steps[res.failedAt])}) で止まる`);
-      }
-    }
-  }
-}
+// 未決トグルのしくみ (opts / options / 未決タブのラジオ) は 2026-10-08 に消した (未決が 0 件で切り替えるものが無い)
+if (UNDECIDED.some((u) => 'options' in u || 'default' in u)) fail('未決一覧にトグル (options / default) が残っている');
+if ('defaultOpts' in Engine || 'opts' in Engine.initialState()) fail('Engine に未決トグル (opts) が残っている');
+if (/\bopts\b|data-opt|setOpt|type="radio"/.test(read('js', 'app.js'))) fail('app.js に未決トグルが残っている');
 
 // 決定 (U31、2026-10-07 に開始ボタンの名前を Ready に変更): 開始は両者の Ready だけ。Ready 画面になっても自動では開始しない
 const u31 = UNDECIDED.find((u) => u.id === 'U31');
@@ -128,7 +121,7 @@ for (const r of TRANSITIONS) {
   if (r.event === 'sys.bothStarted' && (r.from.host !== 'Host.FriendMatch.Lobby.Starting' || r.from.client !== 'Client.FriendMatch.Lobby.Starting')) fail(`${r.id}: 両者が押す前に開始する`);
 }
 for (const sc of SCENARIOS) {
-  if (sc.opts && Object.keys(sc.opts).length) fail(`シナリオ ${sc.id} が決定済みのトグル ${Object.keys(sc.opts)} を前提にしている`);
+  if ('opts' in sc) fail(`シナリオ ${sc.id} に未決トグル (opts) が残っている`);
   if (sc.steps.some((st) => OLD_EVENTS.includes(Engine.stepEvent(st)))) fail(`シナリオ ${sc.id} に古いイベントが残っている`);
   if (/Start Match|自動開始|自動で開始/.test(sc.title)) fail(`シナリオ ${sc.id} の題名が Start Match / 自動開始のまま`);
 }
@@ -1116,10 +1109,10 @@ console.log('ok  U43: 検索が止まった通知は Online Battle の中 (モ�
 
 // 端末の画面にはゲームが出すものだけ: 決定の注記や「決定」バッジは端末の中にも端末の上にも出さない (右パネルへ)
 if (/decided-note|decidedNoteHtml|GAME_COUNTDOWN_PREMISE/.test(appJs)) fail('app.js が端末の画面に決定の注記を出している');
-if (/pillHtml\(id, 'pill-decided'/.test(appJs)) fail('app.js が端末の上に「決定」バッジを出している');
+if (/pillHtml|undecided-strip/.test(appJs)) fail('app.js が端末の上にバッジを出している');
 console.log('ok  端末の画面と端末の上に決定の注記・バッジが無い');
 
-// 端末の画面には仮・未決の印やモックの注記も出さない (未決は端末の上の帯、説明は右パネル)。
+// 端末の画面には仮・未決の印やモックの注記も出さない (説明は右パネル)。
 // 実際の描画は tests/scan-screens.mjs が全シナリオの全手順で確かめる
 if (/mock-note|class="tmp"|pill-undecided small inline|btn-wrap/.test(appJs)) fail('app.js が端末の画面に仮・未決の印やモックの注記を出している');
 // 結果画面の決定 (U44 / U45 / U49 / U50) は右パネルの「決定済み」に出し、仮の値の説明も右パネルに出す

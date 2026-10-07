@@ -14,7 +14,9 @@
 // 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
 // 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" であること (U49)、
 // 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
-// 端末の上の帯は未決バッジだけで、すべて見えていること (1280x720 で確かめる) も確かめる。
+// 最初に、hash なしで開くと自由操作 (両端末が最初の画面で、ボタンを押せる) で、ページに消した部品 (左のシナリオのパネル、
+// 右パネルの状態名の行・「ほか:」のバッジの列・ログタブ、凡例の未決・点線 / 実線、端末の上の黄色い未決の帯、未決トグルのラジオ) が無く、
+// タブの名前が「決定」であることも確かめる (1280x720 で確かめる)。
 // 遷移表に行が無いボタンの破線・半透明 ([data-norow]) はモックの操作の手がかりなので数えるだけにする。
 // 使い方: node tests/scan-screens.mjs   (Chromium の場所は環境変数 CHROMIUM で変えられる。既定は chromium)
 import { spawn } from 'node:child_process';
@@ -69,15 +71,19 @@ try {
   send = (method, params = {}) => new Promise((r) => { const id = ++seq; pending.set(id, r); ws.send(JSON.stringify({ id, method, params })); });
 
   await send('Page.enable');
-  // ノート PC くらいの縦に狭い画面で確かめる (端末の上の帯が縮んでバッジが隠れないか)
+  // ノート PC くらいの縦に狭い画面で確かめる (端末の列が横にスクロールしても押せるか)
   await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
   await send('Page.navigate', { url });
   for (let i = 0; i < 100 && !events.some((e) => e.method === 'Page.loadEventFired'); i++) await new Promise((r) => setTimeout(r, 100));
 
-  const res = await send('Runtime.evaluate', { returnByValue: true, awaitPromise: true,
-    expression: `document.fonts.ready.then(() => (${scan})())` });
-  if (res.result.exceptionDetails) throw new Error(JSON.stringify(res.result.exceptionDetails));
-  const { frames, findings, norow } = res.result.result.value;
+  const evaluate = async (fn) => {
+    const r = await send('Runtime.evaluate', { returnByValue: true, awaitPromise: true, expression: `document.fonts.ready.then(() => (${fn})())` });
+    if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails));
+    return r.result.result.value;
+  };
+  const pageFindings = await evaluate(checkPage);
+  const { frames, findings, norow } = await evaluate(scan);
+  findings.unshift(...pageFindings);
 
   console.log(`${frames} 枚 (全シナリオの全手順と、カウントダウン 3 / 2 / 1) の両端末の画面を確かめました`);
   const norowStates = Object.keys(norow);
@@ -88,11 +94,52 @@ try {
     findings.forEach((f) => console.error('  ' + f));
     process.exitCode = 1;
   } else {
+    console.log('ok  hash なしで開くと自由操作で、両端末が最初の画面 (Online Battle) にあり、ボタンを押せます');
+    console.log('ok  左のシナリオのパネル、右パネルの状態名の行・「ほか:」・ログタブ、凡例の未決・点線 / 実線、端末の上の未決の帯、トグルのラジオはありません');
+    console.log('ok  タブの名前は「決定」です');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
-    console.log('ok  端末の上の帯は未決バッジだけで、すべて帯の中に見えています');
   }
 } finally {
   await cleanup();
+}
+
+// ページの中で実行する。hash なしで開いた直後のページ全体を確かめる
+function checkPage() {
+  const findings = [];
+  const page = (what) => findings.push(`ページ: ${what}`);
+  // 自由操作: シナリオなし、両端末が最初の画面 (Online Battle) で、ボタンを押せる
+  if (MockApp.scenario !== null) page(`hash なしでシナリオ ${MockApp.scenario.id} が開いている`);
+  if (location.hash !== '#s=free') page(`hash が ${location.hash} (期待: #s=free)`);
+  const names = [...document.querySelectorAll('.device .state-name')].map((e) => e.textContent).join(' / ');
+  if (names !== 'Host.MultiModeSelection / Client.MultiModeSelection') page(`自由操作の最初の画面が ${names}`);
+  document.querySelectorAll('.device').forEach((dev) => {
+    if (!dev.querySelector('.screen.view-online')) page(`${dev.dataset.dev} が Online Battle の画面でない`);
+    if (!dev.querySelector('.screen [data-ev="friendMatch"]:not([data-norow])')) page(`${dev.dataset.dev} の Friend Match を押せない`);
+  });
+  // 消した部品
+  const gone = {
+    '.scenario-panel, #scenario-list, #scenario-detail, #btn-next, #btn-prev': '左のシナリオのパネル',
+    '.cs-line, #current-state code.state-name': '右パネルの状態名の行',
+    '.cs-others, .cs-decided li.others': '決定済みの「ほか:」のバッジの列',
+    '[data-tab="log"], [data-tab-body="log"], #event-log': 'ログタブ',
+    '.legend .pill-undecided': '凡例の「未決」',
+    '.legend-auto, .legend-user': '凡例の「自動遷移 (点線)」「ユーザー操作 (実線)」',
+    '.undecided-strip': '端末の上の黄色い未決の帯',
+    'input[type="radio"], [data-opt], .u-options, #undecided-count': '未決トグルのラジオ',
+  };
+  Object.entries(gone).forEach(([sel, what]) => { if (document.querySelector(sel)) page(`${what}が残っている (${sel})`); });
+  const legend = document.querySelector('.legend').textContent;
+  if (/未決|点線|実線/.test(legend)) page(`凡例に ${legend}`);
+  if (/Host\.|Client\./.test(document.querySelector('#current-state').textContent)) page('右パネルに状態名がある');
+  if (/ほか:/.test(document.querySelector('#current-state').textContent)) page('右パネルに「ほか:」がある');
+  // タブ: 状態遷移表と「決定」(件数なし) の 2 つ
+  const tabs = [...document.querySelectorAll('.tabs [data-tab]')].map((b) => b.textContent);
+  if (tabs.join() !== '状態遷移表,決定') page(`タブが ${tabs.join(' / ')} (期待: 状態遷移表 / 決定)`);
+  // 押すと遷移表どおりに進む (自由操作)
+  document.querySelector('.device[data-dev="host"] .screen [data-ev="friendMatch"]').click();
+  const after = document.querySelector('.device[data-dev="host"] .state-name').textContent;
+  if (after !== 'Host.FriendMatch.Room') page(`自由操作で Friend Match を押しても ${after}`);
+  return findings;
 }
 
 // ページの中で実行する。MockApp.show は同期的に描画する
@@ -127,16 +174,6 @@ function scan() {
         if (el.hasAttribute('data-norow')) return;
         const attr = (el.getAttribute('title') || '') + ' ' + (el.getAttribute('aria-label') || '');
         BAD_TEXT.forEach(([re, what]) => { if (re.test(attr)) findings.push(`${at}: 属性に ${what} (${attr.trim()})`); });
-      });
-      // 端末の上の帯: 未決バッジだけで、すべてが帯の中に見えていること
-      const strip = dev.querySelector('.undecided-strip');
-      const box = strip.getBoundingClientRect();
-      strip.querySelectorAll('*').forEach((el) => {
-        if (el.parentElement === strip && !el.classList.contains('pill-undecided')) findings.push(`${at}: 端末の上の帯に未決以外 (${el.className})`);
-      });
-      strip.querySelectorAll(':scope > .pill-undecided').forEach((el) => {
-        const r = el.getBoundingClientRect();
-        if (r.bottom > box.bottom + 0.5 || r.right > box.right + 0.5) findings.push(`${at}: 端末の上の帯で ${el.dataset.undecided} がはみ出して見えない (${Math.max(r.bottom - box.bottom, r.right - box.right).toFixed(1)}px)`);
       });
       // ランダム対戦 (決定 U13): 60 秒という仮の長さは端末の画面に出さない。「アプリを離れる」「60 秒たつ」は端末の外 (下のモック操作) だけ
       if (/\.Matchmake/.test(state) && /\d/.test(text)) findings.push(`${at}: 数字がある (60 秒は端末の画面に出さない): ${text.trim().slice(0, 80)}`);

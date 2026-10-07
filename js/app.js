@@ -25,11 +25,9 @@
     step: 0, // 再生済みの手順数
     detached: false, // シナリオの途中で手順と違う操作をした
     cd: 3, // 手順で止めているとき、ゲーム本体のカウントダウンで表示しておく数字 (#...&cd=3|2|1)
-    opts: Engine.defaultOpts(),
     ctx: Engine.defaultCtx(),
     state: null,
     lastRow: null,
-    log: [],
     autoTimer: null,
   };
 
@@ -56,10 +54,6 @@
     return Engine.DEVICES.some(function (d) { return SCREENS[app.state[d]].countdown; });
   }
 
-  function undecidedById(id) {
-    return UNDECIDED.filter(function (u) { return u.id === id; })[0];
-  }
-
   function label(event) { return EVENT_LABELS[event] || event; }
 
   // ---- 状態の更新 -----------------------------------------------------------
@@ -67,7 +61,6 @@
   function selectScenario(id, step) {
     var sc = SCENARIOS.filter(function (s) { return s.id === id; })[0] || null;
     app.scenario = sc;
-    app.opts = Object.assign(Engine.defaultOpts(), sc && sc.opts);
     app.ctx = Object.assign(Engine.defaultCtx(), sc && sc.ctx);
     rebuild(step || 0);
   }
@@ -76,9 +69,8 @@
   function rebuild(n) {
     clearAuto();
     app.detached = false;
-    app.log = [];
     if (!app.scenario) {
-      app.state = Engine.initialState(app.opts, app.ctx);
+      app.state = Engine.initialState(app.ctx);
       app.step = 0;
       app.lastRow = null;
       render();
@@ -86,32 +78,20 @@
       return;
     }
     n = Math.max(0, Math.min(n, app.scenario.steps.length));
-    var res = Engine.replay(app.scenario, n, app.opts, app.ctx);
+    var res = Engine.replay(app.scenario, n, app.ctx);
     app.state = res.state;
     app.step = res.fired.length;
-    res.fired.forEach(function (row, i) {
-      pushLog(Engine.stepEvent(app.scenario.steps[i]), row, 'step');
-    });
     app.lastRow = res.fired[res.fired.length - 1] || null;
     render();
     scheduleAuto();
   }
 
-  function pushLog(event, row, kind) {
-    app.log.push({ event: event, row: row, kind: kind, time: new Date() });
-  }
-
-  // 実際にイベントを遷移表へ渡す唯一の場所
-  function fire(event, kind) {
+  // 実際にイベントを遷移表へ渡す唯一の場所。行が無ければ何もしない
+  function fire(event) {
     var res = Engine.fire(app.state, event);
-    if (!res) {
-      pushLog(event, null, 'norow');
-      renderSide();
-      return false;
-    }
+    if (!res) return false;
     app.state = res.state;
     app.lastRow = res.row;
-    pushLog(event, res.row, kind);
     render();
     scheduleAuto();
     return true;
@@ -124,7 +104,7 @@
   function nextStep() {
     if (!scenarioActive()) return false;
     var ev = Engine.stepEvent(app.scenario.steps[app.step]);
-    if (!fire(ev, 'step')) return false;
+    if (!fire(ev)) return false;
     app.step++;
     render();
     return true;
@@ -136,12 +116,9 @@
       nextStep();
       return;
     }
-    if (!Engine.canFire(app.state, event)) {
-      fire(event, 'user');
-      return;
-    }
+    if (!Engine.canFire(app.state, event)) return;
     if (app.scenario && app.step < app.scenario.steps.length) app.detached = true;
-    fire(event, 'user');
+    fire(event);
   }
 
   function clearAuto() {
@@ -157,20 +134,8 @@
     if (!row) return;
     app.autoTimer = setTimeout(function () {
       app.autoTimer = null;
-      if (Engine.findRow(app.state, row.event) === row) fire(row.event, 'auto');
+      if (Engine.findRow(app.state, row.event) === row) fire(row.event);
     }, row.auto);
-  }
-
-  function setOpt(id, value) {
-    app.opts[id] = value;
-    if (app.scenario && !app.detached && !(app.scenario.opts && id in app.scenario.opts)) {
-      rebuild(app.step);
-      return;
-    }
-    if (app.scenario) app.detached = true;
-    app.state = Object.assign({}, app.state, { opts: Object.assign({}, app.opts) });
-    render();
-    scheduleAuto();
   }
 
   function setCtx(key, value) {
@@ -509,34 +474,18 @@
       screen.dataset.html = html;
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
-
-    // 未決バッジ: 画面・ダイアログ・直前に発火した行 (この端末に関係するもの) の未決を集める。
-    // 決定済みの項目はここには出さず、右パネルの「決定済み」に出す
-    var ids = relevantIds(dev, 'undecided');
-    if (dlg && DIALOGS[dlg].undecided) ids = uniq(ids.concat(DIALOGS[dlg].undecided));
-    var strip = $('.undecided-strip', root);
-    strip.classList.toggle('compact', ids.length > 2);
-    strip.classList.toggle('dense', ids.length > 4 && ids.length <= 6);
-    strip.classList.toggle('packed', ids.length > 6);
-    strip.innerHTML = ids.map(function (id) { return pillHtml(id, 'pill-undecided', '未決'); }).join('');
   }
 
   function uniq(list) {
     return list.filter(function (id, i) { return list.indexOf(id) === i; });
   }
 
-  // この端末の画面と、直前に発火した行 (この端末に関係するもの) の未決 / 決定の ID
-  function relevantIds(dev, key) {
-    var ids = SCREENS[app.state[dev]][key].slice();
+  // この端末の画面と、直前に発火した行 (この端末に関係するもの) の決定の ID
+  function relatedDecidedIds(dev) {
+    var ids = SCREENS[app.state[dev]].decided.slice();
     var r = app.lastRow;
-    if (r && (r.to[dev] !== '*' || (r.dialog && dev in r.dialog))) ids = ids.concat(r[key]);
+    if (r && (r.to[dev] !== '*' || (r.dialog && dev in r.dialog))) ids = ids.concat(r.decided);
     return uniq(ids);
-  }
-
-  function pillHtml(id, cls, word) {
-    var u = undecidedById(id);
-    return '<button type="button" class="' + cls + '" data-undecided="' + id + '" title="' + esc(u.title + ' - ' + u.desc) + '">' +
-      word + ' ' + id + ' <span>' + esc(u.title) + '</span></button>';
   }
 
   // ---- パネル ---------------------------------------------------------------
@@ -592,7 +541,6 @@
       var cls = [];
       if (app.lastRow === r) cls.push('fired');
       if (available) cls.push('available');
-      if (r.when && Object.keys(r.when).some(function (k) { return /^U\d+$/.test(k) && app.opts[k] !== r.when[k]; })) cls.push('inactive');
       var memo = '<span class="ev-label">' + esc(label(r.event)) + '</span> ';
       if (r.auto) memo += '<span class="auto">⏱ 自動 ' + r.auto / 1000 + 's</span> ';
       var conds = Object.keys(r.when || {}).map(function (k) { return k + '=' + r.when[k]; }).concat(Object.keys(r.from).filter(function (k) {
@@ -622,13 +570,8 @@
   }
 
   function renderCurrent() {
-    var s = app.state;
-    var dl = function (d) { var x = Engine.extrasLabel(s, d); return x ? ' <span class="dlg">' + esc(x.slice(1)) + '</span>' : ''; };
     var r = app.lastRow;
-    $('#current-state').innerHTML =
-      '<div class="cs-line"><span class="role-badge host small">Host</span> <code>' + esc(s.host) + '</code>' + dl('host') + '</div>' +
-      '<div class="cs-line"><span class="role-badge client small">Client</span> <code>' + esc(s.client) + '</code>' + dl('client') + '</div>' +
- sessionHtml() +
+    $('#current-state').innerHTML = sessionHtml() +
       '<div class="cs-last">' + (r ? '直前の遷移: <a href="#row-' + r.id + '" data-row="' + r.id + '">' + r.id + '</a> <code>' + esc(r.event) + '</code>' : '直前の遷移: なし (初期状態)') + '</div>' +
       contextHtml() + decidedHtml();
   }
@@ -665,26 +608,19 @@
     }).join('');
   }
 
-  // 決定済みの項目。今の画面や直前の遷移に関係するものは題名 (と前提) まで出し、ほかはバッジだけを 1 行に並べる
-  // (決定が増えても遷移表を押し下げないように。題名はバッジの title と未決タブで読める)
+  // 今の画面や直前の遷移に関係する決定。題名 (と前提) まで出す。すべての決定は決定タブで読める
   function decidedHtml() {
-    var related = uniq(relevantIds('host', 'decided').concat(relevantIds('client', 'decided')));
-    var all = UNDECIDED.filter(function (u) { return u.decided; });
-    var on = all.filter(function (u) { return related.indexOf(u.id) !== -1; });
-    var off = all.filter(function (u) { return related.indexOf(u.id) === -1; });
-    var pill = function (u) {
-      return '<button type="button" class="pill-decided small" data-undecided="' + u.id + '" title="' + esc(u.title) + '">決定 ' + u.id + '</button>';
-    };
+    var related = uniq(relatedDecidedIds('host').concat(relatedDecidedIds('client')));
+    var on = UNDECIDED.filter(function (u) { return u.decided && related.indexOf(u.id) !== -1; });
+    if (!on.length) return '';
     var items = on.map(function (u) {
-      return '<li class="related">' + pill(u) + ' ' + esc(u.title) + ' <small>(今の画面に関係)</small>' +
-        (u.decided.premise ? '<div class="cs-premise">前提: ' + esc(u.decided.premise) + '</div>' : '') + '</li>';
-    }).join('') + (off.length ? '<li class="others">' + (on.length ? '<span class="cs-others">ほか:</span>' : '') + off.map(pill).join('') + '</li>' : '');
-    return '<div class="cs-decided"><span class="cs-label">決定済み</span><ul>' + items + '</ul></div>';
+      return '<li><button type="button" class="pill-decided small" data-undecided="' + u.id + '" title="' + esc(u.title) + '">決定 ' + u.id + '</button> ' +
+        esc(u.title) + (u.decided.premise ? '<div class="cs-premise">前提: ' + esc(u.decided.premise) + '</div>' : '') + '</li>';
+    }).join('');
+    return '<div class="cs-decided"><span class="cs-label">決定済み (今の画面に関係)</span><ul>' + items + '</ul></div>';
   }
 
   function renderUndecided() {
-    var open = UNDECIDED.filter(function (u) { return !u.decided; }).length;
-    $('#undecided-count').textContent = '(' + open + ')';
     $('#undecided-list').innerHTML = UNDECIDED.map(function (u) {
       if (u.decided) {
         var d = u.decided;
@@ -693,27 +629,11 @@
           (d.reason ? '<p><b>理由:</b> ' + esc(d.reason) + '</p>' : '') +
           (d.premise ? '<p><b>前提:</b> ' + esc(d.premise) + '</p>' : '') + '</li>';
       }
-      var opts = u.options ? '<div class="u-options">' + u.options.map(function (o) {
-        var checked = app.opts[u.id] === o.value ? ' checked' : '';
-        return '<label><input type="radio" name="opt-' + u.id + '" value="' + esc(o.value) + '" data-opt="' + u.id + '"' + checked + '> ' +
-          esc(o.label) + (o.value === u.default ? ' <small>(既定)</small>' : '') + '</label>';
-      }).join('') + '</div>' : '';
       var rows = TRANSITIONS.filter(function (r) { return r.undecided.indexOf(u.id) !== -1; }).map(function (r) {
         return '<a href="#row-' + r.id + '" data-row="' + r.id + '">' + r.id + '</a>';
       }).join(' ');
       return '<li id="u-' + u.id + '"><div class="u-head"><span class="pill-undecided">' + u.id + '</span> ' + esc(u.title) + '</div>' +
-        '<p>' + esc(u.desc) + '</p>' + opts + (rows ? '<div class="u-rows">関係する行: ' + rows + '</div>' : '') + '</li>';
-    }).join('');
-  }
-
-  function renderLog() {
-    $('#event-log').innerHTML = app.log.slice().reverse().map(function (e) {
-      var t = e.time.toTimeString().slice(0, 8);
-      var kind = { step: '手順', user: '操作', auto: '自動', norow: '行なし' }[e.kind];
-      var body = e.row
-        ? '<a href="#row-' + e.row.id + '" data-row="' + e.row.id + '">' + e.row.id + '</a>'
-        : '<span class="norow">遷移表に一致する行がありません (' + esc(app.state.host) + ' / ' + esc(app.state.client) + ')</span>';
-      return '<li class="' + e.kind + '"><span class="t">' + t + '</span> <span class="k">' + kind + '</span> <code>' + esc(e.event) + '</code> ' + body + '</li>';
+        '<p>' + esc(u.desc) + '</p>' + (rows ? '<div class="u-rows">関係する行: ' + rows + '</div>' : '') + '</li>';
     }).join('');
   }
 
@@ -721,11 +641,6 @@
     var hash = app.scenario ? '#s=' + app.scenario.id + '&step=' + app.step : '#s=free';
     if (frozen() && inGameCountdown()) hash += '&cd=' + app.cd;
     if (location.hash !== hash) history.replaceState(null, '', hash);
-  }
-
-  function renderSide() {
-    renderLog();
-    renderEnv();
   }
 
   function render() {
@@ -736,7 +651,7 @@
     renderCurrent();
     renderTable();
     renderUndecided();
-    renderSide();
+    renderEnv();
     updateHash();
   }
 
@@ -812,8 +727,7 @@
 
   document.addEventListener('change', function (e) {
     var t = e.target;
-    if (t.dataset.opt) setOpt(t.dataset.opt, t.value);
-    else if (t.id === 'ctx-codeResult') setCtx('codeResult', t.value);
+    if (t.id === 'ctx-codeResult') setCtx('codeResult', t.value);
     else if (t.id === 'ctx-createResult') setCtx('createResult', t.value);
     else if (t.id === 'filter-available') renderTable();
   });
@@ -832,8 +746,9 @@
     else if (cdParam(p) !== app.cd) { app.cd = cdParam(p); render(); }
   });
 
-  // 手順を 1 枚ずつ描いて確かめるテスト (tests/scan-screens.mjs) 用。hash を大量に書き換えると Chromium が history.replaceState を黙って捨てるので、直接呼ぶ
-  window.MockApp = { show: show };
+  // 手順を 1 枚ずつ描いて確かめるテスト (tests/scan-screens.mjs) 用。hash を大量に書き換えると Chromium が history.replaceState を黙って捨てるので、直接呼ぶ。
+  // scenario は開いているシナリオ (null = 自由操作)
+  window.MockApp = { show: show, get scenario() { return app.scenario; } };
 
   applyHash();
   // Web フォント (Oxanium) が読み込まれると行の高さが変わるので、描画し直して直前の行と手順を見える位置へスクロールし直す

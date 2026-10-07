@@ -5,25 +5,18 @@
 var Engine = (function () {
   var DEVICES = ['host', 'client'];
 
-  function defaultOpts() {
-    var o = {};
-    UNDECIDED.forEach(function (u) { if (u.options) o[u.id] = u.default; });
-    return o;
-  }
-
   function defaultCtx() {
     return { codeResult: 'auto', createResult: 'ok' };
   }
 
   // 端末ごとの付属状態 (hostDialog / hostStamp / hostMute / hostFailed など) とセッション (match / rated) は transitions.js の
   // DEVICE_FIELDS / SESSION_FIELDS で決まる
-  function initialState(opts, ctx) {
+  function initialState(ctx) {
     var s = { host: 'Host.MultiModeSelection', client: 'Client.MultiModeSelection' };
     DEVICES.forEach(function (d) {
       Object.keys(DEVICE_FIELDS).forEach(function (f) { s[d + f] = DEVICE_FIELDS[f].initial; });
     });
     Object.keys(SESSION_FIELDS).forEach(function (k) { s[k] = SESSION_FIELDS[k]; });
-    s.opts = Object.assign(defaultOpts(), opts || {});
     s.ctx = Object.assign(defaultCtx(), ctx || {});
     return s;
   }
@@ -42,7 +35,7 @@ var Engine = (function () {
   function whenHolds(row, state) {
     if (!row.when) return true;
     return Object.keys(row.when).every(function (k) {
-      var actual = /^U\d+$/.test(k) ? state.opts[k] : k in SESSION_FIELDS ? state[k] : state.ctx[k];
+      var actual = k in SESSION_FIELDS ? state[k] : state.ctx[k];
       return matchPat(row.when[k], actual);
     });
   }
@@ -125,9 +118,8 @@ var Engine = (function () {
   }
 
   // シナリオの手順を最初から n 個再生する。失敗した手順があれば failedAt に入る
-  function replay(scenario, n, opts, ctx) {
-    var state = initialState(Object.assign({}, opts || {}, scenario.opts || {}),
-      Object.assign({}, ctx || {}, scenario.ctx || {}));
+  function replay(scenario, n, ctx) {
+    var state = initialState(Object.assign({}, ctx || {}, scenario.ctx || {}));
     var fired = [];
     var steps = scenario.steps.slice(0, n === undefined ? scenario.steps.length : n);
     for (var i = 0; i < steps.length; i++) {
@@ -144,7 +136,7 @@ var Engine = (function () {
   }
 
   return {
-    DEVICES: DEVICES, initialState: initialState, defaultOpts: defaultOpts, defaultCtx: defaultCtx,
+    DEVICES: DEVICES, initialState: initialState, defaultCtx: defaultCtx,
     fire: fire, canFire: canFire, findRow: findRow, nextAuto: nextAuto, deviceOf: deviceOf, extrasLabel: extrasLabel,
     availableEnvEvents: availableEnvEvents, replay: replay, stepEvent: stepEvent,
   };

@@ -10,7 +10,7 @@
   <header class="topbar">
     <h1>QA² オンライン対戦フロー モック</h1>
     <span class="topbar-sub">qniapp/qa2#1891 ・ ogwssk さんの図 (09-30 / 10-02) と 10-01 の合意事項をもとにしたモック</span>
-    <span class="legend"><span class="legend-auto">⏱ 自動遷移 (点線)</span><span class="legend-user">👆 ユーザー操作 (実線)</span><span class="pill-undecided">未決</span> = 決まっていない点 <span class="pill-decided">決定</span> = 決まった点</span>
+    <span class="legend"><span class="pill-decided">決定</span> = 決まった点</span>
   </header>
 
   <main class="layout">
@@ -20,7 +20,6 @@
           <span class="role-badge host">ホスト</span>
           <code class="state-name"></code>
         </div>
-        <div class="undecided-strip"></div>
         <div class="phone"><div class="screen"></div></div>
         <div class="mock-controls"></div>
       </div>
@@ -29,7 +28,6 @@
           <span class="role-badge client">クライアント</span>
           <code class="state-name"></code>
         </div>
-        <div class="undecided-strip"></div>
         <div class="phone"><div class="screen"></div></div>
         <div class="mock-controls"></div>
       </div>
@@ -62,8 +60,7 @@
       <div id="current-state" class="current-state"></div>
       <nav class="tabs" role="tablist">
         <button type="button" role="tab" data-tab="table" class="active">状態遷移表</button>
-        <button type="button" role="tab" data-tab="undecided">未決 <span id="undecided-count"></span></button>
-        <button type="button" role="tab" data-tab="log">ログ</button>
+        <button type="button" role="tab" data-tab="undecided">決定</button>
       </nav>
       <div class="tab-body" data-tab-body="table">
         <label class="filter"><input type="checkbox" id="filter-available"> 今の状態から発火できる行だけ表示</label>
@@ -77,11 +74,8 @@
         </table>
       </div>
       <div class="tab-body" data-tab-body="undecided" hidden>
-        <p class="hint">選択肢があるものはトグルで切り替えられます (既定 = 図の通り、無ければ最も中立な案)。切り替えると遷移表の対応する行が有効になります。緑の「決定」は決まった項目です (ID はそのまま残しています)。</p>
+        <p class="hint">決まった項目と、その理由・前提です (ID はそのまま残しています)。</p>
         <ol id="undecided-list" class="undecided-list"></ol>
-      </div>
-      <div class="tab-body" data-tab-body="log" hidden>
-        <ol id="event-log" class="event-log"></ol>
       </div>
     </aside>
   </main>

@@ -309,14 +309,14 @@
       return '<div class="vs">' + card('host') + '<div class="vs-mark">VS</div>' + card('client') +
         '<div class="vs-bar"><i></i></div></div>';
     },
-    // ゲーム画面のプレースホルダー。HUD・カウントダウン・ポーズポップアップは実機 (VsAI) の画面にならう。
-    // ポーズボタンはプレイ中だけ出る (カウントダウン中とポーズ中は隠す)
+    // ゲーム画面のプレースホルダー。HUD・カウントダウンは実機 (VsAI) の画面にならう。
+    // メニューボタン (☰) はプレイ中だけ出る (カウントダウン中と、MATCH MENU・降参の確認を開いている間は隠す)
     game: function (dev, s) {
       var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
       var me = '<div class="g-me">' +
         '<div class="g-hud"><div class="g-time"><span>Time</span><b>0:00</b></div>' +
         '<div class="g-score"><span>Score</span><b>0</b></div></div>' +
-        (s.countdown || s.paused ? '' : '<button type="button" class="g-pause" aria-label="Pause"' + attrs(dev, 'pause') + '><i></i><i></i></button>') +
+        (s.countdown || s.menu ? '' : '<button type="button" class="g-menu" aria-label="Match menu"' + attrs(dev, 'matchMenu') + '><i></i><i></i><i></i></button>') +
         fieldHtml(FIELD, 'g-field') +
         (s.countdown ? countdownHtml() : '') +
         '<div class="g-bar"><span class="g-gauge"><i></i></span><span class="g-up">︽</span></div>' +
@@ -325,14 +325,15 @@
         '<div class="g-opp"><div class="g-score small"><span>Score</span><b>0</b></div>' +
         '<div class="g-opp-name">' + esc(opp.name) + '</div>' +
         fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
-        (s.paused ? pauseHtml(dev) : '');
+        (s.menu ? matchMenuHtml(dev, s.menu) : '');
     },
     // 対戦後 (図なし)。値もボタンも仮だが、仮・未決の印は端末の上の帯と右パネルに出す (SCREENS の undecided / context)
     result: function (dev, s) {
       var me = PLAYERS[dev];
       var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
       var win = s.outcome === 'WIN';
-      var status = { wait: 'Waiting for your friend…', asked: 'Your friend wants a rematch' }[s.rematch];
+      var status = s.surrender ? SURRENDER_STATUS[s.surrender] : { wait: 'Waiting for your friend…', asked: 'Your friend wants a rematch' }[s.rematch];
+      var buttons = s.buttons || [{ label: 'Rematch', event: 'rematch', primary: true }, { label: 'Back to Friend Match', event: 'backToFriendMatch' }];
       var btn = function (b) {
         return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
       };
@@ -343,11 +344,8 @@
         '<div class="r-row"><span>Rank</span><b>' + me.rank + ' → ' + (me.rank + (win ? 1 : 0)) + '</b></div>' +
         '<div class="r-row"><span>Score</span><b class="dim-value">----</b></div>' +
         '</div>' +
-        '<div class="r-status ' + (s.rematch || '') + '">' + (status ? esc(status) : '') + '</div>' +
-        '</div><div class="actions">' +
-        btn({ label: 'Rematch', event: 'rematch', primary: true }) +
-        btn({ label: 'Back to Friend Match', event: 'backToFriendMatch' }) +
-        '</div>';
+        '<div class="r-status ' + (s.surrender ? 'surrendered' : s.rematch || '') + '">' + (status ? esc(status) : '') + '</div>' +
+        '</div><div class="actions">' + buttons.map(btn).join('') + '</div>';
     },
   };
 
@@ -370,11 +368,14 @@
     return '<div class="g-cd">' + GAME_COUNTDOWN.digits.map(step).join('') + '</div>';
   }
 
-  // ポーズポップアップ (実機の Menu_Pause): 全面の暗幕、中央の黒いパネル、全幅のボタン 3 つ。タイトル・開閉アニメーションなし
-  function pauseHtml(dev) {
-    return '<div class="p-dim"><div class="p-panel" role="dialog" aria-label="Pause">' + PAUSE_BUTTONS.map(function (b) {
-      return '<button type="button" class="p-btn ' + b.kind + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
-    }).join('') + '</div></div>';
+  // MATCH MENU と降参の確認 (決定 U37 / U40)。パネルとボタンは実機のポーズポップアップ (Menu_Pause) にならうが、
+  // 試合は止まらないので暗幕は薄くし、ゲーム画面が見えたままにする
+  function matchMenuHtml(dev, m) {
+    return '<div class="m-dim"><div class="p-panel m-panel" role="dialog" aria-label="' + esc(m.title) + '">' +
+      '<div class="m-title">' + esc(m.title) + '</div><p class="m-body">' + esc(m.body) + '</p>' +
+      m.buttons.map(function (b) {
+        return '<button type="button" class="p-btn ' + b.kind + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+      }).join('') + '</div></div>';
   }
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる
@@ -600,15 +601,20 @@
     }).join('');
   }
 
-  // 決定済みの項目。今の画面や直前の遷移に関係するものを強調する
+  // 決定済みの項目。今の画面や直前の遷移に関係するものは題名 (と前提) まで出し、ほかはバッジだけを 1 行に並べる
+  // (決定が増えても遷移表を押し下げないように。題名はバッジの title と未決タブで読める)
   function decidedHtml() {
     var related = uniq(relevantIds('host', 'decided').concat(relevantIds('client', 'decided')));
-    var items = UNDECIDED.filter(function (u) { return u.decided; }).map(function (u) {
-      var on = related.indexOf(u.id) !== -1;
-      return '<li class="' + (on ? 'related' : '') + '"><button type="button" class="pill-decided small" data-undecided="' + u.id + '">決定 ' + u.id + '</button> ' +
-        esc(u.title) + (on ? ' <small>(今の画面に関係)</small>' : '') +
+    var all = UNDECIDED.filter(function (u) { return u.decided; });
+    var on = all.filter(function (u) { return related.indexOf(u.id) !== -1; });
+    var off = all.filter(function (u) { return related.indexOf(u.id) === -1; });
+    var pill = function (u) {
+      return '<button type="button" class="pill-decided small" data-undecided="' + u.id + '" title="' + esc(u.title) + '">決定 ' + u.id + '</button>';
+    };
+    var items = on.map(function (u) {
+      return '<li class="related">' + pill(u) + ' ' + esc(u.title) + ' <small>(今の画面に関係)</small>' +
         (u.decided.premise ? '<div class="cs-premise">前提: ' + esc(u.decided.premise) + '</div>' : '') + '</li>';
-    }).join('');
+    }).join('') + (off.length ? '<li class="others">' + (on.length ? '<span class="cs-others">ほか:</span>' : '') + off.map(pill).join('') + '</li>' : '');
     return '<div class="cs-decided"><span class="cs-label">決定済み</span><ul>' + items + '</ul></div>';
   }
 

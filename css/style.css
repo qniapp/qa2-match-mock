@@ -297,11 +297,12 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .g-score b { font-size: 18px; color: #F5A623; }
 .g-score.small { right: auto; text-align: left; }
 .g-score.small b { font-size: 14px; color: #E6E6E6; }
-.g-pause {
+/* メニューボタン (☰、決定 U37)。枠と位置は実機のポーズボタンと同じで、中の印を 3 本の横線にした */
+.g-menu {
   position: absolute; top: 64px; right: 12px; width: 26px; height: 26px; padding: 0; border: 1.5px solid #E6E6E6; background: none; cursor: pointer;
-  display: flex; justify-content: center; align-items: center; gap: 4px;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px;
 }
-.g-pause i { width: 2px; height: 11px; background: #E6E6E6; }
+.g-menu i { width: 12px; height: 2px; background: #E6E6E6; }
 .g-col { display: flex; flex-direction: column-reverse; gap: 2px; }
 .g-field, .g-mini { display: flex; align-items: flex-end; justify-content: center; }
 .g-field { position: absolute; left: 0; right: 0; bottom: 64px; gap: 2px; }
@@ -323,23 +324,26 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .g-gauge i { position: absolute; right: -4px; top: -6px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #29B6E8; background: #1F3A4D; }
 .g-up { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #29B6E8; background: #0F5E86; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
 
-/* ポーズポップアップ (実機の Menu_Pause)。参照解像度 1170 幅の値を画面幅 360px に縮める (× 0.3077):
-   パネル 880 x 570 → 271 x 175、ボタン 800 x 130 → 246 x 40、padding 60 → 18.5、spacing 30 → 9.2、文字 54 → 16.6px。
-   文字間隔は TMP の characterSpacing 5 (1/100 em 単位) = 0.05em。暗幕にブラーは無く、開閉アニメーションも無い */
-.p-dim { position: absolute; inset: 0; z-index: 3; background: rgba(0, 0, 0, 0.784); display: flex; align-items: center; justify-content: center; }
+/* MATCH MENU と降参の確認 (決定 U37 / U40)。パネルとボタンは実機のポーズポップアップ (Menu_Pause) の値を画面幅 360px に縮めたもの (× 0.3077):
+   パネル 880 幅 → 271px、ボタン 800 x 130 → 246 x 40、padding 60 → 18.5、spacing 30 → 9.2、文字 54 → 16.6px、文字間隔 0.05em。
+   ポーズと違って試合は止まらないので、暗幕は実機の α 0.784 より薄い α 0.35 にしてゲーム画面が見えたままにする */
+.m-dim { position: absolute; inset: 0; z-index: 3; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; }
 .p-panel {
   width: 271px; padding: 18.5px 12.3px; display: flex; flex-direction: column; gap: 9.2px;
   background: rgba(11, 11, 11, 0.9); border: 2px solid #fff; border-radius: 4px;
 }
+.m-title { font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 16.6px; letter-spacing: 0.05em; text-align: center; color: #fff; }
+.m-body { margin: 0 0 4px; font-size: 12.5px; line-height: 1.4; text-align: center; text-wrap: balance; color: #C9CED8; }
 .p-btn {
   height: 40px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.31); cursor: pointer; color: #fff;
   font-family: 'Oxanium', sans-serif; font-weight: 400; font-size: 16.6px; letter-spacing: 0.05em; text-align: center;
 }
 .p-btn.continue { background: #020202; letter-spacing: 0; }
-/* REMATCH / QUIT は半透明の塗りに、白 α 0.04 の走査線が重なる */
-.p-btn.rematch, .p-btn.quit { background-image: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 2px); }
-.p-btn.rematch { background-color: rgba(99, 102, 241, 0.51); }
-.p-btn.quit { background-color: rgba(239, 43, 43, 0.51); }
+/* SURRENDER は実機の QUIT と同じ赤の半透明の塗りに、白 α 0.04 の走査線が重なる */
+.p-btn.surrender {
+  background-color: rgba(239, 43, 43, 0.51);
+  background-image: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 2px);
+}
 
 /* ゲーム本体の開始カウントダウン (VsAI の CountdownTimer): 1 秒待ってから 3 → 2 → 1 を 0.8 秒ずつ。
    数字は 0.5 → 0.66 倍に拡大しながら 0.15 秒で現れ、0.55 秒まで少しずつ大きくなり、最後の 0.25 秒で 1.6 倍に広がって消える。
@@ -388,6 +392,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .r-status { margin-top: auto; padding-bottom: 18px; min-height: 2.5em; font-size: 15px; text-align: center; }
 .r-status.wait { color: var(--h); }
 .r-status.asked { color: var(--y); }
+.r-status.surrendered { color: #C9CED8; }
 
 /* ダイアログ */
 .dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; }
@@ -413,6 +418,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .cs-decided li { padding: 1px 0; }
 .cs-decided li.related { color: var(--text); }
 .cs-decided li.related small { color: #A7F3D0; }
+.cs-decided li.others { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 0; }
+.cs-decided .cs-others { margin-right: 6px; }
 .cs-premise { margin-left: 52px; font-size: 11px; }
 
 .tabs { flex: none; display: flex; gap: 2px; margin-top: 8px; border-bottom: 1px solid var(--line); }

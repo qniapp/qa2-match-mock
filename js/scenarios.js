@@ -17,8 +17,8 @@ var SCENARIOS = (function () {
   var hostOnly = 'このシナリオではクライアントは関与しない (クライアントの端末は Online Battle のまま)';
   var toMatchEnd = toReady.concat(bothStart, toGame); // 通常対戦でプレイ開始まで (12 手順)
   var postMatch = '対戦後の部分は図が無く、画面もボタンもすべて仮 (未決 U20〜U30)。Win / Lose は端末の下のモック操作で、勝敗判定そのものは対象外。';
-  var pause = 'ポーズポップアップは実機の VsAI と同じ見た目 (タイトルなし、CONTINUE / REMATCH / QUIT、確認なし)。ただし実機の VsPlayer (オンライン対戦) ではポーズボタン自体が出ないので、ポーズを出す前提の案 (U37)。' +
-    'REMATCH は行が無く押せない (U39)。ポーズや QUIT をしても相手の端末は変えていない (仮、U38)。';
+  var matchMenu = 'オンライン対戦の MATCH MENU は 2026-10-07 に決定 (案A、U37〜U42)。試合は止まらず (Time.timeScale = 0 にしない、BGM も下げない)、' +
+    '暗幕は薄くゲーム画面が見えたまま。ボタンは CONTINUE と SURRENDER だけで、対戦中に REMATCH / RETRY は無い (U39)。';
 
   return [
     { id: '1', title: '通常対戦 (ホストが先に Start Match)', diagram: '01',
@@ -96,11 +96,17 @@ var SCENARIOS = (function () {
     { id: '15c', title: '対戦後に再戦 (仮)', diagram: 'なし (対戦後)',
       desc: 'ホストが勝ったあと、クライアントが Rematch を押すと "Waiting for your friend…"、ホストには "Your friend wants a rematch"。ホストも Rematch を押すと VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (再戦でロビーの Start Match を挟むかは U23 で未決。モックは挟まない)。今度はクライアントが Win を押す。再戦の有無・同意の要否・VS 画面を挟むか・Match Code の再利用はすべて未決 (U23)。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch'], toGame, ['client.win']) },
-    { id: '16', title: '対戦中にポーズ → 再開 (CONTINUE)', diagram: 'なし (実機の VsAI のポーズ)',
-      desc: 'プレイ中にホストが右上のポーズボタン (II) を押すとポーズポップアップが開き、ポーズボタンは消える。クライアントもポーズする。CONTINUE でそれぞれプレイに戻る。' + pause,
-      steps: toMatchEnd.concat(['host.pause', 'client.pause', 'host.continue', 'client.continue']) },
-    { id: '16b', title: '対戦中にポーズ → QUIT', diagram: 'なし (実機の VsAI のポーズ)',
-      desc: 'プレイ中にホストがポーズして QUIT を押すと、確認なしで Online Battle に戻る (実機は AI / SOLO 選択画面へ。行き先と文言は U41、確認は U40)。クライアントはゲーム画面のまま (仮、U38)。続けてクライアントもポーズして QUIT する。' + pause,
-      steps: toMatchEnd.concat(['host.pause', 'host.quit', 'client.pause', 'client.quit']) },
+    { id: '16', title: '対戦中に MATCH MENU → CONTINUE (試合は続く)', diagram: 'なし (10-07 の決定、案A)',
+      desc: 'プレイ中にホストが右上のメニューボタン (☰) を押すと MATCH MENU が開き、"The match continues while the menu is open."。メニューを開いただけでは、クライアントの端末には何も出ない (U38)。' +
+        'クライアントも開き、CONTINUE でそれぞれメニューを閉じる。' + matchMenu,
+      steps: toMatchEnd.concat(['host.matchMenu', 'client.matchMenu', 'host.matchMenu.continue', 'client.matchMenu.continue']) },
+    { id: '16b', title: '対戦中に降参 (SURRENDER → 確認 → 負け)', diagram: 'なし (10-07 の決定、案A)',
+      desc: 'ホストが MATCH MENU の SURRENDER を押すと、確認 "Surrender?" / "You will lose." が出る (U40)。いったん CONTINUE でプレイに戻り、もう一度 SURRENDER → SURRENDER で降参する。' +
+        'ホストは負けの結果画面 ("You surrendered")、クライアントは勝ちの結果画面に "Your opponent surrendered" (U38)。ホストは Back to Online Battle で Online Battle へ戻る (U41)。' + matchMenu,
+      steps: toMatchEnd.concat(['host.matchMenu', 'host.matchMenu.surrender', 'host.surrenderConfirm.continue',
+        'host.matchMenu', 'host.matchMenu.surrender', 'host.surrenderConfirm.surrender', 'host.backToOnlineBattle']) },
+    { id: '16c', title: 'MATCH MENU を開いている間に試合が終わる', diagram: 'なし (10-07 の決定、案A)',
+      desc: 'ホストが MATCH MENU を開いている間も試合は続くので、その間にクライアントが勝つと (端末の下の Win)、ホストのメニューは閉じて負けの結果画面になる (U37)。' + matchMenu,
+      steps: toMatchEnd.concat(['host.matchMenu', 'client.win']) },
   ];
 })();

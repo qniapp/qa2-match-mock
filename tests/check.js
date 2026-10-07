@@ -10,7 +10,7 @@ const ctx = vm.createContext({});
 for (const f of ['transitions.js', 'engine.js', 'scenarios.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 }
-const { TRANSITIONS, SCREENS, DIALOGS, UNDECIDED, SCENARIOS, EVENT_LABELS, TOASTS, GAME_COUNTDOWN_MS, PAUSE_BUTTONS, Engine } = ctx;
+const { TRANSITIONS, SCREENS, DIALOGS, UNDECIDED, SCENARIOS, EVENT_LABELS, TOASTS, GAME_COUNTDOWN_MS, MATCH_MENU, SURRENDER_CONFIRM, SURRENDER_STATUS, Engine } = ctx;
 const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
 
 const errors = [];
@@ -146,11 +146,11 @@ const expectFire = (from, event, host, client) => {
 const counting = expectFire(at('Host.Opponent', 'Client.Opponent'), 'vs.done', 'Host.Game.Countdown', 'Client.Game.Countdown');
 if (counting) expectFire(counting, 'game.countdownDone', 'Host.Game.Play', 'Client.Game.Play');
 for (const r of TRANSITIONS) {
-  for (const [d, vs, cd, game, paused] of [['host', 'Host.Opponent', 'Host.Game.Countdown', 'Host.Game.Play', 'Host.Game.Pause'],
-    ['client', 'Client.Opponent', 'Client.Game.Countdown', 'Client.Game.Play', 'Client.Game.Pause']]) {
+  for (const [d, R] of [['host', 'Host'], ['client', 'Client']]) {
+    const [vs, cd, game] = [`${R}.Opponent`, `${R}.Game.Countdown`, `${R}.Game.Play`];
     if (r.from[d] === vs && r.event === 'vs.done' && r.to[d] !== cd) fail(`${r.id}: VS 画面のあと ${r.to[d]} (期待: ${cd})`);
-    // Host.Game.Play / Client.Game.Play に入るのはカウントダウンの後か、ポーズからの再開 (CONTINUE) だけ
-    if (r.to[d] === game && r.from[d] !== cd && r.from[d] !== paused) fail(`${r.id}: ${game} にカウントダウンを経ずに入る`);
+    // Host.Game.Play / Client.Game.Play に入るのはカウントダウンの後か、MATCH MENU・降参の確認の CONTINUE だけ
+    if (r.to[d] === game && ![cd, `${R}.Game.MatchMenu`, `${R}.Game.SurrenderConfirm`].includes(r.from[d])) fail(`${r.id}: ${game} にカウントダウンを経ずに入る`);
   }
 }
 const cdRow = TRANSITIONS.find((r) => r.event === 'game.countdownDone');
@@ -212,19 +212,21 @@ expectFire(inGame, 'host.lose', 'Host.LoseResult', 'Client.WinResult');
 expectFire(inGame, 'client.win', 'Host.LoseResult', 'Client.WinResult');
 expectFire(inGame, 'client.lose', 'Host.WinResult', 'Client.LoseResult');
 
-// Win / Lose は両端末が対戦中 (Host.Game.Play / Client.Game.Play) のときだけ行がある
+// Win / Lose は両端末が試合中のときだけ行がある。MATCH MENU や降参の確認を開いていても試合は続く (決定 U37)
+const hostInPlay = ['Host.Game.Play', 'Host.Game.MatchMenu', 'Host.Game.SurrenderConfirm'];
+const clientInPlay = ['Client.Game.Play', 'Client.Game.MatchMenu', 'Client.Game.SurrenderConfirm'];
 const hostStates = Object.keys(SCREENS).filter((k) => k.startsWith('Host.'));
 const clientStates = Object.keys(SCREENS).filter((k) => k.startsWith('Client.'));
 if (hostStates.length + clientStates.length !== Object.keys(SCREENS).length) fail('Host. / Client. で始まらない状態がある');
 for (const h of hostStates) {
   for (const c of clientStates) {
     for (const ev of ['host.win', 'host.lose', 'client.win', 'client.lose']) {
-      const want = h === 'Host.Game.Play' && c === 'Client.Game.Play';
+      const want = hostInPlay.includes(h) && clientInPlay.includes(c);
       if (Engine.canFire(at(h, c), ev) !== want) fail(`${h} / ${c} で ${ev} の行が${want ? '無い' : 'ある'}`);
     }
   }
 }
-// カウントダウン中は Win / Lose を押せない (ポーズボタンもまだ無い)
+// カウントダウン中は Win / Lose を押せない (メニューボタンもまだ無い)
 for (const ev of ['host.win', 'host.lose', 'client.win', 'client.lose']) {
   if (Engine.canFire(at('Host.Game.Countdown', 'Client.Game.Countdown'), ev)) fail(`カウントダウン中に ${ev} の行がある`);
   if (!Engine.canFire(at('Host.Game.Play', 'Client.Game.Play'), ev)) fail(`プレイ中に ${ev} の行が無い`);
@@ -264,34 +266,67 @@ for (const [id, [afterResult, last]] of Object.entries(postMatch)) {
 }
 console.log('ok  対戦後: Win / Lose・再戦・Back to Friend Match の遷移');
 
-// 対戦中のポーズ: II で開き、CONTINUE で戻り、QUIT で Online Battle へ。相手の端末は変えない (仮、U38)。REMATCH は行なし (U39)
-for (const [dev, game, paused, online, other] of [['host', 'Host.Game.Play', 'Host.Game.Pause', 'Host.MultiModeSelection', 'Client.Game.Play'], ['client', 'Client.Game.Play', 'Client.Game.Pause', 'Client.MultiModeSelection', 'Host.Game.Play']]) {
-  const pair2 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
-  const start = dev === 'host' ? at(game, other) : at(other, game);
-  const p = expectFire(start, `${dev}.pause`, ...pair2(paused, other));
-  if (!p) continue;
-  if (Engine.canFire(p, `${dev}.pause`)) fail(`${paused} でもう一度ポーズできる`);
-  if (Engine.canFire(p, `${dev}.pauseRematch`)) fail(`${paused} の REMATCH に行がある (U39 で未決)`);
-  for (const ev of ['win', 'lose']) if (Engine.canFire(p, `${dev}.${ev}`)) fail(`${paused} で ${ev} を押せる`);
-  expectFire(p, `${dev}.continue`, ...pair2(game, other));
-  expectFire(p, `${dev}.quit`, ...pair2(online, other));
-  if (Engine.canFire(at('Host.Game.Countdown', 'Client.Game.Countdown'), `${dev}.pause`)) fail(`カウントダウン中に ${dev}.pause の行がある`);
-  const s = SCREENS[paused];
-  if (s.view !== 'game' || !s.paused) fail(`${paused} がポーズポップアップ付きのゲーム画面になっていない`);
+// 対戦中の MATCH MENU (決定 U37〜U42、案A): ☰ で開いても相手の端末は変わらない。CONTINUE で閉じ、SURRENDER は確認を挟む。
+// 降参すると自分は負け、相手は (メニューを開いていても) 勝ち + "Your opponent surrendered"。負けの結果画面から Online Battle へ
+for (const id of ['U37', 'U38', 'U39', 'U40', 'U41', 'U42']) {
+  const u = UNDECIDED.find((x) => x.id === id);
+  if (!u || !u.decided || u.decided.by !== '高宮さん' || u.decided.date !== '2026-10-07') fail(`${id} が 高宮さん 2026-10-07 の決定になっていない`);
 }
-if (!PAUSE_BUTTONS || PAUSE_BUTTONS.map((b) => b.label).join() !== 'CONTINUE,REMATCH,QUIT') fail('ポーズのボタンが CONTINUE / REMATCH / QUIT の順でない');
-for (const id of ['U37', 'U38', 'U39', 'U40', 'U41', 'U42']) if (!openIds.has(id)) fail(`未決 ${id} が無い`);
-// モック専用の Back to Online Battle と "Game in progress (mock)" は無くなった
+if (/降参/.test(UNDECIDED.find((u) => u.id === 'U28').title)) fail('U28 の題名に決定済みの降参が残っている');
+for (const [dev, R, other, O] of [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']]) {
+  const pair2 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
+  const st = (mine, theirs) => at(...pair2(mine, theirs));
+  const [play, menu, confirm] = [`${R}.Game.Play`, `${R}.Game.MatchMenu`, `${R}.Game.SurrenderConfirm`];
+  for (const theirs of clientInPlay.concat(hostInPlay).filter((s) => s.startsWith(O + '.'))) {
+    const m = expectFire(st(play, theirs), `${dev}.matchMenu`, ...pair2(menu, theirs));
+    if (!m) continue;
+    if (Engine.canFire(m, `${dev}.matchMenu`)) fail(`${menu} でもう一度メニューを開ける`);
+    for (const ev of ['pause', 'quit', 'continue', 'pauseRematch', 'rematch']) if (Engine.canFire(m, `${dev}.${ev}`)) fail(`${menu} で ${dev}.${ev} の行がある`);
+    expectFire(m, `${dev}.matchMenu.continue`, ...pair2(play, theirs));
+    const c = expectFire(m, `${dev}.matchMenu.surrender`, ...pair2(confirm, theirs));
+    if (!c) continue;
+    expectFire(c, `${dev}.surrenderConfirm.continue`, ...pair2(play, theirs));
+    expectFire(c, `${dev}.surrenderConfirm.surrender`, ...pair2(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`));
+  }
+  expectFire(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), `${dev}.backToOnlineBattle`,
+    ...pair2(`${R}.MultiModeSelection`, `${O}.WinResult.OpponentSurrendered`));
+  expectFire(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), `${other}.backToFriendMatch`,
+    ...pair2(`${R}.LoseResult.Surrendered`, `${O}.FriendMatch.Room`));
+  if (Engine.canFire(at('Host.Game.Countdown', 'Client.Game.Countdown'), `${dev}.matchMenu`)) fail(`カウントダウン中に ${dev}.matchMenu の行がある`);
+  for (const name of [menu, confirm]) {
+    const s = SCREENS[name];
+    if (s.view !== 'game' || !s.menu) fail(`${name} がメニュー付きのゲーム画面になっていない`);
+  }
+  for (const [name, who] of [[`${R}.LoseResult.Surrendered`, 'self'], [`${R}.WinResult.OpponentSurrendered`, 'opponent']]) {
+    const s = SCREENS[name];
+    if (!s || s.surrender !== who) { fail(`${name} が降参の結果画面になっていない`); continue; }
+    if (s.buttons.some((b) => b.event === 'rematch')) fail(`${name} に Rematch がある`);
+  }
+}
+if (MATCH_MENU.title !== 'MATCH MENU' || !/continues while the menu is open/.test(MATCH_MENU.body)) fail('MATCH MENU のタイトルか「試合は続く」の一文が無い');
+if (MATCH_MENU.buttons.map((b) => b.label).join() !== 'CONTINUE,SURRENDER') fail('MATCH MENU のボタンが CONTINUE / SURRENDER でない (REMATCH / QUIT は無い)');
+if (SURRENDER_CONFIRM.title !== 'Surrender?' || SURRENDER_CONFIRM.body !== 'You will lose.') fail('降参の確認の文言が "Surrender?" / "You will lose." でない');
+if (SURRENDER_CONFIRM.buttons.map((b) => b.label).join() !== 'CONTINUE,SURRENDER') fail('降参の確認のボタンが CONTINUE / SURRENDER でない');
+if (SURRENDER_STATUS.opponent !== 'Your opponent surrendered') fail('勝った側に "Your opponent surrendered" が出ない');
+for (const r of TRANSITIONS) if (/\.(pause|quit|continue|pauseRematch)$/.test(r.event) && !/(matchMenu|surrenderConfirm)\./.test(r.event)) fail(`${r.id}: ポーズの ${r.event} が残っている`);
+for (const k of Object.keys(SCREENS)) if (/\.Game\.Pause$/.test(k)) fail(`ポーズの状態 ${k} が残っている`);
+if (/timeScale|g-pause|p-dim/.test(read('js', 'app.js') + read('css', 'style.css'))) fail('app.js / style.css にポーズ (試合を止める表示) が残っている');
+// モック専用の "Game in progress (mock)" は無くなった
 for (const r of TRANSITIONS) if (/backToOnline$/.test(r.event)) fail(`${r.id}: モック専用の ${r.event} が残っている`);
-if (/Game in progress|Back to Online Battle/.test(read('js', 'app.js'))) fail('app.js にモック専用のゲーム画面の表示が残っている');
-const pauseEnds = { '16': ['Host.Game.Pause / Client.Game.Pause', 'Host.Game.Play / Client.Game.Play'], '16b': ['Host.MultiModeSelection / Client.Game.Play', 'Host.MultiModeSelection / Client.MultiModeSelection'] };
-for (const [id, [mid, last]] of Object.entries(pauseEnds)) {
+if (/Game in progress/.test(read('js', 'app.js'))) fail('app.js にモック専用のゲーム画面の表示が残っている');
+// [手順の途中, 最後] の状態
+const menuScenarios = {
+  '16': [14, 'Host.Game.MatchMenu / Client.Game.MatchMenu', 'Host.Game.Play / Client.Game.Play'],
+  '16b': [18, 'Host.LoseResult.Surrendered / Client.WinResult.OpponentSurrendered', 'Host.MultiModeSelection / Client.WinResult.OpponentSurrendered'],
+  '16c': [13, 'Host.Game.MatchMenu / Client.Game.Play', 'Host.LoseResult / Client.WinResult'],
+};
+for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
   const sc = SCENARIOS.find((x) => x.id === id);
   if (!sc) { fail(`シナリオ ${id} が無い`); continue; }
-  const got = [pair(Engine.replay(sc, 14).state), pair(Engine.replay(sc).state)];
+  const got = [pair(Engine.replay(sc, n).state), pair(Engine.replay(sc).state)];
   if (got.join() !== [mid, last].join()) fail(`シナリオ ${id} の状態 ${got.join(' → ')} (期待: ${mid} → ${last})`);
 }
-console.log('ok  ポーズ: 開く / CONTINUE / QUIT (両端末)、REMATCH は行なし');
+console.log('ok  MATCH MENU: 開いても相手は変わらない / CONTINUE / SURRENDER → 確認 → 負け + 相手に "Your opponent surrendered" (両端末)、メニュー中も Win / Lose');
 
 // 決定 (U13a): ランダム対戦は相手が見つかり次第 VS 画面へ。Ready / Start Match / Starting match… を挟まない (U31 は Friend Match だけ)。
 // 相手を探す画面は "Searching for an opponent…" と大きな Cancel で、Cancel は Online Battle へ戻る
@@ -337,7 +372,9 @@ console.log('ok  端末の画面と端末の上に決定の注記・バッジが
 if (/mock-note|class="tmp"|pill-undecided small inline|btn-wrap/.test(appJs)) fail('app.js が端末の画面に仮・未決の印やモックの注記を出している');
 for (const [name, s] of Object.entries(SCREENS)) {
   if (s.view !== 'result') continue;
-  const want = ['U21', 'U23', 'U24'].concat(s.rematch === 'wait' ? ['U30'] : []);
+  // 再戦 (U23) と Back to Friend Match の戻り先 (U24) は、そのボタンがある結果画面だけ
+  const events = (s.buttons || [{ event: 'rematch' }, { event: 'backToFriendMatch' }]).map((b) => b.event);
+  const want = ['U21'].concat(events.includes('rematch') ? ['U23'] : [], events.includes('backToFriendMatch') ? ['U24'] : [], s.rematch === 'wait' ? ['U30'] : []);
   for (const id of want) if (!s.undecided.includes(id)) fail(`${name}: 端末の上の帯に未決 ${id} が無い`);
   if (!/仮の表示/.test([].concat(s.context).join())) fail(`${name}: 右パネルに Rank / Score が仮の表示だという説明が無い`);
 }

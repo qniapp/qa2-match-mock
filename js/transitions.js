@@ -58,6 +58,14 @@ OUTCOMES.forEach(function (o) {
     clientResultAny.push(resultState('Client', o, ph));
   });
 });
+// 降参で決まった結果 (決定 U38 / U41): 勝った側は "Your opponent surrendered" (Back to Friend Match は通常の結果画面と同じ)、
+// 降参した側は負けの結果画面から Online Battle へ戻る。どちらも再戦は無い
+hostResultAny.push(resultState('Host', 'Win', '.OpponentSurrendered'));
+clientResultAny.push(resultState('Client', 'Win', '.OpponentSurrendered'));
+
+// 試合が続いている状態 (決定 U37: MATCH MENU や降参の確認を開いていても試合は止まらない)
+var hostInPlay = ['Host.Game.Play', 'Host.Game.MatchMenu', 'Host.Game.SurrenderConfirm'];
+var clientInPlay = ['Client.Game.Play', 'Client.Game.MatchMenu', 'Client.Game.SurrenderConfirm'];
 
 // 遷移表の表示で、配列の代わりにグループ名を出すための一覧
 var STATE_GROUPS = {
@@ -73,6 +81,8 @@ var STATE_GROUPS = {
   'Client.FriendMatch.Room.CodeFilled': clientRoomFilled,
   'Host.Result.Any': hostResultAny,
   'Client.Result.Any': clientResultAny,
+  'Host.Game.InPlay': hostInPlay,
+  'Client.Game.InPlay': clientInPlay,
 };
 
 // ゲーム本体の開始カウントダウン (VsAI の CountdownTimer と同じ): 1 秒待ってから 3 → 2 → 1 を 0.8 秒ずつ
@@ -145,22 +155,33 @@ var TRANSITIONS = (function () {
     to: { host: 'Host.Game.Countdown', client: 'Client.Game.Countdown' },
     note: '合意: VS 画面は 2〜3 秒。決定 (U2): そのままゲーム画面へ移り、ゲーム本体のカウントダウンが始まる', decided: ['U2'] });
   T({ from: { host: 'Host.Game.Countdown', client: 'Client.Game.Countdown' }, event: 'game.countdownDone', auto: GAME_COUNTDOWN_MS,
-    to: { host: 'Host.Game.Play', client: 'Client.Game.Play' }, note: '決定 (U2): ゲーム本体の 3 → 2 → 1 (1 秒待ち + 0.8 秒 × 3) が終わるとポーズボタンが出てプレイ開始', decided: ['U2'] });
+    to: { host: 'Host.Game.Play', client: 'Client.Game.Play' }, note: '決定 (U2): ゲーム本体の 3 → 2 → 1 (1 秒待ち + 0.8 秒 × 3) が終わるとメニューボタン (☰) が出てプレイ開始', decided: ['U2'] });
 
-  // === 対戦中のポーズ (実機の VsAI のポーズポップアップにならう。オンラインで出すかは未決 U37) ===
-  // 相手の端末は変えない (仮、U38)。2 番目のボタン REMATCH には行が無い (U39)
-  T({ from: { host: 'Host.Game.Play', client: '*' }, event: 'host.pause', to: { host: 'Host.Game.Pause', client: '*' },
-    note: '仮: ポーズポップアップを開く (実機の VsPlayer ではポーズボタンが出ない)。相手の端末は変わらない', undecided: ['U37', 'U38'] });
-  T({ from: { host: '*', client: 'Client.Game.Play' }, event: 'client.pause', to: { host: '*', client: 'Client.Game.Pause' },
-    note: '仮: ポーズポップアップを開く (実機の VsPlayer ではポーズボタンが出ない)。相手の端末は変わらない', undecided: ['U37', 'U38'] });
-  T({ from: { host: 'Host.Game.Pause', client: '*' }, event: 'host.continue', to: { host: 'Host.Game.Play', client: '*' },
-    note: '実機と同じ: CONTINUE でポップアップを閉じてプレイに戻る', undecided: ['U37'] });
-  T({ from: { host: '*', client: 'Client.Game.Pause' }, event: 'client.continue', to: { host: '*', client: 'Client.Game.Play' },
-    note: '実機と同じ: CONTINUE でポップアップを閉じてプレイに戻る', undecided: ['U37'] });
-  T({ from: { host: 'Host.Game.Pause', client: '*' }, event: 'host.quit', to: { host: 'Host.MultiModeSelection', client: '*' },
-    note: '仮: 確認なしで Online Battle へ (実機は AI / SOLO 選択画面へ)。相手の端末は変わらない', undecided: ['U38', 'U40', 'U41'] });
-  T({ from: { host: '*', client: 'Client.Game.Pause' }, event: 'client.quit', to: { host: '*', client: 'Client.MultiModeSelection' },
-    note: '仮: 確認なしで Online Battle へ (実機は AI / SOLO 選択画面へ)。相手の端末は変わらない', undecided: ['U38', 'U40', 'U41'] });
+  // === 対戦中の MATCH MENU (決定 U37〜U42、高宮さん 2026-10-07、案A) ===
+  // 試合は止まらない (Time.timeScale = 0 にしない)。メニューや確認を開いただけでは相手の端末は変わらない (U38)。対戦中の REMATCH / RETRY は無い (U39)
+  [['host', 'Host', 'client'], ['client', 'Client', 'host']].forEach(function (p) {
+    var d = p[0];
+    var R = p[1];
+    var other = p[2];
+    var O = other === 'host' ? 'Host' : 'Client';
+    var row = function (mine, theirs) {
+      var r = {};
+      r[d] = mine;
+      r[other] = theirs;
+      return r;
+    };
+    T({ from: row(R + '.Game.Play', '*'), event: d + '.matchMenu', to: row(R + '.Game.MatchMenu', '*'),
+      note: '決定 (U37 / U38): ☰ で MATCH MENU を開く。試合は続き、相手の端末には何も出ない', decided: ['U37', 'U38'] });
+    T({ from: row(R + '.Game.MatchMenu', '*'), event: d + '.matchMenu.continue', to: row(R + '.Game.Play', '*'),
+      note: '決定 (U37): CONTINUE でメニューを閉じる (試合はずっと続いている)', decided: ['U37'] });
+    T({ from: row(R + '.Game.MatchMenu', '*'), event: d + '.matchMenu.surrender', to: row(R + '.Game.SurrenderConfirm', '*'),
+      note: '決定 (U40 / U41): SURRENDER (QUIT ではない) で確認を出す。確認中も試合は続く', decided: ['U40', 'U41'] });
+    T({ from: row(R + '.Game.SurrenderConfirm', '*'), event: d + '.surrenderConfirm.continue', to: row(R + '.Game.Play', '*'),
+      note: '決定 (U40): CONTINUE で確認を閉じてプレイに戻る', decided: ['U40'] });
+    T({ from: row(R + '.Game.SurrenderConfirm', other === 'host' ? hostInPlay : clientInPlay), event: d + '.surrenderConfirm.surrender',
+      to: row(resultState(R, 'Lose', '.Surrendered'), resultState(O, 'Win', '.OpponentSurrendered')),
+      note: '決定 (U38 / U40): 降参した側は負け、相手は (メニューを開いていても) 勝ちの結果画面に "Your opponent surrendered"', decided: ['U38', 'U40'] });
+  });
 
   // === Start Match 直後の同期失敗 (図06) ===
   T({ from: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, event: 'sys.startFailed',
@@ -341,9 +362,10 @@ var TRANSITIONS = (function () {
   // Win / Lose は端末の下のモック操作。勝敗判定そのものはモックの対象外
   var opposite = { Win: 'Lose', Lose: 'Win' };
   [['host.win', 'Win'], ['host.lose', 'Lose'], ['client.win', 'Lose'], ['client.lose', 'Win']].forEach(function (p) {
-    T({ from: { host: 'Host.Game.Play', client: 'Client.Game.Play' }, event: p[0],
+    T({ from: { host: hostInPlay, client: clientInPlay }, event: p[0],
       to: { host: resultState('Host', p[1]), client: resultState('Client', opposite[p[1]]) },
-      note: 'モック操作: 押した側が' + (/win$/.test(p[0]) ? '勝ち' : '負け') + '、相手は自動で逆の結果。対戦後の画面は図に無い', undecided: ['U28'] });
+      note: 'モック操作: 押した側が' + (/win$/.test(p[0]) ? '勝ち' : '負け') + '、相手は自動で逆の結果。対戦後の画面は図に無い。' +
+        'MATCH MENU や降参の確認を開いていても試合は続いているので、そのまま結果画面へ (決定 U37)', undecided: ['U28'], decided: ['U37'] });
   });
   OUTCOMES.forEach(function (o) {
     var h = resultState('Host', o);
@@ -365,6 +387,11 @@ var TRANSITIONS = (function () {
     note: '仮: 押した側だけ Friend Match トップへ。相手は結果画面のまま', undecided: ['U24', 'U25'] });
   T({ from: { host: '*', client: clientResultAny }, event: 'client.backToFriendMatch', to: { host: '*', client: 'Client.FriendMatch.Room' },
     note: '仮: 相手はすでに結果画面を抜けている', undecided: ['U24'] });
+  // 降参した側の負けの結果画面 (決定 U41): Online Battle (Host.MultiModeSelection / Client.MultiModeSelection) へ戻る。相手は結果画面のまま
+  T({ from: { host: resultState('Host', 'Lose', '.Surrendered'), client: '*' }, event: 'host.backToOnlineBattle', to: { host: 'Host.MultiModeSelection', client: '*' },
+    note: '決定 (U41): 降参して負けたあとは Online Battle へ。ボタンの文言は仮 (U22)', decided: ['U41'], undecided: ['U22'] });
+  T({ from: { host: '*', client: resultState('Client', 'Lose', '.Surrendered') }, event: 'client.backToOnlineBattle', to: { host: '*', client: 'Client.MultiModeSelection' },
+    note: '決定 (U41): 降参して負けたあとは Online Battle へ。ボタンの文言は仮 (U22)', decided: ['U41'], undecided: ['U22'] });
 
   rows.forEach(function (r, i) {
     r.id = 'T' + String(i + 1).padStart(2, '0');
@@ -386,10 +413,12 @@ var EVENT_LABELS = {
   'host.cancelSearch': 'ホスト: 相手を探している間に Cancel を押す',
   'host.back': 'ホスト: ‹ (戻る / 別画面へ)',
   'host.tapToast': 'ホスト: トーストをタップ',
-  'host.pause': 'ホスト: ポーズボタン (II) を押す',
-  'host.continue': 'ホスト: ポーズの CONTINUE を押す',
-  'host.pauseRematch': 'ホスト: ポーズの REMATCH を押す (行なし)',
-  'host.quit': 'ホスト: ポーズの QUIT を押す',
+  'host.matchMenu': 'ホスト: メニューボタン (☰) を押す',
+  'host.matchMenu.continue': 'ホスト: MATCH MENU の CONTINUE を押す',
+  'host.matchMenu.surrender': 'ホスト: MATCH MENU の SURRENDER を押す',
+  'host.surrenderConfirm.continue': 'ホスト: 降参の確認で CONTINUE を押す',
+  'host.surrenderConfirm.surrender': 'ホスト: 降参の確認で SURRENDER を押す',
+  'host.backToOnlineBattle': 'ホスト: Back to Online Battle を押す (降参後)',
   'host.win': 'ホスト: Win を押す (モック操作)',
   'host.lose': 'ホスト: Lose を押す (モック操作)',
   'host.rematch': 'ホスト: Rematch を押す (仮)',
@@ -408,10 +437,12 @@ var EVENT_LABELS = {
   'client.cancelSearch': 'クライアント: 相手を探している間に Cancel を押す',
   'client.back': 'クライアント: ‹ (戻る / 別画面へ)',
   'client.tapToast': 'クライアント: トーストをタップ',
-  'client.pause': 'クライアント: ポーズボタン (II) を押す',
-  'client.continue': 'クライアント: ポーズの CONTINUE を押す',
-  'client.pauseRematch': 'クライアント: ポーズの REMATCH を押す (行なし)',
-  'client.quit': 'クライアント: ポーズの QUIT を押す',
+  'client.matchMenu': 'クライアント: メニューボタン (☰) を押す',
+  'client.matchMenu.continue': 'クライアント: MATCH MENU の CONTINUE を押す',
+  'client.matchMenu.surrender': 'クライアント: MATCH MENU の SURRENDER を押す',
+  'client.surrenderConfirm.continue': 'クライアント: 降参の確認で CONTINUE を押す',
+  'client.surrenderConfirm.surrender': 'クライアント: 降参の確認で SURRENDER を押す',
+  'client.backToOnlineBattle': 'クライアント: Back to Online Battle を押す (降参後)',
   'client.win': 'クライアント: Win を押す (モック操作)',
   'client.lose': 'クライアント: Lose を押す (モック操作)',
   'client.rematch': 'クライアント: Rematch を押す (仮)',
@@ -446,24 +477,32 @@ var TOASTS = {
   lost: { kind: 'grey', text: 'Connection lost' },
 };
 
-// ポーズポップアップ (実機の Menu_Pause)。ボタンの event はデバイス名を除いたもの。REMATCH には行が無い (U39)
-var PAUSE_BUTTONS = [
-  { label: 'CONTINUE', event: 'continue', kind: 'continue' },
-  { label: 'REMATCH', event: 'pauseRematch', kind: 'rematch' },
-  { label: 'QUIT', event: 'quit', kind: 'quit' },
-];
-var PAUSE_UNDECIDED = ['U37', 'U38', 'U39', 'U40', 'U41', 'U42'];
+// オンライン対戦の MATCH MENU (決定 U37〜U42) と降参の確認。ボタンの event はデバイス名を除いたもの。
+// 対戦中に REMATCH / RETRY は出さず (U39)、QUIT ではなく SURRENDER (U41)
+var MATCH_MENU = {
+  title: 'MATCH MENU', body: 'The match continues while the menu is open.',
+  buttons: [{ label: 'CONTINUE', event: 'matchMenu.continue', kind: 'continue' }, { label: 'SURRENDER', event: 'matchMenu.surrender', kind: 'surrender' }],
+};
+var SURRENDER_CONFIRM = {
+  title: 'Surrender?', body: 'You will lose.',
+  buttons: [{ label: 'CONTINUE', event: 'surrenderConfirm.continue', kind: 'continue' }, { label: 'SURRENDER', event: 'surrenderConfirm.surrender', kind: 'surrender' }],
+};
+// 降参で決まった結果画面の一行 (決定 U38)
+var SURRENDER_STATUS = { self: 'You surrendered', opponent: 'Your opponent surrendered' };
 
 // 右パネルに出す、その状態の画面の説明 (端末の画面の中には出さない)
-var GAME_COUNTDOWN_CONTEXT = 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。終わるとポーズボタンが出てプレイ開始。';
-var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のポーズボタン (II) でポーズポップアップを開く。勝敗は端末の下のモック操作 Win / Lose。';
+var GAME_COUNTDOWN_CONTEXT = 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。終わるとメニューボタン (☰) が出てプレイ開始。';
+var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のメニューボタン (☰) で MATCH MENU を開く (U37)。勝敗は端末の下のモック操作 Win / Lose。';
 // 結果画面の仮の点。端末の画面には出さず (未決は端末の上の帯)、右パネルの説明に出す
 var RESULT_CONTEXT = '結果画面 (図なしの仮の画面、U20)。Rank の変化と Score はどちらも仮の表示で、Score の ---- は値が決まっていないため (U21)。Rematch の扱いは U23、Back to Friend Match の戻り先は U24。';
 var RESULT_WAIT_CONTEXT = [RESULT_CONTEXT, '自分が申し込んで待っている間の Rematch (取り消し) は U30 で、行が無く押せない。'];
 var MATCHMAKE_CONTEXT = 'ランダム対戦で相手を探している画面 (決定 U13a)。相手が見つかり次第 VS 画面へ進む (Start Match は無い)。' +
   'Cancel で Online Battle へ戻る (確認を挟むかは未決 U13、モックは確認なし)。席を外したとき・タイムアウトの扱いも未決 (U13)。';
-var GAME_PAUSED_CONTEXT = 'ポーズポップアップ (実機の VsAI と同じ見た目)。REMATCH は仮の文言で行なし (U39)、QUIT は Online Battle へ (仮、U41)。' +
-  '相手の端末は変えていない (仮置き、U38)。実機の VsPlayer ではポーズボタン自体が出ない (U37)。';
+var MATCH_MENU_CONTEXT = 'MATCH MENU (決定 U37)。試合は止まらない: Time.timeScale = 0 にせず、暗幕も薄くしてゲームが見えたまま。メニュー中に試合が終われば (Win / Lose) そのまま結果画面へ。' +
+  '開いただけでは相手の端末には何も出ない (U38)。対戦中に REMATCH / RETRY は無い (U39、再戦は結果画面だけ)。BGM も下げない (U42、モックには音が無い)。';
+var SURRENDER_CONFIRM_CONTEXT = '降参の確認 (決定 U40)。確認中も試合は続く。CONTINUE でプレイに戻り、SURRENDER で負けが決まって相手は勝ちの結果画面に "Your opponent surrendered" (U38)。ボタンは QUIT ではなく SURRENDER (U41)。';
+var SURRENDERED_LOSE_CONTEXT = '降参した側の負けの結果画面 (決定 U38)。Back to Online Battle で Online Battle へ戻る (決定 U41、文言は仮 U22)。降参のあとに再戦は無い。Rank の変化と Score は仮の表示 (U21)。';
+var SURRENDERED_WIN_CONTEXT = '相手が降参したので勝ち。"Your opponent surrendered" を出す (決定 U38)。相手はもう抜けているので再戦は無い。Rank の変化と Score は仮の表示 (U21)、Back to Friend Match の戻り先は U24。';
 
 var SCREENS = (function () {
   var S = {};
@@ -479,6 +518,12 @@ var SCREENS = (function () {
   function matchmake() {
     return { view: 'random', title: 'Random Match', back: 'back', status: 'Searching for an opponent…',
       buttons: [B.search], decided: ['U13a'], undecided: ['U13'], context: MATCHMAKE_CONTEXT };
+  }
+  function matchMenu() {
+    return { view: 'game', menu: MATCH_MENU, decided: ['U37', 'U38', 'U39', 'U42'], context: MATCH_MENU_CONTEXT };
+  }
+  function surrenderConfirm() {
+    return { view: 'game', menu: SURRENDER_CONFIRM, decided: ['U37', 'U40', 'U41'], context: SURRENDER_CONFIRM_CONTEXT };
   }
   function online(dev) {
     return { view: 'online', title: 'ONLINE BATTLE', back: null, items: [
@@ -528,10 +573,11 @@ var SCREENS = (function () {
   });
   S['Host.Matchmake'] = matchmake();
   S['Host.Opponent'] = { view: 'vs', undecided: [] };
-  // ゲーム画面: カウントダウン中 (ポーズボタンなし・Win / Lose は押せない) → プレイ中 → ポーズ中
+  // ゲーム画面: カウントダウン中 (メニューボタンなし・Win / Lose は押せない) → プレイ中 ⇄ MATCH MENU → 降参の確認
   S['Host.Game.Countdown'] = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
   S['Host.Game.Play'] = { view: 'game', context: GAME_CONTEXT };
-  S['Host.Game.Pause'] = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
+  S['Host.Game.MatchMenu'] = matchMenu();
+  S['Host.Game.SurrenderConfirm'] = surrenderConfirm();
 
   // --- クライアント ---
   S['Client.MultiModeSelection'] = online('client');
@@ -562,7 +608,8 @@ var SCREENS = (function () {
   S['Client.Opponent'] = { view: 'vs' };
   S['Client.Game.Countdown'] = { view: 'game', countdown: true, decided: ['U2'], undecided: ['U32'], context: GAME_COUNTDOWN_CONTEXT };
   S['Client.Game.Play'] = { view: 'game', context: GAME_CONTEXT };
-  S['Client.Game.Pause'] = { view: 'game', paused: true, undecided: PAUSE_UNDECIDED, context: GAME_PAUSED_CONTEXT };
+  S['Client.Game.MatchMenu'] = matchMenu();
+  S['Client.Game.SurrenderConfirm'] = surrenderConfirm();
 
   // --- 対戦後 (両端末共通。図なし) ---
   ['Host', 'Client'].forEach(function (role) {
@@ -574,6 +621,13 @@ var SCREENS = (function () {
           context: wait ? RESULT_WAIT_CONTEXT : RESULT_CONTEXT };
       });
     });
+    // 降参で決まった結果 (決定 U38 / U41)。再戦のボタンは出さない
+    S[resultState(role, 'Lose', '.Surrendered')] = { view: 'result', title: 'RESULT', back: null, outcome: 'LOSE', surrender: 'self',
+      buttons: [{ label: 'Back to Online Battle', event: 'backToOnlineBattle', primary: true }],
+      decided: ['U38', 'U41'], undecided: ['U20', 'U21', 'U22'], context: SURRENDERED_LOSE_CONTEXT };
+    S[resultState(role, 'Win', '.OpponentSurrendered')] = { view: 'result', title: 'RESULT', back: null, outcome: 'WIN', surrender: 'opponent',
+      buttons: [{ label: 'Back to Friend Match', event: 'backToFriendMatch' }],
+      decided: ['U38'], undecided: ['U20', 'U21', 'U22', 'U24', 'U25'], context: SURRENDERED_WIN_CONTEXT };
   });
 
   Object.keys(S).forEach(function (k) {
@@ -687,8 +741,9 @@ var UNDECIDED = [
     desc: 'タイムアウトで自動的に次の画面へ進むのか、ボタンを押すまで結果画面に留まるのか。両者の操作が必要か。モックには自動遷移が無い。' },
   { id: 'U27', title: '結果画面であいさつ絵文字を送れるか',
     desc: 'issue の「あいさつ＋絵文字」はモックでは VS 画面に表示している。対戦後にもあいさつや絵文字を送れるか。' },
-  { id: 'U28', title: '勝敗が決まらない場合 (引き分け・対戦中の切断・降参)',
-    desc: '端末の下の Win / Lose ボタンはモック操作で、勝敗の判定そのものと、両端末に同じ結果を出す同期は対象外。引き分け、対戦中の切断、降参したときの扱いと画面は未定。' },
+  { id: 'U28', title: '勝敗が決まらない場合 (引き分け・対戦中の切断)',
+    desc: '端末の下の Win / Lose ボタンはモック操作で、勝敗の判定そのものと、両端末に同じ結果を出す同期は対象外。引き分け、対戦中の切断のときの扱いと画面は未定。' +
+      'オンライン対戦の降参 (MATCH MENU の SURRENDER) は U38 / U40 / U41 で決定済み。' },
   { id: 'U29', title: 'ランダム対戦の対戦後',
     desc: 'ランダム対戦 (U13) の対戦後も Friend Match と同じ結果画面か。モックでは同じ画面になり、"Back to Friend Match" も出てしまう。再戦や戻り先 (Random Match の待機に戻るなど) が違うかは未定。' },
   { id: 'U30', title: '再戦の申し込みの取り消し・応答待ちのタイムアウト',
@@ -712,19 +767,27 @@ var UNDECIDED = [
   { id: 'U36', title: '片方が Start Match を押したあとの表示の細部',
     desc: 'U31 で決まったのは「押した側は待機表示、相手側には相手が準備完了であることを表示」まで。モックの文言 (押した側の "Waiting for your friend…"、相手側の名前の下の "Friend is ready!")、' +
       '押した側の Start Match を無効表示にするか隠すか、ホスト・クライアントで同じ表示にするかは仮。' },
-  { id: 'U37', title: 'オンライン対戦でポーズを出すか・ゲームを止めるか',
-    desc: '実ゲームの VsPlayer (オンライン対戦) では、プレイ開始時に HidePause() でポーズボタンを隠している。また VsAI やソロのポーズは Time.timeScale = 0 でゲームを止めるが、オンラインでは相手がいるので同じようには止められない。' +
-      'このモックは「オンラインでもポーズボタンとポーズポップアップを出す」前提の案。ポーズを出すか、出すならポーズ中もゲームが進むのか (両者を止めるのか) は決まっていない。' },
-  { id: 'U38', title: 'ポーズ・QUIT したとき相手側に何が見えるか・どうなるか',
-    desc: 'モックでは、片方がポーズしても QUIT しても相手の端末は変えていない (仮置き)。相手にポーズ中・退出したことをどう伝えるか、QUIT を負け (降参) 扱いにするか、残された側はどの画面へ進むかは決まっていない (対戦中の切断・降参は U28)。' },
-  { id: 'U39', title: 'ポーズの 2 番目のボタン (REMATCH / RETRY) をオンラインで出すか',
-    desc: '実機のポーズポップアップの 2 番目のボタンは、VsAI では REMATCH、ソロでは RETRY (どちらも確認なしでその場でやり直す)。モックでは VsAI の文言 REMATCH を仮に置き、遷移行は作っていない (破線で押せない)。' +
-      'オンラインでこのボタンを出すか、出すなら何をするか (相手の同意が要る再戦の申し込みになるのかなど。対戦後の再戦は U23) は決まっていない。' },
-  { id: 'U40', title: 'QUIT に確認ダイアログを付けるか',
-    desc: '実ゲームのポーズの QUIT は確認なしですぐに抜ける (モックも同じ)。オンラインでは相手がいて、抜けると対戦が終わるので、確認を挟むかは決まっていない。' },
-  { id: 'U41', title: 'QUIT の行き先と表記',
-    desc: '実ゲームの QUIT は VsAI なら AI 選択画面、ソロなら SOLO 選択画面へ戻る。モックではそれにあたる画面として Online Battle に戻している (仮)。' +
-      'Friend Match トップや同じマッチのロビーに戻る案もありうる。ボタンの文言 (QUIT のままか) も未定。' },
-  { id: 'U42', title: 'ポーズ中の BGM ダッキングなどの細部',
-    desc: '実ゲームはポーズ中に BGM を -5dB 下げ (ダッキング)、ボタンを押すとクリック音を鳴らす。オンラインでゲームを止めない場合に同じように BGM を下げるかなど、音や細かい演出は決まっていない (モックには音が無い)。' },
+  { id: 'U37', title: 'オンライン対戦は ☰ MATCH MENU。開いても試合は止まらない',
+    desc: '案A。オンライン対戦では VsAI のポーズポップアップの代わりに MATCH MENU (☰) を出す。VsAI やソロのポーズのように Time.timeScale = 0 でゲームを止めることはせず、メニューを開いている間も試合は続く。' +
+      'メニューには "The match continues while the menu is open." と出し、CONTINUE (閉じる) と SURRENDER (降参、U40 / U41) を置く。ゲーム画面は薄い暗幕の向こうに見えたままにして、止まっているように見せない。' +
+      'メニュー中に試合が終われば、そのまま結果画面へ進む (モックでは端末の下の Win / Lose)。',
+    decided: { by: '高宮さん', date: '2026-10-07' } },
+  { id: 'U38', title: 'メニューを開いても相手には何も見えない。降参すると相手は勝ち + "Your opponent surrendered"',
+    desc: 'MATCH MENU を開いただけでは、相手の端末には何も出さない (相手はそのままプレイを続ける)。' +
+      '降参すると降参した側は負けの結果画面 ("You surrendered")、相手は勝ちの結果画面に "Your opponent surrendered" を出す。相手がメニューや降参の確認を開いていても同じ。',
+    decided: { by: '高宮さん', date: '2026-10-07' } },
+  { id: 'U39', title: '対戦中に REMATCH / RETRY は出さない (再戦は結果画面だけ)',
+    desc: '実機のポーズポップアップの 2 番目のボタン (VsAI では REMATCH、ソロでは RETRY) は、オンライン対戦の MATCH MENU には置かない。再戦は結果画面の Rematch だけ (進め方は U23)。',
+    decided: { by: '高宮さん', date: '2026-10-07' } },
+  { id: 'U40', title: '降参の前に確認を出す ("Surrender?" / "You will lose.")',
+    desc: 'MATCH MENU の SURRENDER を押すと、すぐには降参せず確認を出す: 「降参しますか？ 負けになります」(画面の英語は "Surrender?" / "You will lose.")。' +
+      'ボタンは CONTINUE (続ける、プレイに戻る) と SURRENDER (降参する)。確認を開いている間も試合は続く。',
+    decided: { by: '高宮さん', date: '2026-10-07' } },
+  { id: 'U41', title: 'ボタンは SURRENDER (QUIT ではない)。負けの結果画面のあと Online Battle へ',
+    desc: 'MATCH MENU のボタンの文言は QUIT ではなく SURRENDER。降参して負けの結果画面を見たあとは、Online Battle (Host.MultiModeSelection / Client.MultiModeSelection) に戻る。' +
+      'モックでは負けの結果画面の "Back to Online Battle" で戻る (ボタンの文言は U22 で仮)。',
+    decided: { by: '高宮さん', date: '2026-10-07' } },
+  { id: 'U42', title: 'MATCH MENU 中も BGM を下げない',
+    desc: '実ゲームのポーズは BGM を -5dB 下げる (ダッキング) が、オンライン対戦の MATCH MENU では試合が続くので BGM を下げない。モックには音が無いので、決定の記録だけ。',
+    decided: { by: '高宮さん', date: '2026-10-07' } },
 ];

@@ -11,6 +11,9 @@
 // 部屋の画面 (決定 U1〜U19) は、Match Code の下の "Code expires in 30:00" (U7)、ホストが離れている間だけクライアントのカードのホストが "Away" (U14)、
 // 古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
 // 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
+// 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
+// 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" であること (U49)、
+// 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
 // 端末の上の帯は未決バッジだけで、すべて見えていること (1280x720 で確かめる) も確かめる。
 // 遷移表に行が無いボタンの破線・半透明 ([data-norow]) はモックの操作の手がかりなので数えるだけにする。
 // 使い方: node tests/scan-screens.mjs   (Chromium の場所は環境変数 CHROMIUM で変えられる。既定は chromium)
@@ -172,8 +175,49 @@ function scan() {
         });
         scroller.scrollTo(sx, sy);
       }
-      // 結果画面と切断を待つ画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアが決まっていなければ行ごと出さない
-      if (/Result|\.Game\./.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(text)) findings.push(`${at}: 秒数がある: ${text.trim().slice(0, 80)}`);
+      // 結果画面とゲーム画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアが決まっていなければ行ごと出さない。
+      // 切断を待つ間 (決定 U46 / U54) だけは、残りの秒数 "20s" を濃い暗幕の上のパネルに出す
+      const waitingTimer = screen.querySelector('.m-dim.paused .m-timer');
+      const isWaiting = /\.(Game|Opponent)\.(Disconnected|OpponentDisconnected)\b/.test(state);
+      if (isWaiting !== !!waitingTimer || (waitingTimer && waitingTimer.textContent !== '20s')) findings.push(`${at}: 切断を待つ間の残りの秒数が ${waitingTimer ? waitingTimer.textContent : 'なし'}`);
+      const restText = waitingTimer ? text.replace(waitingTimer.textContent, '') : text;
+      if (/Result|\.Game\.|\.Opponent/.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(restText)) findings.push(`${at}: 秒数がある: ${restText.trim().slice(0, 80)}`);
+      if (isWaiting) {
+        const want = /\.Disconnected\b/.test(state) ? ['Connection lost', 'Reconnecting…'] : ['Your opponent disconnected', 'Waiting for your opponent to reconnect…'];
+        const got = [...screen.querySelectorAll('.m-panel .m-title, .m-panel .m-body')].map((e) => e.textContent);
+        if (got.join() !== want.join()) findings.push(`${at}: 切断を待つ表示が ${got.join(' / ')} (期待: ${want.join(' / ')})`);
+        const evs = [...dev.querySelectorAll('.mock-controls [data-env]:not([data-norow])')].map((e) => e.dataset.env).join();
+        if (evs !== 'net.recovered,timer.disconnectTimeout') findings.push(`${at}: 端末の下のモック操作で再接続 / 20 秒たつを押せない (${evs})`);
+        if (screen.querySelector('.g-menu')) findings.push(`${at}: 切断を待つ間にメニューボタンがある`);
+      }
+      if (screen.querySelector('.m-dim') && !/\.Game\.(MatchMenu|SurrenderConfirm)\b/.test(state) && !isWaiting) findings.push(`${at}: 暗幕がある`);
+      if (/\.Game\.(MatchMenu|SurrenderConfirm)\b/.test(state) && screen.querySelector('.m-dim.paused')) findings.push(`${at}: MATCH MENU の暗幕が止まった表示 (U37)`);
+      // VS 画面 (決定 U48): 両者のカードに "Rating 1000"。Rank は無い
+      if (screen.querySelector('.vs')) {
+        const ratings = [...screen.querySelectorAll('.vs-card .vs-rating')].map((e) => e.textContent);
+        if (ratings.join() !== `Rating ${ELO.initial},Rating ${ELO.initial}`) findings.push(`${at}: VS 画面のレーティングが ${ratings.join(' / ')}`);
+      }
+      if (/\bRank\b/.test(text)) findings.push(`${at}: "Rank" が残っている`);
+      // 部屋のお知らせ (決定 U52): モーダルではない帯で、Close を押せる。画面に収まり、ほかの部品と重ならない
+      const notice = screen.querySelector('.room-notice');
+      if (/\.FriendMatch\.Room\.(HostLeft|HostDisconnected|RoomClosed|ReconnectFailed|MatchCancelled)\b/.test(state) !== !!notice) findings.push(`${at}: 部屋のお知らせの帯が ${notice ? 'ある' : '無い'}`);
+      if (notice) {
+        const close = notice.querySelector('.rn-close');
+        if (!close || close.textContent !== 'Close' || close.hasAttribute('data-norow')) findings.push(`${at}: お知らせの Close を押せない`);
+        if (screen.querySelector('.dim')) findings.push(`${at}: お知らせがモーダル (暗幕がある)`);
+        const sr = screen.getBoundingClientRect();
+        const nr = notice.getBoundingClientRect();
+        if (nr.top < sr.top || nr.bottom > sr.bottom || nr.left < sr.left || nr.right > sr.right) findings.push(`${at}: お知らせの帯が画面からはみ出している`);
+        screen.querySelectorAll('.btn, .input, .sec-label').forEach((el) => {
+          const r = el.getBoundingClientRect();
+          if (r.bottom > nr.top + 0.5 && nr.bottom > r.top + 0.5 && r.right > nr.left && nr.right > r.left) findings.push(`${at}: お知らせの帯が ${el.textContent.trim()} と重なっている`);
+        });
+        if (close) { const cr = close.getBoundingClientRect(); if (cr.right > nr.right || cr.top < nr.top || cr.bottom > nr.bottom) findings.push(`${at}: Close が帯からはみ出している`); }
+      }
+      // スタンプのミュート (決定 U49)
+      const mute = screen.querySelector('.r-mute');
+      if (mute && !/^.?.?(Mute|Unmute) opponent emotes$/u.test(mute.textContent)) findings.push(`${at}: ミュートのボタンが ${mute.textContent}`);
+      if (mute && (/🔕/.test(state) !== /Unmute/.test(mute.textContent))) findings.push(`${at}: ミュートのボタンが状態と合わない (${mute.textContent})`);
       // Ready 画面 (決定 U31 / U32 / U36) と部屋の画面 (決定 U1〜U19)。古い文言は出さない
       const OLD = text.match(/Start Match|Ready to start|Stay in Room|Go Back|Leave Match|Cancel Match|Cancel this match|Leave this match|Match expired\.|cancelled the match|left the match\./);
       if (OLD) findings.push(`${at}: 古い文言 "${OLD[0]}" が残っている`);
@@ -212,7 +256,7 @@ function scan() {
         if ((states[1] === 'Away') !== wantAway || states[0] === 'Away') findings.push(`${at}: 相手のカードの "Away" が ${states[1] === 'Away'} (期待: ${wantAway})`);
         if (!cards[0] || !cards[0].querySelector('.you') || screen.querySelectorAll('.rd-card .you').length !== 1) findings.push(`${at}: 自分のカードに YOU が無い`);
         const timer = screen.querySelector('.rd-timer');
-        const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /OpponentDisconnected/.test(state) ? '20s' : null;
+        const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /\.(OpponentDisconnected|Reconnecting|ConnectionLost|FriendDisconnected)\b/.test(state) ? '20s' : null;
         if ((timer ? timer.textContent : null) !== wantTimer) findings.push(`${at}: カウントダウンが ${timer ? timer.textContent : 'なし'} (期待: ${wantTimer || 'なし'})`);
         ['leaveApp', 'disconnect'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]`)) findings.push(`${at}: 端末の下のモック操作に ${ev} が無い`);

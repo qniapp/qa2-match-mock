@@ -40,6 +40,11 @@
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
 
+  // お知らせの文を 1 文ずつ折り返さない塊にする ("Match cancelled. / Opponent did not reconnect." のように文の切れ目で改行させる)
+  function sentences(text) {
+    return esc(text).split(/(?<=\.) /).map(function (t) { return '<span class="sen">' + t + '</span>'; }).join(' ');
+  }
+
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
@@ -272,7 +277,7 @@
         : '<span class="placeholder">Match Code</span>';
       return header(dev, s, s.title) +
         '<div class="body">' +
-        (s.roomNotice ? '<p class="room-notice" role="status">' + esc(s.roomNotice) + '</p>' : '') +
+        roomNoticeHtml(dev, s.roomNotice) +
         '<div class="sec-label">Create Match</div>' +
         '<button type="button" class="btn big"' + attrs(dev, 'createMatch') + '>Create Match</button>' +
         '<div class="sec-label second">Enter Match Code</div>' +
@@ -305,7 +310,7 @@
         (s.status ? '<div class="status">' + esc(s.status) + '</div><div class="dots"><i></i><i></i><i></i></div>' : '') + '</div>' +
         buttonsHtml(dev, s.buttons);
     },
-    vs: function (dev) {
+    vs: function (dev, s) {
       var me = dev;
       var card = function (who) {
         var p = PLAYERS[who];
@@ -313,11 +318,11 @@
           (who === me ? '<span class="you">YOU</span>' : '') +
           '<div class="vs-emoji">' + p.emoji + '</div>' +
           '<div class="vs-name">' + esc(p.name) + '</div>' +
-          '<div class="vs-rank">Rank ' + p.rank + '</div>' +
+          '<div class="vs-rating">Rating ' + ELO.initial + '</div>' +
           '<div class="vs-greet">“' + esc(p.greeting) + '”</div></div>';
       };
       return '<div class="vs">' + card('host') + '<div class="vs-mark">VS</div>' + card('client') +
-        '<div class="vs-bar"><i></i></div></div>';
+        '<div class="vs-bar"><i></i></div></div>' + (s.overlay ? overlayHtml(s) : '');
     },
     // ゲーム画面のプレースホルダー。HUD・カウントダウンは実機 (VsAI) の画面にならう。
     // メニューボタン (☰) はプレイ中だけ出る (カウントダウン中と、MATCH MENU・降参の確認を開いている間は隠す)
@@ -335,7 +340,7 @@
         '<div class="g-opp"><div class="g-score small"><span>Score</span><b>0</b></div>' +
         '<div class="g-opp-name">' + esc(opp.name) + '</div>' +
         fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
-        (s.menu ? matchMenuHtml(dev, s.menu) : '') + (s.overlay ? overlayHtml(s.overlay) : '');
+        (s.menu ? matchMenuHtml(dev, s.menu) : '') + (s.overlay ? overlayHtml(s) : '');
     },
     // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・スコア・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
     // ボタンと Rating の行は Friend Match かランダム対戦か (セッションの match / rated) で変わる
@@ -344,7 +349,7 @@
       var head = RESULT_HEADLINES[s.outcome];
       var score = s.outcome === 'NoContest' ? null : DEMO_SCORES[s.outcome];
       var rating = ratingText(s.outcome, app.state);
-      var status = REMATCH_STATUS[s.phase];
+      var status = REMATCH_STATUS[s.status];
       // 相手が送ったスタンプは、ミュートしていなければ相手の名前の上に出す。自分が送ったものは自分の名前の上
       var player = function (who, isMe) {
         var stamp = stampById(app.state[who + 'Stamp']);
@@ -394,15 +399,16 @@
     return STAMPS.filter(function (st) { return st.id === id; })[0] || null;
   }
 
-  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。🔔 / 🔕 は相手のスタンプのミュート
+  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。
+  // その下に相手のスタンプのミュート "Mute opponent emotes" / "Unmute opponent emotes" (決定 U49)
   function stampsHtml(dev) {
     var waiting = app.state[dev + 'Stamp'] !== null;
     var muted = app.state[dev + 'Mute'];
     return '<div class="r-stamps">' + STAMPS.map(function (st) {
       if (waiting) return '<button type="button" class="r-stamp is-disabled" disabled aria-label="' + esc(st.text) + '">' + st.emoji + '</button>';
       return '<button type="button" class="r-stamp" aria-label="' + esc(st.text) + '"' + attrs(dev, 'stamp.' + st.id) + '>' + st.emoji + '</button>';
-    }).join('') + '<button type="button" class="r-mute' + (muted ? ' muted' : '') + '" aria-label="' + (muted ? 'Unmute stamps' : 'Mute stamps') + '"' +
-      attrs(dev, muted ? 'unmuteStamps' : 'muteStamps') + '>' + (muted ? '\u{1F515}' : '\u{1F514}') + '</button></div>';
+    }).join('') + '</div><button type="button" class="r-mute' + (muted ? ' muted' : '') + '"' + attrs(dev, muted ? 'unmuteStamps' : 'muteStamps') + '>' +
+      '<span class="r-mute-icon" aria-hidden="true">' + (muted ? '\u{1F515}' : '\u{1F514}') + '</span>' + (muted ? 'Unmute opponent emotes' : 'Mute opponent emotes') + '</button>';
   }
 
   // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Rematch / Decline) は横に並べる
@@ -442,11 +448,20 @@
     return '<div class="g-cd">' + GAME_COUNTDOWN.digits.map(step).join('') + '</div>';
   }
 
-  // 片方が切断して待っている間の表示 (決定 U28、表示は仮 U46)。MATCH MENU と同じパネルに、ボタンの代わりに順に光る点
-  function overlayHtml(o) {
-    return '<div class="m-dim"><div class="p-panel m-panel" role="status">' +
-      '<div class="m-title">' + esc(o.title) + '</div><p class="m-body">' + esc(o.body) + '</p>' +
-      '<div class="dots"><i></i><i></i><i></i></div></div></div>';
+  // 片方が切断して待っている間の表示 (決定 U46 / U54)。MATCH MENU と同じパネルに、ボタンの代わりに残りの秒数。
+  // サーバーが両者のゲームを止めているので、暗幕は MATCH MENU (試合は止まらない) より濃くする
+  function overlayHtml(s) {
+    return '<div class="m-dim paused"><div class="p-panel m-panel" role="status">' +
+      '<div class="m-title">' + esc(s.overlay.title) + '</div><p class="m-body">' + esc(s.overlay.body) + '</p>' +
+      '<div class="rd-timer m-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div></div></div>';
+  }
+
+  // Friend Match トップの部屋のお知らせ (決定 U52)。モーダルではない帯で、Close で閉じる (Match Code を入れても消えない)
+  function roomNoticeHtml(dev, n) {
+    if (!n) return '';
+    return '<div class="room-notice" role="status"><p class="rn-text">' + sentences(n.text) + '</p>' + n.buttons.map(function (b) {
+      return '<button type="button" class="rn-close"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
+    }).join('') + '</div>';
   }
 
   // MATCH MENU と降参の確認 (決定 U37 / U40)。パネルとボタンは実機のポーズポップアップ (Menu_Pause) にならうが、
@@ -460,11 +475,21 @@
   }
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
-  // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29)、ロビー (Ready 画面) では「アプリを離れる」と「切断する」(決定 U32 / U35)、
-  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、それ以外は試合の決着 (Win / Lose / Draw) と、この端末の接続が切れる「切断する」(決定 U28 / U32)
+  // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29 / U47)、ロビー (Ready 画面) では「アプリを離れる」と「切断する」(決定 U5 / U35)、
+  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。左の環境イベントと同じ)、
+  // それ以外は時間切れの決着 (勝ち / 負け / 同点、決定 U44) と、この端末の接続が切れる「切断する」(決定 U28 / U32 / U54)
   function mockControlsHtml(dev) {
-    var btn = function (ev, text) { return '<button type="button" class="mc-btn"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
+    var btn = function (ev, text, cls) { return '<button type="button" class="mc-btn' + (cls ? ' ' + cls : '') + '"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
+    var envBtn = function (ev, text) {
+      var ok = Engine.canFire(app.state, ev);
+      return '<button type="button" class="mc-btn" data-env="' + esc(ev) + '"' + (ok ? '' : ' data-norow="1" title="遷移表に行がありません (' + esc(ev) + ')"') + '>' + esc(text) + '</button>';
+    };
     var state = app.state[dev];
+    var overlay = SCREENS[state].overlay;
+    if (overlay) {
+      return '<span class="mc-label">モック操作 (切断中):</span>' + envBtn('net.recovered', overlay === DISCONNECT_OVERLAYS.self ? '再接続する' : '相手が戻る') +
+        envBtn('timer.disconnectTimeout', '20 秒たつ');
+    }
     if (/\.Matchmake/.test(state) && MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(app.state, dev + '.' + ev); })) {
       return '<span class="mc-label">モック操作 (検索中):</span>' + btn('leaveApp', 'アプリを離れる') + btn('searchTimeout', '60 秒たつ');
     }
@@ -474,7 +499,8 @@
     if (isResultState(app.state[dev])) {
       return '<span class="mc-label">モック操作 (スタンプ):</span>' + btn('stampShown', '3 秒たつ') + btn('stampInterval', '5 秒たつ');
     }
-    return '<span class="mc-label">モック操作 (対戦):</span>' + btn('win', 'Win') + btn('lose', 'Lose') + btn('draw', 'Draw') + btn('disconnect', '切断する');
+    return '<span class="mc-label">モック操作 (時間切れ):</span>' + btn('win', '勝ち', 'compact') + btn('lose', '負け', 'compact') + btn('draw', '同点', 'compact') +
+      '<span class="mc-sep" aria-hidden="true"></span>' + btn('disconnect', '切断する');
   }
 
   // 60 秒探しても見つからなかったときの通知 (決定 U13 / U29)。元の画面の上に、確認ダイアログと同じ見た目で出す
@@ -489,7 +515,7 @@
   // アプリを離れて検索が止まったときの通知 (決定 U43)。モーダルではなく Online Battle の中のボックスなので、上のメニューも押せる
   function inlineNoticeHtml(dev, n) {
     if (!n) return '';
-    return '<div class="inline-notice" role="status"><p class="in-text">' + esc(n.text) + '</p><div class="btn-row">' +
+    return '<div class="inline-notice" role="status"><p class="in-text">' + sentences(n.text) + '</p><div class="btn-row">' +
       n.buttons.map(function (b) {
         return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
       }).join('') + '</div></div>';

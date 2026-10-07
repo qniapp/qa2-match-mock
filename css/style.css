@@ -130,13 +130,18 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 
 /* 端末の下のモック操作 (Win / Lose) */
 .mock-controls { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin-top: 8px; }
-.mc-label { color: var(--muted); font-size: 12px; }
+.mc-label { color: var(--muted); font-size: 12px; white-space: nowrap; }
 .mc-btn {
   min-width: 54px; padding: 3px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;
   background: #141B33; border: 1px solid var(--undecided); color: var(--undecided);
 }
 .mc-btn:hover:not([data-norow]) { background: rgba(250, 204, 21, 0.12); }
+.mc-btn { white-space: nowrap; }
+/* 時間切れの勝ち / 負け / 同点 (決定 U44) は 2 文字なので幅を詰め、「切断する」と 1 行に収める */
+.mc-btn.compact { min-width: 0; padding: 3px 10px; }
 .mc-btn[data-norow] { opacity: 0.38; border-style: dashed; cursor: not-allowed; }
+/* 時間切れの決着 (勝ち / 負け / 同点) と「切断する」の間の区切り */
+.mc-sep { width: 1px; height: 18px; margin: 0 2px; background: #3A4466; }
 
 .pill-undecided {
   display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
@@ -249,7 +254,16 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   font-size: 14px; font-weight: 600; line-height: 1.45; text-align: center; text-wrap: balance;
 }
 .rd-notice { align-self: stretch; }
-.room-notice { margin-bottom: 18px; }
+/* Friend Match トップの部屋のお知らせ (決定 U52): モーダルではない帯。Close で閉じる */
+.room-notice { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 10px 10px 10px 14px; text-align: left; }
+.rn-text { flex: 1; margin: 0; }
+/* お知らせは文の切れ目で改行する (1 文はなるべく 1 行に) */
+.rn-text .sen, .in-text .sen { display: inline-block; }
+.rn-close {
+  flex: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--text); background: rgba(255, 255, 255, 0.06); border: 1px solid #56607E;
+}
+.rn-close:hover:not([data-norow]) { border-color: var(--h); }
 /* カウントダウン (Ready の 60 秒・再接続の 20 秒)。モックは始まった直後の秒数のまま描く */
 .rd-timer {
   display: flex; align-items: baseline; justify-content: center; width: 64px; height: 64px; box-sizing: border-box; padding-top: 15px;
@@ -316,7 +330,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .vs-card .you { position: absolute; top: 10px; left: 12px; font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; background: var(--text); color: var(--navy); }
 .vs-emoji { font-size: 34px; }
 .vs-name { font-size: 22px; font-weight: 700; }
-.vs-rank { font-size: 13px; color: var(--muted); }
+.vs-rating { font-size: 13px; color: var(--muted); }
 .vs-greet { margin-top: 6px; font-size: 15px; }
 .vs-mark { text-align: center; font-size: 40px; font-weight: 700; color: var(--swap); text-shadow: 0 0 16px rgba(250, 204, 21, 0.7); }
 .vs-bar { position: absolute; left: 24px; right: 24px; bottom: 24px; height: 3px; background: rgba(255, 255, 255, 0.1); }
@@ -371,6 +385,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
    パネル 880 幅 → 271px、ボタン 800 x 130 → 246 x 40、padding 60 → 18.5、spacing 30 → 9.2、文字 54 → 16.6px、文字間隔 0.05em。
    ポーズと違って試合は止まらないので、暗幕は実機の α 0.784 より薄い α 0.35 にしてゲーム画面が見えたままにする */
 .m-dim { position: absolute; inset: 0; z-index: 3; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; }
+/* 切断を待つ間 (決定 U46 / U54) はサーバーが両者のゲームを止めるので、実機のポーズと同じ濃さ (α 0.784) にして止まっていることを示す */
+.m-dim.paused { background: rgba(0, 0, 0, 0.784); }
 .p-panel {
   width: 271px; padding: 18.5px 12.3px; display: flex; flex-direction: column; gap: 9.2px;
   background: rgba(11, 11, 11, 0.9); border: 2px solid #fff; border-radius: 4px;
@@ -458,15 +474,21 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .r-status.wait { color: var(--h); }
 .r-status.asked { color: var(--y); }
 .r-status.info { color: #C9CED8; }
-.r-stamps { display: flex; justify-content: center; gap: 10px; padding-bottom: 14px; }
-.r-stamp, .r-mute {
+.r-stamps { display: flex; justify-content: center; gap: 10px; padding-bottom: 8px; }
+.r-stamp {
   width: 44px; height: 40px; padding: 0; border-radius: 10px; cursor: pointer; font-size: 20px; line-height: 1;
   background: rgba(255, 255, 255, 0.05); border: 1px solid #56607E;
 }
-.r-stamp:hover:not(:disabled), .r-mute:hover { border-color: var(--h); }
+.r-stamp:hover:not(:disabled) { border-color: var(--h); }
 .r-stamp.is-disabled { cursor: default; opacity: 0.4; }
-.r-mute { margin-left: 8px; font-size: 16px; border-radius: 50%; width: 40px; }
-.r-mute.muted { border-color: var(--x); background: rgba(248, 138, 138, 0.12); }
+/* 相手のスタンプのミュート (決定 U49)。スタンプの下の小さな文字のボタン */
+.r-mute {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 auto 12px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: #C9CED8; background: none; border: 1px solid transparent;
+}
+.r-mute:hover:not([data-norow]) { border-color: #56607E; }
+.r-mute-icon { font-size: 14px; }
+.r-mute.muted { color: #F8B4B4; border-color: rgba(248, 138, 138, 0.45); background: rgba(248, 138, 138, 0.1); }
 .view-result .actions { padding-bottom: 28px; gap: 8px; }
 .btn-row { display: flex; gap: 8px; }
 .btn-row .btn { flex: 1; }
@@ -562,5 +584,5 @@ tbody.fired td.rid { box-shadow: inset 3px 0 0 var(--h); color: #fff; }
 
 .flash { animation: flash 1.6s ease-out; }
 @keyframes flash { 0%, 30% { background: rgba(250, 204, 21, 0.35); } 100% { background: transparent; } }
-/* 片方が切断して待っている間の表示 (決定 U28、表示は仮 U46): MATCH MENU と同じパネルにボタンの代わりの点 */
-.m-panel .dots { justify-content: center; margin: 4px 0 6px; }
+/* 片方が切断して待っている間の表示 (決定 U46 / U54): MATCH MENU と同じパネルに、ボタンの代わりの残りの秒数 (Ready 画面のカウントダウンと同じ円) */
+.m-panel .m-timer { align-self: center; margin: 4px 0 6px; }

@@ -184,7 +184,7 @@ var SCENARIOS = (function () {
         'ホストが Rematch で応じると、ロビーの Ready を挟まずにそのまま VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (U23)。今度は時間切れでクライアントが勝つ。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch'], toGame, ['client.win']) },
     { id: '15d', title: '再戦の申し込みを取り消す → 3 秒後にまた申し込める', diagram: 'なし (10-07 の決定 U30)',
-      desc: 'ホストが Rematch で申し込み、Cancel Request で取り消すと、クライアントに "Rematch request was cancelled" (U30)、ホストにも "Rematch request cancelled" (U50)。' +
+      desc: 'ホストが Rematch で申し込み、Cancel Request で取り消すと、両者に "Rematch request cancelled" (クライアントは U30、ホストは U50。2026-10-08 に両者の文言を統一)。' +
         '両者とも結果画面に残り、3 秒 (仮) は Rematch を押せない。3 秒たっても一行は次の操作まで残る (U50)。' +
         '左の環境イベント「3 秒たつ」でまた押せるようになり、今度はクライアントが申し込んでホストが応じ、VS 画面へ。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'host.rematch', 'host.cancelRematch', 'timer.rematchCooldown', 'client.rematch', 'host.rematch']) },
@@ -295,7 +295,7 @@ var SCENARIOS = (function () {
     { id: '21c', title: 'Friend Match の再戦の VS 画面中に切断 → 戻らない → Friend Match トップ', diagram: 'なし (10-08 の決定 U52 / U54)',
       desc: 'Friend Match の対戦のあと再戦が成立し、VS 画面中にクライアントの接続が切れる。再戦は Ready 画面に戻らず (U54)、VS 画面のまま 20 秒 (仮) 待つ (表示は U46 と同じ)。' +
         '戻らないと試合を取りやめ (勝敗なし)、両者とも Friend Match トップへ: ホストは "Match cancelled. Opponent did not reconnect."、クライアントは "Could not reconnect. The match did not start." の帯 (U52)。' +
-        '行き先 (Back to Friend Match と同じ Friend Match トップ、U24) と帯の文言はモックの仮定。両者とも Close で帯を閉じる。' + postMatch,
+        '行き先 (Back to Friend Match と同じ Friend Match トップ、U24) と帯の文言は 2026-10-08 に確認。両者とも Close で帯を閉じる。' + postMatch,
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch', 'client.disconnect', 'timer.disconnectTimeout', 'host.closeNotice', 'client.closeNotice']) },
   ];
 })();

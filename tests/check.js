@@ -730,10 +730,21 @@ if (REMATCH_STATUS.OpponentLeft.text !== 'Your opponent left. Rematch is not ava
 
 // U23 / U30: 再戦。どちらからでも申し込め、応じたら VS 画面 (レートは変わらない対戦)。同時なら成立。取り消し・辞退・期限切れのあとは両者とも結果画面に残り、3 秒後にまた申し込める
 // U50: 取り消し・辞退・期限切れは両者に一行 (U30 の文言 + もう一方の文言)。3 秒たっても次の操作まで残る
-const statusText = { RematchRequested: 'Waiting for your opponent…', RematchIncoming: 'Your opponent wants a rematch', RematchCancelled: 'Rematch request was cancelled',
+const statusText = { RematchRequested: 'Waiting for your opponent…', RematchIncoming: 'Your opponent wants a rematch', RematchCancelled: 'Rematch request cancelled',
   RematchCancelledByYou: 'Rematch request cancelled', RematchDeclined: 'Your opponent declined the rematch', RematchDeclinedByYou: 'Rematch declined',
   RematchExpired: 'No response to rematch request', RematchExpiredIncoming: 'Rematch request expired' };
 for (const [k, t] of Object.entries(statusText)) if (!REMATCH_STATUS[k] || REMATCH_STATUS[k].text !== t) fail(`${k} の文言が "${t}" でない`);
+// 2026-10-08 (高宮さん): 取り消しの一行は両者とも "Rematch request cancelled" ("was" は付けない)。
+// 申し込まれた側 (相手) の結果画面の一行と、リポジトリのどの文章にも以前の "was" 付きの文言が残っていないことを確かめる
+const cancelledNames = resultNames.filter((k) => /\.RematchCancelled(ByYou)?(\.Cooldown)?$/.test(k));
+if (cancelledNames.filter((k) => /\.RematchCancelled(\.Cooldown)?$/.test(k)).length < 6) fail('申し込まれた側の取り消しの状態が足りない');
+for (const name of cancelledNames) {
+  if (REMATCH_STATUS[SCREENS[name].status].text !== 'Rematch request cancelled') fail(`${name} の取り消しの一行が "Rematch request cancelled" でない`);
+}
+const OLD_CANCELLED = new RegExp('was' + ' cancelled', 'i');
+const textFiles = require('child_process').execFileSync('git', ['ls-files'], { cwd: path.join(__dirname, '..'), encoding: 'utf8' })
+  .split('\n').filter((f) => /\.(js|mjs|md|html|css|json)$/.test(f));
+for (const f of textFiles) if (OLD_CANCELLED.test(read(f))) fail(`${f} に以前の "was" 付きの取り消しの文言が残っている`);
 if (Object.keys(REMATCH_STATUS).some((k) => /Cooldown/.test(k)) || Object.keys(SCREENS).some((k) => /RematchCooldown/.test(k))) fail('メッセージを出さない .RematchCooldown が残っている (U50)');
 for (const name of resultNames.filter((k) => /\.Rematch(Cancelled|Declined|Expired)/.test(k))) {
   const s = SCREENS[name];

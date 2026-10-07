@@ -135,6 +135,7 @@ U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用�
 ランダム対戦・ランダム対戦の再戦・Friend Match の再戦の開始前の切断が VS 画面で 20 秒待ち、戻れば VS 画面から、戻らなければ結果画面へは行かずに取りやめになり、
 ランダム対戦は Online Battle の中の通知 (Search again / Close) になること (U54)、"Friend is in the room" と "Your friend left." の 5 秒 (U55)、
 部屋での切断の再接続待ちの間に Match Code の期限が切れ、戻った側も "Match code expired." になること (pi の仮定 3)、ホストの ‹ に確認が無いこと (仮定 1)、"Back to Online Battle" が無いこと (仮定 5) を確かめます。
+再戦の取り消し (2026-10-08) については、両者のすべての取り消しの状態の一行が "Rematch request cancelled" であることと、リポジトリの文章 (js・README・テストなど) に以前の "was" 付きの文言が残っていないことを確かめます。
 
 端末の画面の検査: `node tests/scan-screens.mjs` (ヘッドレス Chromium が必要。場所は環境変数 `CHROMIUM` で変えられます) で、
 全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 889 枚) を 1280x720 の画面で実際に描画し、
@@ -371,6 +372,32 @@ Ready の決定 (U31 の変更・U32〜U36、2026-10-07) で Ready 画面と開�
 | 21b | ランダム対戦のカウントダウン中に切断 → 戻らない → 取りやめ → Search again | なし (10-08 の決定 U52 / U54) |
 | 21c | Friend Match の再戦の VS 画面中に切断 → 戻らない → Friend Match トップ | なし (10-08 の決定 U52 / U54) |
 
+## 2026-10-08 の決定 (再戦取り消し文言の統一と仮定の確定)
+
+高宮さんの決定 (2026-10-08) で、次のことが決まりました。**未決は 0 件のまま** です。
+
+1. **再戦の申し込みを取り消したときの一行は、両者とも "Rematch request cancelled"** (取り消した側も、申し込まれた側も)。以前の申し込まれた側の文言 (U30) は "was" の有無だけ違っていましたが、取り消した側 (U50) の文言にそろえました。
+2. **試合が終わるのは時間切れだけ** (U44 の今のモックのまま)。
+3. **「2026-10-08 の決定 (U44〜U55)」で置いた仮定は、どれもそのまま確定** (下の表)。
+
+| 確定した動き | よりどころ |
+|---|---|
+| Friend Match の再戦を開始前の切断で取りやめたら、両者とも Friend Match トップの帯へ。残った側は "Match cancelled. Opponent did not reconnect." | U54 / U24 / U32 / U52 |
+| ランダム対戦を取りやめたあとの Search again / Close は、Online Battle の中の通知 (モーダルではない) | U54 / U43 |
+| カウントダウン中に切断しても VS 画面の上で待ち、戻ったら VS 画面からやり直す | U54 / U46 |
+| 部屋での切断 (U5) の残った側にも "20s" を出す | U52 / U32 |
+| 部屋のお知らせの Friend Match トップは Match Code の入力欄を空にする。お知らせを出したまま Join Match を押すと、結果の画面がお知らせに取って代わる | U52 |
+| 再戦の一行はスタンプでは消えない | U50 |
+| 切断を待つ間の暗幕は実機のポーズと同じ濃さ | U46 / U37 |
+| "Friend is in the room" の帯は "Waiting for your friend…" と同じ青 | U55 / U17 |
+| VS 画面の "Rating" は、モックでは両者とも初期値 1000 | U48 / U21 |
+
+モックの画面の動きは、取り消しの一行のほかは変わりません (遷移表 360 行・状態 211・シナリオ 61 のまま)。右パネルの説明・遷移表のメモの「モックの仮定」は「2026-10-08 に確認」に書き換えました。
+
+- `index.html#s=15d&step=16` - 取り消し: 両者に "Rematch request cancelled"
+
+![再戦の取り消し: 両者に Rematch request cancelled](docs/screenshots/40-rematch-cancelled.png)
+
 ## 2026-10-08 の決定 (U44〜U55)
 
 高宮さんの決定 (2026-10-08) で、最後に残っていた未決 **U44〜U55** がすべて決まり、前回 pi が置いた仮定 5 点も確認されました。これで **未決は 0 件** です。
@@ -415,7 +442,7 @@ Friend Match トップの部屋のお知らせは、画面の上の帯 (文言�
 | `Client.FriendMatch.Room.HostDisconnected` | "Room closed. The host disconnected." | VS 画面・カウントダウン中に切断したホストが戻らなかった (U32) |
 | `Client.FriendMatch.Room.RoomClosed` | "The room was closed." | 部屋で切断したホストが戻らなかった (U5 / U52) |
 | `*.FriendMatch.Room.ReconnectFailed` | "Could not reconnect. The match did not start." | 試合が始まる前に切断して 20 秒で戻れなかった (U32 / U52。Friend Match の再戦も、U54) |
-| `*.FriendMatch.Room.MatchCancelled` | "Match cancelled. Opponent did not reconnect." | Friend Match の再戦の開始前に相手が戻らなかった (U54。モックの仮定) |
+| `*.FriendMatch.Room.MatchCancelled` | "Match cancelled. Opponent did not reconnect." | Friend Match の再戦の開始前に相手が戻らなかった (U54。2026-10-08 に確認) |
 
 クライアントの帯付きの画面で Match Code を入れると `….CodeEntered` (帯はそのまま) になり、そのまま Join Match で入れます。Close で `Client.FriendMatch.Room` / `.CodeEntered` に戻ります。
 ホストに出るのは `ReconnectFailed` と `MatchCancelled` だけです (ホストは Match Code を入れない)。
@@ -424,14 +451,14 @@ Friend Match トップの部屋のお知らせは、画面の上の帯 (文言�
 
 | きっかけ | 申し込んだ側 | 申し込まれた側 |
 |---|---|---|
-| 申し込んだ側が Cancel Request | "Rematch request cancelled" (U50) | "Rematch request was cancelled" (U30) |
+| 申し込んだ側が Cancel Request | "Rematch request cancelled" (U50) | "Rematch request cancelled" (U30。2026-10-08 に統一) |
 | 申し込まれた側が Decline | "Your opponent declined the rematch" (U30) | "Rematch declined" (U50) |
 | 20 秒応答がない | "No response to rematch request" (U30) | "Rematch request expired" (U50) |
 
 - どの一行も、3 秒たって Rematch を押せるようになっても残り、どちらかがまた申し込むか、結果画面を抜けるまで出しておきます (スタンプでは消えない)。
 - 状態は `*.Result.Rematch<結末>.Cooldown` (3 秒待ち、Rematch は無効表示) → `*.Result.Rematch<結末>` (一行は残り、Rematch を押せる) です。結末は `Cancelled` / `CancelledByYou` / `Declined` / `DeclinedByYou` / `Expired` / `ExpiredIncoming`。
   以前の、メッセージを出さない側の `.RematchCooldown` は無くなりました。
-- U30 の文言はそのままにしたので、取り消しのときは両者の文言が "was" の有無だけ違います (申し込まれた側 "Rematch request was cancelled"、取り消した側 "Rematch request cancelled")。
+- 取り消しのときは、両者とも同じ "Rematch request cancelled" です (2026-10-08 に、"was" の有無だけ違っていた U30 の文言を U50 にそろえた)。
 
 ### 切断を待つ間 (U46) と、ランダム対戦と再戦の開始前の切断 (U54)
 
@@ -440,9 +467,9 @@ Friend Match トップの部屋のお知らせは、画面の上の帯 (文言�
 | 対戦中 (U28 / U46) | ゲーム画面の上に "Connection lost" / "Reconnecting…" / "20s" | "Your opponent disconnected" / "Waiting for your opponent to reconnect…" / "20s" | 止めたところから続ける | 切断した側の負け (U28) |
 | Friend Match の Ready 画面から始まった対戦の VS 画面・カウントダウン (U32) | Ready 画面に "Connection lost. Reconnecting…" と "20s" (U52) | Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と "20s" | 両者もう一度 Ready | 戻れなかった側は Friend Match トップに "Could not reconnect. The match did not start." (U52)。残った側は U32 のとおり |
 | ランダム対戦 (再戦を含む) の VS 画面・カウントダウン (U54) | VS 画面の上に対戦中と同じパネルと "20s" | 同じ | VS 画面からやり直す (カウントダウンも 3 から) | 取りやめ (勝敗なし・レートは変わらない)。Online Battle の中に、切断した側は "Could not reconnect. The match did not start."、残った側は "Match cancelled. Opponent did not reconnect." と Search again / Close |
-| Friend Match の再戦の VS 画面・カウントダウン (U54) | 同じ | 同じ | 同じ | 取りやめ (勝敗なし)。Friend Match トップの帯に、切断した側は "Could not reconnect. The match did not start."、残った側は "Match cancelled. Opponent did not reconnect." (モックの仮定) |
+| Friend Match の再戦の VS 画面・カウントダウン (U54) | 同じ | 同じ | 同じ | 取りやめ (勝敗なし)。Friend Match トップの帯に、切断した側は "Could not reconnect. The match did not start."、残った側は "Match cancelled. Opponent did not reconnect." (2026-10-08 に確認) |
 
-部屋 (Ready 画面・読み込み) での切断 (U5) は、両者に "20s" を出すようにしたほかは変わりません (切れた側の "20s" は U52、残った側の "20s" はモックの仮定)。
+部屋 (Ready 画面・読み込み) での切断 (U5) は、両者に "20s" を出すようにしたほかは変わりません (切れた側の "20s" は U52、残った側の "20s" は 2026-10-08 に確認)。
 
 ### モック操作 (端末の外)
 
@@ -464,9 +491,10 @@ Friend Match トップの部屋のお知らせは、画面の上の帯 (文言�
 
 遷移表は 297 行から 360 行に、状態は 145 から 211 に (結果画面が 58 から 106)、グループは 55 から 66 になりました。シナリオは 57 から 61 です。
 
-### 決定に書かれていないので置いた仮定
+### 決定に書かれていないので置いた仮定 (2026-10-08 にすべて確定)
 
 決定に書かれていないところは、次のように置きました。どれも既にある決定から自然に決まるものとして、新しい未決にはしていません。
+2026-10-08 に高宮さんが、下の仮定をすべてそのまま確定しました (「2026-10-08 の決定 (再戦取り消し文言の統一と仮定の確定)」)。
 
 | 仮定 (モックの動き) | よりどころ |
 |---|---|
@@ -566,7 +594,7 @@ U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのク
 | 入った直後 (同期の前、U4) | カード 2 枚と "Friend joined!"、Ready (押せない表示) / Close Room | カード 2 枚と "Connecting…"、Ready (押せない表示) / Leave Room |
 | Ready 画面 (U36) | Ready (押すと Cancel Ready) / Close Room | Ready (押すと Cancel Ready) / Leave Room |
 | 部屋で切断 (U5、自分の接続が切れた) | "Connection lost. Reconnecting…" (ボタンなし、‹ も押せない) → 2026-10-08: と "20s" (U52) | 同じ |
-| 部屋で切断 (U5、相手の接続が切れた) | "Your friend disconnected. Waiting for them to reconnect…"、Close Room → 2026-10-08: と "20s" (モックの仮定) | 同じ文言、Leave Room |
+| 部屋で切断 (U5、相手の接続が切れた) | "Your friend disconnected. Waiting for them to reconnect…"、Close Room → 2026-10-08: と "20s" (2026-10-08 に確認) | 同じ文言、Leave Room |
 | 20 秒で再接続できなかった (U5) | "Could not reconnect."、Retry / Leave Room | 同じ |
 | 期限切れ (U7 / U10 / U18) | "Match code expired."、Create Match | "Match code expired."、Join Match (今の画面のまま) |
 
@@ -601,7 +629,7 @@ U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのク
 | | 部屋 (Ready 画面・読み込み) で切断: U5 | VS 画面・カウントダウン中に切断: U32 |
 |---|---|---|
 | 切れた側 | "Connection lost. Reconnecting…" → 2026-10-08: と "20s" (U52) | ~~"Reconnecting…"~~ → "Connection lost. Reconnecting…" と "20s" (2026-10-08、U52) |
-| 残った側 | "Your friend disconnected. Waiting for them to reconnect…" (カウントダウンなし) → 2026-10-08: と "20s" (モックの仮定) | "Opponent disconnected. Waiting for them to reconnect…" と "20s" |
+| 残った側 | "Your friend disconnected. Waiting for them to reconnect…" (カウントダウンなし) → 2026-10-08: と "20s" (2026-10-08 に確認) | "Opponent disconnected. Waiting for them to reconnect…" と "20s" |
 | 20 秒のうちに戻る | 両者とも Ready していない Ready 画面 ("Friend joined!" は出さない、U17) | 同じ (カウントダウンは 3 から) |
 | 20 秒たっても戻らない: クライアントが切れた | クライアント: "Could not reconnect." と Retry / Leave Room。ホスト: 空の部屋で "Waiting for your friend…" | ホスト: "Match cancelled. Opponent did not reconnect."。クライアント: Friend Match トップ → 2026-10-08: に "Could not reconnect. The match did not start." の帯 (U52) |
 | 20 秒たっても戻らない: ホストが切れた | ホスト: "Could not reconnect." と Retry / Leave Room (Retry でつながると空の部屋に戻る)。クライアント: Friend Match トップ → 2026-10-08: に "The room was closed." の帯 (U52。入力欄は空) | クライアント: "Room closed. The host disconnected."。ホスト: Friend Match トップ → 2026-10-08: に "Could not reconnect. The match did not start." の帯 (U52) |
@@ -657,7 +685,7 @@ Friend Match のシナリオは、参加のあとの自動遷移が 2 つ (`sys.
 | ホストが離れている間、友だちがいて Ready していないときの帯は青い "Waiting for your friend…"。"Your friend left." はモックで 3 秒出す | U55 → "Friend is in the room"。"Your friend left." は 5 秒 |
 | 同期の前のホストの文言は "Friend joined!"、クライアントは "Connecting…" (決定の 2 つの文言を役割で分けた)。どちらも Ready のボタンは押せない表示で出す | (U4 の範囲) |
 | 同期が終わったあとにホストが離れても、クライアントは Ready を押せる (U1 の "Friend is ready!" の場面)。ホストが戻ったときは同期し直さずに Ready 画面に戻る | (U4 / U1 の範囲) |
-| U5 の残った側の画面には、U32 と違ってカウントダウン (20s) を出さない (決定に無い)。"Could not reconnect." の Leave Room も確認を出す (U9 にそろえた) | (U5 の範囲) → 2026-10-08: 切れた側に "20s" が決まった (U52) ので、残った側にも "20s" を出すようにした (モックの仮定) |
+| U5 の残った側の画面には、U32 と違ってカウントダウン (20s) を出さない (決定に無い)。"Could not reconnect." の Leave Room も確認を出す (U9 にそろえた) | (U5 の範囲) → 2026-10-08: 切れた側に "20s" が決まった (U52) ので、残った側にも "20s" を出すようにした (これも 2026-10-08 に確認) |
 | 部屋での切断 (U5) の間は Match Code の期限の時計が止まらない (止まるのは決定に書かれた読み込み・VS 画面・カウントダウン・U32 の再接続待ちだけ)。ホストが 1 人で待っている間の切断は行が無い | (U7 / U5 の範囲) → 2026-10-08 に確認 (pi の仮定 3)。部屋の画面で再接続を待っている間にも切れる行を足した |
 | 別の部屋に入る流れ (Join another match?) はモックでは省略し、入れたものとして扱う | (U12 の範囲) |
 
@@ -1215,7 +1243,7 @@ Ready 画面・"Starting match…" は挟みません。両者が Ready を押�
 | U27 | スタンプ 3 種類: 👏 "Good game" / 🤝 "Thanks for the match" / 👍 "Nice"。1 つ 3 秒表示、送る間隔は 5 秒、ミュートできる |
 | U28 | 片方が切断したら 20 秒待ち、戻らなければ切断した側の負け。両者の切断・サービス障害は "No contest due to a connection error" でレートは変わらない。降参した側は再戦を申し込めない |
 | U29 | 次の相手は 60 秒探す。見つからなければ "No opponent found." と Search again / Back to Online |
-| U30 | 再戦の申し込みの応答期限は 20 秒。申し込んだ側に Cancel Request。取り消されたら相手に "Rematch request was cancelled"、断られたら申し込んだ側に "Your opponent declined the rematch"、期限切れなら "No response to rematch request"。どの場合も両者とも結果画面に残り、3 秒後にまた申し込める |
+| U30 | 再戦の申し込みの応答期限は 20 秒。申し込んだ側に Cancel Request。取り消されたら相手に "Rematch request cancelled" (2026-10-08 に取り消した側と同じ文言に統一)、断られたら申し込んだ側に "Your opponent declined the rematch"、期限切れなら "No response to rematch request"。どの場合も両者とも結果画面に残り、3 秒後にまた申し込める |
 
 **秒数 (20 秒・3 秒・5 秒・60 秒) と Elo の値 (初期値 1000、K=24) は QA² 側の仮の値です** (変わりうる)。
 そのため、秒数と「仮の値」であることは右パネルの説明・遷移表のメモ・この README にだけ書き、電話の画面には出しません (`tests/scan-screens.mjs` で確認)。
@@ -1257,7 +1285,7 @@ Elo の結果 (例: "1000 → 1012 (+12)") は決定どおり電話の画面に�
 |---|---|---|
 | Rematch を押した | "Waiting for your opponent…"、Cancel Request | "Your opponent wants a rematch"、Rematch / Decline |
 | 申し込まれた側が Rematch (応じる) / 両者が同時に Rematch | VS 画面 → ゲーム本体のカウントダウン → プレイ (ロビーの Ready は挟まない) | 同じ |
-| Cancel Request (取り消す) | ~~(何も出さない)~~ → "Rematch request cancelled" (2026-10-08、U50)、3 秒は Rematch を押せない | "Rematch request was cancelled"、3 秒は押せない |
+| Cancel Request (取り消す) | ~~(何も出さない)~~ → "Rematch request cancelled" (2026-10-08、U50)、3 秒は Rematch を押せない | ~~("was" の付いた文言)~~ → "Rematch request cancelled" (2026-10-08 に統一)、3 秒は押せない |
 | Decline (断る) | "Your opponent declined the rematch"、3 秒は押せない | ~~(何も出さない)~~ → "Rematch declined" (2026-10-08、U50)、3 秒は押せない |
 | 20 秒応答がない | "No response to rematch request"、3 秒は押せない | ~~申し込みの表示が消える~~ → "Rematch request expired" (2026-10-08、U50)、3 秒は押せない |
 | 3 秒たつ | どちらからでもまた申し込める (~~メッセージは消える~~ → 一行は次の操作まで残る、2026-10-08、U50) | 同じ |
@@ -1364,7 +1392,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 | 15 | 16 | 14: ホスト WIN! / クライアント LOSE (Friend Match) → 15: ホストが Back to Friend Match、クライアントに "Your opponent left…" → 16: 両者 Friend Match トップ |
 | 15b | 15 | 14: ホスト LOSE / クライアント WIN! → 15: クライアントが先に抜け、ホストに "Your opponent left…" |
 | 15c | 19 | 15: クライアントが申し込んだ ("Waiting for your opponent…" / "Your opponent wants a rematch") → 16: ホストが応じて VS 画面 → 19: 再戦の結果 |
-| 15d | 19 | 15: ホストが申し込む → 16: Cancel Request (クライアントに "Rematch request was cancelled"、ホストにも "Rematch request cancelled"、U50) → 17: 3 秒たつ (一行は残る) → 19: クライアントが申し込み、ホストが応じて VS 画面 |
+| 15d | 19 | 15: ホストが申し込む → 16: Cancel Request (両者に "Rematch request cancelled"、U30 / U50。2026-10-08 に統一) → 17: 3 秒たつ (一行は残る) → 19: クライアントが申し込み、ホストが応じて VS 画面 |
 | 15e | 18 | 16: ホストが Decline (クライアントに "Your opponent declined the rematch") → 18: クライアントが抜け、ホストに "Your opponent left…" |
 | 15f | 19 | 16: 20 秒たつ (ホストに "No response to rematch request") → 17: 3 秒たつ → 19: 申し込み直して VS 画面 |
 | 15g | 17 | 14: 両者 DRAW → 15: 両者が同時に Rematch で VS 画面 |
@@ -1457,6 +1485,11 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 
 ### 決定済み
 
+- **再戦取り消し文言の統一と仮定の確定** - 決定 (高宮さん 2026-10-08)  
+  - 再戦の申し込みを取り消したら、両者とも "Rematch request cancelled" (U30 の申し込まれた側の文言を U50 にそろえた)。
+  - 試合が終わるのは時間切れだけ (U44 のまま)。
+  - 「2026-10-08 の決定 (U44〜U55)」で置いた仮定は、すべてそのまま確定。
+  詳しくは「2026-10-08 の決定 (再戦取り消し文言の統一と仮定の確定)」を見てください。
 - **U44〜U55 と pi の仮定 5 点** - 決定 (高宮さん 2026-10-08)  
   - **U44** 時間切れで得点の高いほうが勝ち、同点なら引き分け (DRAW)。終わった理由は "Time is up"、同点は "Same score when time ran out"。
   - **U45** 降参・切断の結果と NO CONTEST のあとは、どちらの側にも Rematch を出さない (今のモックのまま)。
@@ -1579,7 +1612,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 - **U29 ランダム対戦の Find Next Opponent: 60 秒探して見つからなければ "No opponent found."** - 決定 (高宮さん 2026-10-07)  
   見つからなければ Search again / Back to Online を出す。**60 秒は QA² 側の仮の値**。探している間にアプリを離れたときは U47 にしました (2026-10-08 に決定)。
 - **U30 再戦の申し込み: 応答期限 20 秒、Cancel Request で取り消し、Decline で断る。どの場合も結果画面に残り 3 秒後にまた申し込める** - 決定 (高宮さん 2026-10-07)  
-  取り消されたら相手に "Rematch request was cancelled"、断られたら申し込んだ側に "Your opponent declined the rematch"、期限切れなら "No response to rematch request"。
+  取り消されたら相手に "Rematch request cancelled" (2026-10-08 に取り消した側と同じ文言に統一)、断られたら申し込んだ側に "Your opponent declined the rematch"、期限切れなら "No response to rematch request"。
   **20 秒と 3 秒は QA² 側の仮の値**。メッセージを出さない側の表示は U50 にしました (2026-10-08 に決定)。
 
 詳しくは「対戦後の結果画面」を見てください。
@@ -1596,4 +1629,4 @@ U1 (Ready トーストから VS への入り方) にも同じ決定を当ては�
 ### 未決
 
 **未決はありません (0 件)。** U1〜U55 (と U13a) はすべて決定済みです (上の「決定済み」を参照)。最後に残っていた U44〜U55 の 12 件は、2026-10-08 に高宮さんが決めました。
-このとき新しく分かった、決まっていない点はありません (決定に書かれていないところは、モックの仮定として「2026-10-08 の決定 (U44〜U55)」の「決定に書かれていないので置いた仮定」に書きました)。
+このとき新しく分かった、決まっていない点はありません (決定に書かれていないところは「2026-10-08 の決定 (U44〜U55)」の「決定に書かれていないので置いた仮定」に書き、同じ日にすべて確定しました)。

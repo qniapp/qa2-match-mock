@@ -273,7 +273,7 @@ var TRANSITIONS = (function () {
 
   // === Join Match の結果 ===
   // "Connection failed" はサーバーに届かないときだけ (決定 U6)。Match Code の誤り・期限切れ・満員・閉じたルームの赤字とは別。
-  // 部屋のお知らせ (U52) を出したまま Join Match を押したときは、結果 (部屋・赤字・トースト) がお知らせに取って代わる (モックの仮定)
+  // 部屋のお知らせ (U52) を出したまま Join Match を押したときは、結果 (部屋・赤字・トースト) がお知らせに取って代わる (2026-10-08 に確認)
   T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch', when: { codeResult: 'notFound' },
     to: { host: '*', client: 'Client.FriendMatch.Room.Error.NotFound' }, note: '図08: 無効な Match Code' });
   T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch', when: { codeResult: 'expired' },
@@ -377,7 +377,7 @@ var TRANSITIONS = (function () {
   // 両者の Ready を消し、20 秒 (仮) まで自動で再接続する。切れた側は "Connection lost. Reconnecting…"、
   // 残った側は "Your friend disconnected. Waiting for them to reconnect…"。20 秒で戻れなければ、切れた側に "Could not reconnect." と Retry / Leave Room。
   // クライアントは Friend Match トップへ戻り ("The room was closed."、U52)、ホストは空の部屋を残す (同じ Match Code)。
-  // 待っている間は両者に 20 秒 (仮) のカウントダウン (切れた側は決定 U52、残った側はモックの仮定)。Match Code の期限の時計は止まらない (U7)
+  // 待っている間は両者に 20 秒 (仮) のカウントダウン (切れた側は決定 U52、残った側は 2026-10-08 に確認)。Match Code の期限の時計は止まらない (U7)
   [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']].forEach(function (p) {
     var d = p[0];
     var R = p[1];
@@ -479,7 +479,7 @@ var TRANSITIONS = (function () {
   // === ランダム対戦と再戦の VS 画面・カウントダウン中の切断 (決定 U54、高宮さん 2026-10-08) ===
   // 試合が始まる前なので 20 秒 (仮) 待ち、戻らなければ試合を取りやめる (勝敗なし・レートは変わらない)。Ready 画面には戻さず、戻ったら VS 画面からやり直す。
   // 待っている間は VS 画面の上に、対戦中の切断 (U46) と同じ表示と残りの秒数。取りやめたあとは、ランダム対戦なら Online Battle の中の通知 (Search again / Close)、
-  // Friend Match の再戦なら Friend Match トップの帯 (行き先はモックの仮定)
+  // Friend Match の再戦なら Friend Match トップの帯 (行き先は 2026-10-08 に確認)
   [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']].forEach(function (p) {
     var d = p[0];
     var R = p[1];
@@ -506,7 +506,7 @@ var TRANSITIONS = (function () {
     T({ from: waiting, event: 'timer.disconnectTimeout', when: { match: 'friend' },
       to: pair(R + '.FriendMatch.Room.ReconnectFailed', O + '.FriendMatch.Room.MatchCancelled'),
       note: '決定 (U54): 20 秒 (仮) で戻らなければ試合を取りやめる (勝敗なし)。行き先は Back to Friend Match と同じ Friend Match トップ (U24) で、' +
-        'お知らせは部屋の帯 (U52、Close で閉じる)。この行き先はモックの仮定', decided: ['U54', 'U52', 'U24'] });
+        'お知らせは部屋の帯 (U52、Close で閉じる)。この行き先は 2026-10-08 に確認', decided: ['U54', 'U52', 'U24'] });
   });
 
   // === 部屋を閉じる・抜ける (決定 U9 / U11 / U14 / U34) ===
@@ -850,7 +850,7 @@ var TRANSITIONS = (function () {
         note: '決定 (U23): 相手が Rematch で応じたらそのまま VS 画面へ (ロビーの Ready は挟まない)。ランダム対戦の再戦はレートが変わらない (U21)',
         decided: ['U23', 'U21'] });
       T({ from: asked, event: d + '.cancelRematch', to: pair(mine('.RematchCancelledByYou.Cooldown'), theirs('.RematchCancelled.Cooldown')),
-        note: '決定 (U30 / U50): Cancel Request で取り消すと、相手に "Rematch request was cancelled"、取り消した側にも "Rematch request cancelled"。' +
+        note: '決定 (U30 / U50): Cancel Request で取り消すと、両者に "Rematch request cancelled" (2026-10-08 に両者の文言を統一)。' +
           '両者とも結果画面に残り、3 秒 (仮) は申し込めない', decided: ['U30', 'U50'] });
       T({ from: asked, event: other + '.declineRematch', to: pair(mine('.RematchDeclined.Cooldown'), theirs('.RematchDeclinedByYou.Cooldown')),
         note: '決定 (U30 / U50): Decline で断ると、申し込んだ側に "Your opponent declined the rematch"、断った側にも "Rematch declined"。' +
@@ -1093,7 +1093,7 @@ var END_REASONS = {
 var REMATCH_STATUS = {
   RematchRequested: { text: 'Waiting for your opponent…', kind: 'wait' },
   RematchIncoming: { text: 'Your opponent wants a rematch', kind: 'asked' },
-  RematchCancelled: { text: 'Rematch request was cancelled', kind: 'info' },
+  RematchCancelled: { text: 'Rematch request cancelled', kind: 'info' },
   RematchCancelledByYou: { text: 'Rematch request cancelled', kind: 'info' },
   RematchDeclined: { text: 'Your opponent declined the rematch', kind: 'info' },
   RematchDeclinedByYou: { text: 'Rematch declined', kind: 'info' },
@@ -1168,8 +1168,8 @@ var RESULT_COOLDOWN_CONTEXT = '3 秒 (仮) は Rematch を押せない (左の�
 var RESULT_PHASE_CONTEXT = {
   RematchRequested: '自分が再戦を申し込んで待っている (U23 / U30)。Cancel Request で取り消せる。応答の期限 20 秒 (仮) は左の環境イベントで進める (秒数は端末の画面に出さない)。',
   RematchIncoming: '相手から再戦を申し込まれた (U23 / U30)。Rematch で応じるとそのまま VS 画面、Decline で断る。',
-  RematchCancelled: '相手が申し込みを取り消した (U30)。両者とも結果画面に残る。',
-  RematchCancelledByYou: '自分が申し込みを取り消した。取り消した側にも "Rematch request cancelled" を出す (U50)。両者とも結果画面に残る。',
+  RematchCancelled: '相手が申し込みを取り消した (U30)。取り消した側と同じ "Rematch request cancelled" を出す (2026-10-08 に両者の文言を統一)。両者とも結果画面に残る。',
+  RematchCancelledByYou: '自分が申し込みを取り消した。取り消した側にも "Rematch request cancelled" を出す (U50。相手と同じ文言、2026-10-08)。両者とも結果画面に残る。',
   RematchDeclined: '相手が再戦を断った (U30)。両者とも結果画面に残る。',
   RematchDeclinedByYou: '自分が再戦を断った。断った側にも "Rematch declined" を出す (U50)。両者とも結果画面に残る。',
   RematchExpired: '再戦の申し込みに 20 秒 (仮) 応答がなかった (U30)。両者とも結果画面に残る。',
@@ -1189,7 +1189,7 @@ var SEARCH_NOT_FOUND_CONTEXT = '60 秒探しても相手が見つからなかっ
   'Search again でもう一度相手を探し (Searching に戻る)、Close で通知を閉じて Online Battle のまま。';
 var START_CANCELLED_CONTEXT = {
   MatchCancelled: 'ランダム対戦 (再戦を含む) の VS 画面・カウントダウン中に相手が切断し、20 秒 (仮) のうちに戻らなかったので試合を取りやめた (決定 U54)。勝敗は無く、レートも変わらない。' +
-    'Online Battle の中に "Match cancelled. Opponent did not reconnect." と Search again / Close (U43 と同じくモーダルではない。文言はモックの仮定で U32 の文言にそろえた)。',
+    'Online Battle の中に "Match cancelled. Opponent did not reconnect." と Search again / Close (U43 と同じくモーダルではない。文言は U32 の文言にそろえた。どちらも 2026-10-08 に確認)。',
   ReconnectFailed: 'ランダム対戦 (再戦を含む) の VS 画面・カウントダウン中にこの端末の接続が切れ、20 秒 (仮) のうちに戻れなかった (決定 U54)。勝敗は無く、レートも変わらない。' +
     'Online Battle の中に "Could not reconnect. The match did not start." (U52) と Search again / Close (U43 と同じくモーダルではない)。',
 };
@@ -1216,7 +1216,7 @@ var START_DISCONNECT_CONTEXT = {
     '表示は対戦中の切断 (U46) と同じ "Connection lost" / "Reconnecting…" と残りの秒数。戻れば VS 画面からやり直し、戻れなければ試合を取りやめる (勝敗なし・レートは変わらない)。',
   opponent: 'ランダム対戦か再戦の VS 画面・カウントダウン中に相手の接続が切れた (決定 U54)。Ready 画面には戻さずに 20 秒 (仮) 待つ (表示は U46 と同じ)。' +
     '戻れば VS 画面からやり直し、戻らなければ試合を取りやめる: ランダム対戦は Online Battle に "Match cancelled. Opponent did not reconnect." と Search again / Close、' +
-    'Friend Match の再戦は Friend Match トップの帯 (行き先はモックの仮定)。',
+    'Friend Match の再戦は Friend Match トップの帯 (行き先は 2026-10-08 に確認)。',
 };
 var NEXT_SEARCH_CONTEXT = '結果画面の Find Next Opponent で次の相手を探している (決定 U29)。見た目と Cancel / ‹ は Random Match から探しているとき (U13) と同じ。' +
   '60 秒 (仮) 探しても見つからなければ "No opponent found." と Search again / Back to Online。探している間にアプリを離れると、Random Match のとき (U43) と同じく Online Battle の中に "Search stopped…" (U47)。';
@@ -1277,7 +1277,7 @@ var READY_PHASE_CONTEXT = {
   ConnectionLost: '部屋でこの端末の接続が切れた (決定 U5)。両者の Ready は消え、20 秒まで自動で再接続する ("Connection lost. Reconnecting\u2026" と残りの秒数、U52)。' + RECONNECT_TIMER_CONTEXT +
     '戻れれば (左の環境イベント「通信が回復する」) Ready 画面へ、戻れなければ (「切断から 20 秒たつ」) "Could not reconnect."。この間も Match Code の期限の時計は止まらない (U7)。',
   FriendDisconnected: '部屋で相手の接続が切れた (決定 U5)。両者の Ready は消え、"Your friend disconnected. Waiting for them to reconnect\u2026" で 20 秒待つ。' +
-    '残りの秒数を出すのはモックの仮定 (切れた側 (U52) と VS 画面中の切断 (U32) にそろえた)。' + RECONNECT_TIMER_CONTEXT +
+    '残りの秒数も出す (切れた側 (U52) と VS 画面中の切断 (U32) にそろえた。2026-10-08 に確認)。' + RECONNECT_TIMER_CONTEXT +
     '戻らなければ、相手がクライアントならホストは空の部屋を残して "Waiting for your friend…"、相手がホストならクライアントは Friend Match トップに "The room was closed." (U52)。',
   CouldNotReconnect: '20 秒 (仮) で再接続できなかった (決定 U5)。Retry でもう一度つなぎ直し、Leave Room で抜ける。' +
     'クライアントは Friend Match トップへ戻り ("The room was closed.")、ホストは空の部屋を残している (Retry でつながると、ホストはその部屋に、クライアントはまだ部屋があれば入り直す)。',
@@ -1290,11 +1290,11 @@ var ROOM_CONTEXT = {
   HostLeft: 'ホストが部屋を閉じた (決定 U34)。Friend Match トップに "Room closed. The host left."。前の Match Code は使えない。' + ROOM_NOTICE_CONTEXT,
   HostDisconnected: 'VS 画面・カウントダウン中に切断したホストが 20 秒 (仮) のうちに戻らなかった (決定 U32)。Friend Match トップに "Room closed. The host disconnected."。' + ROOM_NOTICE_CONTEXT,
   RoomClosed: '部屋で切断したホストが 20 秒 (仮) のうちに戻らなかった (決定 U5 / U52)。Friend Match トップに "The room was closed." ("You left the room" とは出さない)。' +
-    'Match Code の入力欄は空にした (モックの仮定。ホストが Retry で空の部屋に戻っていれば、同じ Match Code で入り直せる)。' + ROOM_NOTICE_CONTEXT,
+    'Match Code の入力欄は空にした (2026-10-08 に確認。ホストが Retry で空の部屋に戻っていれば、同じ Match Code で入り直せる)。' + ROOM_NOTICE_CONTEXT,
   ReconnectFailed: '試合が始まる前 (VS 画面・カウントダウン) に切断し、20 秒 (仮) のうちに戻れなかった (決定 U52)。Friend Match トップに "Could not reconnect. The match did not start."。' +
-    'Friend Match の再戦の開始前 (U54) も同じ (行き先はモックの仮定)。' + ROOM_NOTICE_CONTEXT,
+    'Friend Match の再戦の開始前 (U54) も同じ (行き先は 2026-10-08 に確認)。' + ROOM_NOTICE_CONTEXT,
   RoomMatchCancelled: 'Friend Match の再戦の VS 画面・カウントダウン中に相手が切断し、20 秒 (仮) のうちに戻らなかった (決定 U54)。勝敗は無い。' +
-    'Friend Match トップに "Match cancelled. Opponent did not reconnect." (行き先と文言はモックの仮定。Back to Friend Match (U24) と U32 にそろえた)。' + ROOM_NOTICE_CONTEXT,
+    'Friend Match トップに "Match cancelled. Opponent did not reconnect." (行き先と文言は Back to Friend Match (U24) と U32 にそろえた。2026-10-08 に確認)。' + ROOM_NOTICE_CONTEXT,
   CodeExpired: 'Match Code の期限 (30 分、QA² 側の仮の値) が切れた (決定 U7)。両者に "Match code expired."。Ready は出さず、ホストは Create Match で新しい部屋を作り、クライアントは Join Match で新しい Match Code を入れる (決定 U10)。' +
     'クライアントは別の画面へ移されず、今の画面のまま (決定 U18)。部屋での切断を待っている間に切れたときは、戻った側もこの画面。',
   ConnectionFailed: 'Create Match / Join Match がサーバーに届かなかった (決定 U6)。"Connection failed" はこのときだけで、Match Code の誤り・期限切れ・満員・閉じた部屋の赤字とは別。タップで閉じる。',
@@ -1408,7 +1408,7 @@ var SCREENS = (function () {
     // 同期の前 (決定 U4): ホストは "Friend joined!"、クライアントは "Connecting…"。どちらも Ready はまだ押せない
     S[R === 'Host' ? L('FriendJoined') : L('Connecting')] = readyLobby(R, false, false, R === 'Host' ? 'FriendJoined' : 'Connecting', {
       status: R === 'Host' ? ROOM_TEXT.friendJoined : ROOM_TEXT.connecting, buttons: [B.readyOff, exit], decided: ['U4', 'U17'] });
-    // 部屋での切断 (決定 U5): 切れた側 / 残った側 / 再接続できなかった側。どちらにも残りの秒数 (切れた側は U52、残った側はモックの仮定)
+    // 部屋での切断 (決定 U5): 切れた側 / 残った側 / 再接続できなかった側。どちらにも残りの秒数 (切れた側は U52、残った側は 2026-10-08 に確認)
     S[L('ConnectionLost')] = readyLobby(R, false, false, 'ConnectionLost', { status: ROOM_TEXT.connectionLost, timer: READY_TIMERS.reconnect, back: 'disabled', buttons: [],
       decided: ['U5', 'U52'] });
     S[L('FriendDisconnected')] = readyLobby(R, false, false, 'FriendDisconnected', { status: ROOM_TEXT.friendDisconnected, timer: READY_TIMERS.reconnect, buttons: [exit],
@@ -1721,7 +1721,7 @@ var UNDECIDED = [
       '探している間にアプリを離れたときは Random Match のとき (U43) と同じ (U47、2026-10-08)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U30', title: '再戦の申し込み: 応答期限 20 秒、Cancel Request で取り消し、Decline で断る。どの場合も結果画面に残り 3 秒後にまた申し込める',
-    desc: '再戦の申し込みには 20 秒の応答期限がある。申し込んだ側には Cancel Request を出す。取り消すと相手に "Rematch request was cancelled"、' +
+    desc: '再戦の申し込みには 20 秒の応答期限がある。申し込んだ側には Cancel Request を出す。取り消すと相手に "Rematch request cancelled" (2026-10-08 に取り消した側 (U50) と同じ文言に統一)、' +
       '相手が断ると申し込んだ側に "Your opponent declined the rematch"、期限が切れると申し込んだ側に "No response to rematch request" を出す。' +
       'どの場合も両者とも結果画面に残り、3 秒後にまた申し込める。20 秒・3 秒は QA² 側の仮の値 (変わりうる)。もう一方にも一行を出し、次の操作まで残す (U50、2026-10-08)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
@@ -1814,7 +1814,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U50', title: '再戦が取り消し・辞退・期限切れになったら、もう一方にも一行を出し、次の操作まで残す',
     desc: 'U30 のメッセージに加えて、もう一方にも出す: 取り消した側に "Rematch request cancelled"、断った側に "Rematch declined"、申し込まれたまま期限が切れた側に "Rematch request expired"。' +
-      'U30 のメッセージ (申し込まれた側の "Rematch request was cancelled"、申し込んだ側の "Your opponent declined the rematch" / "No response to rematch request") はそのまま。' +
+      'U30 のメッセージ (申し込まれた側の "Rematch request cancelled"、申し込んだ側の "Your opponent declined the rematch" / "No response to rematch request") はそのまま。' +
+      '取り消しは両者とも "Rematch request cancelled" (2026-10-08 に統一)。' +
       'どの一行も次の操作 (どちらかがまた申し込む・結果画面を抜ける) まで残す。Rematch を押せないのは 3 秒 (決定済み、QA² 側の仮の値)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U51', title: 'ホストの Close Room の確認の題名は "Close this room?"。U12 のクライアント向けの本文は保留',
@@ -1835,7 +1836,7 @@ var UNDECIDED = [
     desc: 'ランダム対戦と再戦 (Friend Match の再戦も) の VS 画面・カウントダウン中に切断したら、20 秒待つ。戻らなければ試合を取りやめ、勝敗はつけず、レートも変わらない。' +
       'ランダム対戦はそのあと Search again / Close を出す。再戦は Ready 画面に戻らず、戻ってきたら VS 画面からやり直す。20 秒は QA² 側の仮の値 (変わりうる)。' +
       'モックでは、待っている間は VS 画面の上に対戦中の切断 (U46) と同じ表示と残りの秒数、取りやめたあとは Online Battle の中の通知 (U43 と同じ見せ方)。' +
-      'Friend Match の再戦を取りやめたあとは Friend Match トップの帯 (行き先と文言はモックの仮定)。',
+      'Friend Match の再戦を取りやめたあとは両者とも Friend Match トップの帯で、残った側は "Match cancelled. Opponent did not reconnect." (行き先と文言は 2026-10-08 に確認)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U55', title: '離席中の帯: 友だちがいて Ready していなければ "Friend is in the room"。"Your friend left." は 5 秒',
     desc: 'ホストの離席中、友だちが部屋にいて Ready していないときの帯は "Friend is in the room" (以前のモックの青い "Waiting for your friend…" から変更)。' +

@@ -14,7 +14,7 @@
 // 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
 // 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" であること (U49)、
 // 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
-// 最初に、hash なしで開くと自由操作 (両端末が最初の画面で、ボタンを押せる) で、ページに消した部品 (左のシナリオのパネル、
+// 最初に、hash なしで開くと自由操作 (両端末が最初の画面で、ボタンを押せ、自動遷移が実時間で進む) で、ページに消した部品 (左のシナリオのパネル、
 // 右パネルの状態名の行・「ほか:」のバッジの列・ログタブ、凡例の未決・点線 / 実線、端末の上の黄色い未決の帯、未決トグルのラジオ) が無く、
 // タブの名前が「決定」で、モック設定が閉じていることも確かめる (1280x720 で確かめる)。
 // 遷移表に行が無いボタンの破線・半透明 ([data-norow]) はモックの操作の手がかりなので数えるだけにする。
@@ -94,7 +94,7 @@ try {
     findings.forEach((f) => console.error('  ' + f));
     process.exitCode = 1;
   } else {
-    console.log('ok  hash なしで開くと自由操作で、両端末が最初の画面 (Online Battle) にあり、ボタンを押せます');
+    console.log('ok  hash なしで開くと自由操作で、両端末が最初の画面 (Online Battle) にあり、ボタンを押せ、自動遷移が実時間で進みます');
     console.log('ok  左のシナリオのパネル、右パネルの状態名の行・「ほか:」・ログタブ、凡例の未決・点線 / 実線、端末の上の未決の帯、トグルのラジオはありません');
     console.log('ok  タブの名前は「決定」で、モック設定は閉じています');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
@@ -143,11 +143,20 @@ function checkPage() {
     if (!settings.querySelector('#ctx-codeResult') || !settings.querySelector('#ctx-createResult')) page('モック設定に Join Match / Create Match の結果が無い');
     if (!(document.querySelector('#env-events').compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING)) page('モック設定が環境イベントの下にない');
   }
-  // 押すと遷移表どおりに進む (自由操作)
-  document.querySelector('.device[data-dev="host"] .screen [data-ev="friendMatch"]').click();
-  const after = document.querySelector('.device[data-dev="host"] .state-name').textContent;
-  if (after !== 'Host.FriendMatch.Room') page(`自由操作で Friend Match を押しても ${after}`);
-  return findings;
+  // 押すと遷移表どおりに進み、自動遷移 (参加のあとの同期、0.8 秒) は実時間で進む (自由操作)
+  const stateOf = (d) => document.querySelector(`.device[data-dev="${d}"] .state-name`).textContent;
+  const press = (d, ev) => document.querySelector(`.device[data-dev="${d}"] .screen [data-ev="${ev}"]`).click();
+  press('host', 'friendMatch');
+  if (stateOf('host') !== 'Host.FriendMatch.Room') page(`自由操作で Friend Match を押しても ${stateOf('host')}`);
+  [['host', 'createMatch'], ['client', 'friendMatch'], ['client', 'enterCode'], ['client', 'joinMatch']].forEach(([d, ev]) => press(d, ev));
+  const joined = `${stateOf('host')} / ${stateOf('client')}`;
+  if (joined !== 'Host.FriendMatch.Lobby.FriendJoined / Client.FriendMatch.Lobby.Connecting') page(`自由操作で参加しても ${joined}`);
+  if (!/^⏱ /.test(document.querySelector('#auto-next').textContent)) page(`次の自動遷移の予定が無い (${document.querySelector('#auto-next').textContent})`);
+  return new Promise((resolve) => setTimeout(() => {
+    const synced = `${stateOf('host')} / ${stateOf('client')}`;
+    if (synced !== 'Host.FriendMatch.Lobby.Ready / Client.FriendMatch.Lobby.Ready') page(`自由操作で 0.8 秒たっても同期しない (${synced})`);
+    resolve(findings);
+  }, 1500));
 }
 
 // ページの中で実行する。MockApp.show は同期的に描画する

@@ -1564,7 +1564,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 - **U56 Profile (絵文字とあいさつ)** - 決定 (高宮さん 2026-10-08)  
   - Online Battle の Profile で、相手に見せる絵文字 (10 個) とあいさつ (10 個) を 1 つずつ選ぶ。既定値は 👋 "Hello!"。名前は変えられない。
   - 開けるのは対戦の外だけ。値は部屋を作る・入る・探し始めるときに固定し、次の部屋・次の検索から相手に見える。保存はブラウザ (localStorage) だけ。
-  - あいさつのアポストロフィはどれも `’`。10-08 に 4 つを同じ位置で変えた: 協力しているように聞こえる "Let’s solve this!" を "Bring it on!" に、"Let’s try our best!" を "May the best player win!" に。"Ready when you are!" を "Let’s do this!" に、"A fair match!" を "Ready?" に。
+  - あいさつのアポストロフィはどれも `’`。10-08 に候補を 4 つ同じ位置で入れ替えた (うち 2 つは協力しているように聞こえたため)。
   - 相手 (ogwssk) も Profile を変えられ、最初の値は 😎 "Let’s go!"。
   - 次の 5 点も決定 (高宮さん 2026-10-08): (a) ‹ は Cancel と同じで確認なし。(b) Online Battle の中の "Search stopped…" などの通知の間も開ける (開くと消える、U43)。"No opponent found." の間は開けない。
     (c) localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。(d) 同じ相手との再戦では固定し直さず、ホストの "Join another match" はモックでは固定するときに含めない。(e) Online Battle の Profile のボタンに保存した絵文字を添える。

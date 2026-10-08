@@ -1282,17 +1282,16 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     }
   }
   if (vsGreetings === 0) fail('VS 画面のあいさつを 1 つも確かめていない');
-  // 10-08 に変えた前の 4 つのあいさつ (と id) は、U56 の経緯のほかには残さない
-  const OLD_GREETINGS = /Let(\\u2019|\u2019)s solve this|Let(\\u2019|\u2019)s try our best|Ready when you are|A fair match|letsSolveThis|letsTryOurBest|readyWhenYouAre|fairMatch/;
-  const u56Src = /\{ id: 'U56',[\s\S]*?decided: \{ by: [^}]*\} \},/;
+  // 10-08 に入れ替えた前の 4 つのあいさつ (と id) はどこにも残さない。このファイル自身にも書かないよう、かけらから組み立てる
+  const apos = "(\\\\u2019|\u2019|')";
+  const OLD_GREETINGS = new RegExp([
+    ['Let', apos, 's sol', 've this'], ['Let', apos, 's try our', ' best'], ['Ready when', ' you are'], ['A fair', ' match'],
+    ['lets', 'SolveThis'], ['lets', 'TryOurBest'], ['ready', 'WhenYouAre'], ['fair', 'Match'],
+  ].map((parts) => parts.join('')).join('|'), 'i');
   for (const f of ['index.html', 'README.md', ...fs.readdirSync(path.join(__dirname, '..', 'js')).map((n) => `js/${n}`)]) {
-    let src = read(f);
-    if (f === 'js/transitions.js') src = src.replace(u56Src, '');
-    if (f === 'README.md') src = src.replace(/^- \*\*U56 [^\n]*\n(  [^\n]*\n)*/m, '');
-    const m = src.match(OLD_GREETINGS);
-    if (m) fail(`${f} に前のあいさつ ${m[0]} が残っている (U56 の経緯のほか)`);
+    const m = read(f).match(OLD_GREETINGS);
+    if (m) fail(`${f} に前のあいさつ ${m[0]} が残っている`);
   }
-  if (!OLD_GREETINGS.test(u56.desc)) fail('U56 に前のあいさつからの経緯が無い');
   if (/PLAYERS\[[^\]]+\]\.(emoji|greeting)|\bp\.(emoji|greeting)/.test(appJs)) fail('app.js が絵文字とあいさつを PLAYERS から読んでいる (保存した値・固定した値を使う)');
 
   // 開けるのは Online Battle (と、その中の通知を出している間) だけ。探している間・部屋・対戦中には行もボタンも無い

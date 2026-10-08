@@ -259,7 +259,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   border-radius: 10px; cursor: pointer; color: var(--text); background: rgba(255, 255, 255, 0.04); border: 1px solid #56607E;
 }
 .pf-emoji { height: 46px; padding: 0; font-size: 24px; line-height: 1; }
-.pf-greet { min-height: 36px; padding: 6px 8px; font-family: var(--game); font-size: 12px; font-weight: 600; line-height: 1.2; letter-spacing: 0.02em; }
+.pf-greet { min-height: 36px; padding: 6px 4px; font-family: var(--game); font-size: 12px; font-weight: 600; line-height: 1.2; letter-spacing: 0; }
 .pf-emoji:hover, .pf-greet:hover { border-color: var(--h); }
 .pf-emoji.selected, .pf-greet.selected { border-color: var(--h); background: rgba(95, 201, 250, 0.18); box-shadow: 0 0 12px rgba(95, 201, 250, 0.35); }
 .view-profile .actions.pf-actions { padding: 18px 24px 28px; }

@@ -336,6 +336,8 @@ function scan() {
         const greets = [...screen.querySelectorAll('.pf-greet')];
         if (emojis.map((e) => e.textContent).join(' ') !== PROFILE_EMOJIS.map((e) => e.emoji).join(' ')) findings.push(`${at}: 絵文字の候補が ${emojis.map((e) => e.textContent).join(' ')}`);
         if (greets.map((e) => e.textContent).join(' / ') !== PROFILE_GREETINGS.map((g) => g.text).join(' / ')) findings.push(`${at}: あいさつの候補が違う`);
+        // どのあいさつも 1 行に収まる (折り返すとその行だけボタンが高くなる)
+        greets.forEach((g) => { const r = document.createRange(); r.selectNodeContents(g); if (r.getClientRects().length !== 1) findings.push(`${at}: あいさつ ${g.textContent} が 1 行に収まらない`); });
         const sel = [...screen.querySelectorAll('.selected')].map((e) => e.textContent);
         if (sel.join(' / ') !== `${current[d + 'DraftEmoji']} / ${current[d + 'DraftGreeting']}`) findings.push(`${at}: 選ばれているのが ${sel.join(' / ')}`);
         if ([...screen.querySelectorAll('[aria-pressed="true"]')].length !== 2) findings.push(`${at}: aria-pressed が 2 つでない`);

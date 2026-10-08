@@ -9,12 +9,21 @@ var Engine = (function () {
     return { codeResult: 'auto', createResult: 'ok' };
   }
 
+  function initialOf(f, d) {
+    var init = DEVICE_FIELDS[f].initial;
+    return typeof init === 'function' ? init(d) : init;
+  }
+
   // 端末ごとの付属状態 (hostDialog / hostStamp / hostMute / hostFailed など) とセッション (match / rated) は transitions.js の
-  // DEVICE_FIELDS / SESSION_FIELDS で決まる
-  function initialState(ctx) {
+  // DEVICE_FIELDS / SESSION_FIELDS で決まる。profiles ({ host: { emoji, greeting }, client: ... }) を渡すと、保存した絵文字とあいさつ (U56) をその値で始める
+  function initialState(ctx, profiles) {
     var s = { host: 'Host.MultiModeSelection', client: 'Client.MultiModeSelection' };
     DEVICES.forEach(function (d) {
-      Object.keys(DEVICE_FIELDS).forEach(function (f) { s[d + f] = DEVICE_FIELDS[f].initial; });
+      Object.keys(DEVICE_FIELDS).forEach(function (f) { s[d + f] = initialOf(f, d); });
+      if (profiles && profiles[d]) {
+        s[d + 'Emoji'] = profiles[d].emoji;
+        s[d + 'Greeting'] = profiles[d].greeting;
+      }
     });
     Object.keys(SESSION_FIELDS).forEach(function (k) { s[k] = SESSION_FIELDS[k]; });
     s.ctx = Object.assign(defaultCtx(), ctx || {});
@@ -71,9 +80,11 @@ var Engine = (function () {
       Object.keys(DEVICE_FIELDS).forEach(function (f) {
         var key = d + f;
         if (has(row.set, key)) next[key] = row.set[key];
+        // copy: { 写す先: 写す元 } は、発火する前の付属状態の値を写す (U56 の Profile の下書き・保存・相手に見せる値)
+        else if (has(row.copy, key)) next[key] = state[row.copy[key]];
         else if (f === 'Dialog' && has(row.dialog, d)) next[key] = row.dialog[d];
         // 画面が変わったら、その画面で続かない付属状態は初期値に戻す (ダイアログは必ず閉じる)
-        else if (next[d] !== state[d] && !DEVICE_FIELDS[f].keeps(next[d])) next[key] = DEVICE_FIELDS[f].initial;
+        else if (next[d] !== state[d] && !DEVICE_FIELDS[f].keeps(next[d])) next[key] = initialOf(f, d);
       });
     });
     Object.keys(SESSION_FIELDS).forEach(function (k) { if (has(row.set, k)) next[k] = row.set[k]; });
@@ -117,7 +128,8 @@ var Engine = (function () {
     return out;
   }
 
-  // シナリオの手順を最初から n 個再生する。失敗した手順があれば failedAt に入る
+  // シナリオの手順を最初から n 個再生する。失敗した手順があれば failedAt に入る。
+  // シナリオはいつも最初の値 (保存した絵文字とあいさつは DEVICE_FIELDS の初期値) から始める
   function replay(scenario, n, ctx) {
     var state = initialState(Object.assign({}, ctx || {}, scenario.ctx || {}));
     var fired = [];

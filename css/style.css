@@ -151,6 +151,13 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   box-shadow: 0 0 12px rgba(95, 201, 250, 0.15);
 }
 .menu-item .chev { color: var(--h); font-size: 22px; }
+/* Profile (決定 U56): 対戦の入口 (Random Match / Friend Match) と分け、控えめな見た目で下に置く */
+.menu-item.secondary {
+  margin-top: 10px; padding: 14px 20px; font-size: 16px; background: rgba(255, 255, 255, 0.04); border-color: #56607E; box-shadow: none;
+}
+.menu-item.secondary .chev { color: #B9C0D0; }
+.mi-label { display: flex; align-items: center; gap: 12px; }
+.mi-emoji { font-size: 20px; line-height: 1; }
 /* アプリを離れて検索が止まったときの通知 (決定 U43)。モーダルにせず、メニューの下に置いてメニューの位置を変えない */
 .inline-notice {
   margin-top: 10px; padding: 16px 16px 14px; border-radius: 12px; background: #161C36; border: 1px solid #3A4466;
@@ -240,6 +247,22 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 
 .actions { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 0 28px 76px; }
 .view-random .actions, .view-lobby .actions { padding-bottom: 76px; }
+
+/* Profile 画面 (決定 U56): 上に VS 画面のカードの見本、絵文字 5 x 2、あいさつ 2 列 x 5、下に Save / Cancel */
+.profile { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 6px 24px 0; }
+/* 見本は選ぶたびに描き直すので、VS 画面の滑り込みのアニメーションはしない */
+.vs-card.pf-card { flex: none; padding: 14px 18px; margin-bottom: 18px; animation: none; }
+.pf-card .vs-greet { margin-top: 4px; }
+.pf-emojis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 18px; }
+.pf-greets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pf-emoji, .pf-greet {
+  border-radius: 10px; cursor: pointer; color: var(--text); background: rgba(255, 255, 255, 0.04); border: 1px solid #56607E;
+}
+.pf-emoji { height: 46px; padding: 0; font-size: 24px; line-height: 1; }
+.pf-greet { min-height: 36px; padding: 6px 8px; font-family: var(--game); font-size: 12px; font-weight: 600; line-height: 1.2; letter-spacing: 0.02em; }
+.pf-emoji:hover, .pf-greet:hover { border-color: var(--h); }
+.pf-emoji.selected, .pf-greet.selected { border-color: var(--h); background: rgba(95, 201, 250, 0.18); box-shadow: 0 0 12px rgba(95, 201, 250, 0.35); }
+.view-profile .actions.pf-actions { padding: 18px 24px 28px; }
 
 /* 手順実行中はアニメーションを止める */
 .static .screen *, .static .screen *::before { animation: none !important; }

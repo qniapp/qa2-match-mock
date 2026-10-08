@@ -31,6 +31,9 @@
     autoTimer: null,
   };
 
+  // Profile の保存先 (決定 U56)。file:// などで localStorage を使えないときは null (保存しないで動く)
+  var storage = (function () { try { return window.localStorage; } catch (e) { return null; } })();
+
   var $ = function (sel, root) { return (root || document).querySelector(sel); };
   var $$ = function (sel, root) { return Array.prototype.slice.call((root || document).querySelectorAll(sel)); };
 
@@ -70,7 +73,8 @@
     clearAuto();
     app.detached = false;
     if (!app.scenario) {
-      app.state = Engine.initialState(app.ctx);
+      // 自由操作は保存した絵文字とあいさつから始める。シナリオは localStorage に関係なくいつも最初の値から (スクリーンショットを決定的にする)
+      app.state = Engine.initialState(app.ctx, storage && ProfileStore.load(storage));
       app.step = 0;
       app.lastRow = null;
       render();
@@ -90,11 +94,24 @@
   function fire(event) {
     var res = Engine.fire(app.state, event);
     if (!res) return false;
+    persistProfiles(app.state, res.state);
     app.state = res.state;
     app.lastRow = res.row;
     render();
     scheduleAuto();
     return true;
+  }
+
+  function profilesOf(state) {
+    var out = {};
+    Engine.DEVICES.forEach(function (d) { out[d] = { emoji: state[d + 'Emoji'], greeting: state[d + 'Greeting'] }; });
+    return out;
+  }
+
+  // Profile の Save (決定 U56) で保存した値が変わったら localStorage に残す。シナリオの再生中 (外れたあとも) は書かない
+  function persistProfiles(before, after) {
+    if (app.scenario || !storage) return;
+    if (JSON.stringify(profilesOf(before)) !== JSON.stringify(profilesOf(after))) ProfileStore.save(storage, profilesOf(after));
   }
 
   function scenarioActive() {
@@ -195,8 +212,30 @@
   var VIEWS = {
     online: function (dev, s) {
       return header(dev, s, s.title) + '<div class="menu">' + s.items.map(function (it) {
-        return '<button type="button" class="menu-item"' + attrs(dev, it.event) + '>' + esc(it.label) + '<span class="chev">›</span></button>';
+        // Profile (決定 U56) は対戦の入口より控えめにし、保存した絵文字を添える
+        var label = it.profile ? '<span class="mi-label"><span class="mi-emoji" aria-hidden="true">' + app.state[dev + 'Emoji'] + '</span>' + esc(it.label) + '</span>' : esc(it.label);
+        return '<button type="button" class="menu-item' + (it.profile ? ' secondary' : '') + '"' + attrs(dev, it.event) + '>' + label + '<span class="chev">›</span></button>';
       }).join('') + inlineNoticeHtml(dev, s.inlineNotice) + '</div>';
+    },
+    // Profile 画面 (決定 U56): 上に VS 画面のカードの見本 (選ぶたびに変わる)、絵文字とあいさつを 1 つずつ、下に Save / Cancel
+    profile: function (dev, s) {
+      var emoji = app.state[dev + 'DraftEmoji'];
+      var greeting = app.state[dev + 'DraftGreeting'];
+      var choice = function (cls, ev, selected, label, content) {
+        return '<button type="button" class="' + cls + (selected ? ' selected' : '') + '" aria-pressed="' + selected + '"' +
+          (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
+      };
+      return header(dev, s, s.title) + '<div class="profile">' +
+        '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(PLAYERS[dev].name, emoji, greeting) + '</div>' +
+        '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
+          return choice('pf-emoji', 'pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
+        }).join('') + '</div>' +
+        '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
+          return choice('pf-greet', 'pickGreeting.' + g.id, g.text === greeting, null, esc(g.text));
+        }).join('') + '</div></div>' +
+        '<div class="actions pf-actions"><div class="btn-row">' +
+        '<button type="button" class="btn primary"' + attrs(dev, 'saveProfile') + '>Save</button>' +
+        '<button type="button" class="btn"' + attrs(dev, 'cancelProfile') + '>Cancel</button></div></div>';
     },
     friendTop: function (dev, s) {
       var input = s.input
@@ -237,16 +276,13 @@
         (s.status ? '<div class="status">' + esc(s.status) + '</div><div class="dots"><i></i><i></i><i></i></div>' : '') + '</div>' +
         buttonsHtml(dev, s.buttons);
     },
+    // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56。スタンプのミュート U49 とは関係なく出す)
     vs: function (dev, s) {
       var me = dev;
       var card = function (who) {
-        var p = PLAYERS[who];
         return '<div class="vs-card ' + who + (who === me ? ' me' : '') + '">' +
           (who === me ? '<span class="you">YOU</span>' : '') +
-          '<div class="vs-emoji">' + p.emoji + '</div>' +
-          '<div class="vs-name">' + esc(p.name) + '</div>' +
-          '<div class="vs-rating">Rating ' + ELO.initial + '</div>' +
-          '<div class="vs-greet">“' + esc(p.greeting) + '”</div></div>';
+          vsCardBody(PLAYERS[who].name, app.state[who + 'ShownEmoji'], app.state[who + 'ShownGreeting'], 'Rating ' + ELO.initial) + '</div>';
       };
       return '<div class="vs">' + card('host') + '<div class="vs-mark">VS</div>' + card('client') +
         '<div class="vs-bar"><i></i></div></div>' + (s.overlay ? overlayHtml(s) : '');
@@ -300,6 +336,14 @@
   };
 
   function fmt(n) { return n.toLocaleString('en-US'); }
+
+  // VS 画面のカードの中身。Profile の見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)
+  function vsCardBody(name, emoji, greeting, rating) {
+    return '<div class="vs-emoji">' + esc(emoji) + '</div>' +
+      '<div class="vs-name">' + esc(name) + '</div>' +
+      (rating ? '<div class="vs-rating">' + esc(rating) + '</div>' : '') +
+      '<div class="vs-greet">“' + esc(greeting) + '”</div>';
+  }
 
   // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に "✓ Ready" / "Not ready"。
   // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、カウントダウン (秒)
@@ -548,6 +592,7 @@
       }).map(function (k) { return k + '=' + [].concat(r.from[k]).map(String).join('|'); }));
       if (conds.length) memo += '<span class="when">条件: ' + esc(conds.join(', ')) + '</span> ';
       if (r.set) memo += '<span class="when">設定: ' + esc(Object.keys(r.set).map(function (k) { return k + '=' + r.set[k]; }).join(', ')) + '</span> ';
+      if (r.copy) memo += '<span class="when">写す: ' + esc(Object.keys(r.copy).map(function (k) { return k + '\u2190' + r.copy[k]; }).join(', ')) + '</span> ';
       if (r.note) memo += esc(r.note) + ' ';
       memo += r.undecided.map(function (id) {
         return '<button type="button" class="pill-undecided small" data-undecided="' + id + '">' + id + '</button>';

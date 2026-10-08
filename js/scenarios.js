@@ -148,5 +148,11 @@ var SCENARIOS = (function () {
       steps: ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound', 'vs.done', 'host.disconnect', 'timer.disconnectTimeout', 'host.searchAgain', 'client.searchAgain', 'sys.opponentFound'] },
     { id: '21c', title: 'Friend Match の再戦の VS 画面中に切断 → 戻らない → Friend Match トップ', diagram: 'なし (10-08 の決定 U52 / U54)',
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch', 'client.disconnect', 'timer.disconnectTimeout', 'host.closeNotice', 'client.closeNotice']) },
+    // Profile (決定 U56): 変えて保存すると、次に相手を探し始めたときから相手に見える
+    { id: '22', title: 'Profile で絵文字とあいさつを変えて Save → ランダム対戦の VS 画面に出る', diagram: 'なし (10-08 の決定 U56)',
+      steps: ['host.profile', 'host.pickEmoji.rocket', 'host.pickGreeting.letsSolveThis', 'host.saveProfile'].concat(toRandomGame,
+        ['client.win', 'client.muteStamps', 'host.rematch', 'client.rematch']) },
+    { id: '22b', title: 'Profile で選んだものを Cancel / ‹ で捨てる', diagram: 'なし (10-08 の決定 U56)', clientNote: hostOnly,
+      steps: ['host.profile', 'host.pickEmoji.robot', 'host.pickGreeting.goodLuck', 'host.cancelProfile', 'host.profile', 'host.pickEmoji.star', 'host.back'] },
   ];
 })();

@@ -81,9 +81,22 @@ try {
     if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails));
     return r.result.result.value;
   };
+  const open = async (hash) => {
+    events.length = 0;
+    await send('Page.navigate', { url: 'about:blank' });
+    await send('Page.navigate', { url: url + hash });
+    for (let i = 0; i < 100 && !events.some((e) => e.method === 'Page.loadEventFired'); i++) await new Promise((r) => setTimeout(r, 50));
+  };
   const pageFindings = await evaluate(checkPage);
-  const { frames, findings, norow } = await evaluate(scan);
+  // Profile (決定 U56): 自由操作で Cancel は保存せず、Save したものはページを開き直しても残る (localStorage)
+  await open('');
+  pageFindings.push(...await evaluate(profileSave));
+  await open('');
+  pageFindings.push(...await evaluate(profileReload));
+  // localStorage に既定値と違う値がある状態で全シナリオを描く (シナリオはいつも最初の値から)
+  const { frames, findings, norow, mutedVs } = await evaluate(scan);
   findings.unshift(...pageFindings);
+  if (!mutedVs) findings.push('スタンプをミュートしたままの VS 画面 (あいさつが隠れないこと) を描いたシナリオが無い');
 
   console.log(`${frames} 枚 (全シナリオの全手順と、カウントダウン 3 / 2 / 1) の両端末の画面を確かめました`);
   const norowStates = Object.keys(norow);
@@ -98,6 +111,7 @@ try {
     console.log('ok  左のシナリオのパネル、右パネルの状態名の行・「ほか:」・ログタブ、凡例の未決・点線 / 実線、端末の上の未決の帯、トグルのラジオはありません');
     console.log('ok  タブの名前は「決定」で、モック設定は閉じています');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
+    console.log(`ok  Profile: Cancel は保存せず、Save したものは開き直しても残り、シナリオは localStorage に関係なく最初の値から。ミュートしたままの VS 画面 ${mutedVs} 枚にもあいさつがあります`);
   }
 } finally {
   await cleanup();
@@ -159,6 +173,55 @@ function checkPage() {
   }, 1500));
 }
 
+// ページの中で実行する。自由操作で Profile を開き、Cancel では保存せず、Save で localStorage に保存する (決定 U56)
+function profileSave() {
+  const findings = [];
+  const page = (what) => findings.push(`Profile: ${what}`);
+  const KEY = ProfileStore.KEY;
+  if (localStorage.getItem(KEY) !== null) page('最初から localStorage に値がある');
+  const host = document.querySelector('.device[data-dev="host"]');
+  const press = (sel) => { const el = host.querySelector(`.screen ${sel}`); if (!el || el.hasAttribute('data-norow')) { page(`${sel} を押せない`); return; } el.click(); };
+  const preview = () => [...host.querySelectorAll('.pf-card .vs-emoji, .pf-card .vs-name, .pf-card .vs-greet')].map((e) => e.textContent).join(' ');
+  if (host.querySelector('.menu-item.secondary .mi-emoji').textContent !== '\u{1F44B}') page('Online Battle の Profile に既定の 👋 が無い');
+  press('[data-ev="profile"]');
+  if (preview() !== '\u{1F44B} Yasuhito \u201cHello!\u201d') page(`開いたときの見本が ${preview()}`);
+  press('[data-ev="pickEmoji.robot"]');
+  press('[data-ev="pickGreeting.goodLuck"]');
+  if (preview() !== '\u{1F916} Yasuhito \u201cGood luck!\u201d') page(`選んでも見本が変わらない (${preview()})`);
+  press('[data-ev="cancelProfile"]');
+  if (localStorage.getItem(KEY) !== null) page(`Cancel で保存された (${localStorage.getItem(KEY)})`);
+  press('[data-ev="profile"]');
+  if (preview() !== '\u{1F44B} Yasuhito \u201cHello!\u201d') page(`Cancel のあと開き直した見本が ${preview()}`);
+  press('[data-ev="pickEmoji.star"]');
+  host.querySelector('.screen .back').click();
+  if (localStorage.getItem(KEY) !== null) page('‹ で保存された');
+  press('[data-ev="profile"]');
+  press('[data-ev="pickEmoji.rocket"]');
+  press('[data-ev="pickGreeting.letsSolveThis"]');
+  press('[data-ev="saveProfile"]');
+  const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
+  if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'Let\u2019s solve this!' || saved.client.emoji !== '\u{1F60E}') page(`Save で保存されない (${localStorage.getItem(KEY)})`);
+  return findings;
+}
+
+// ページの中で実行する。開き直した自由操作は保存した値から始まり、シナリオは最初の値から (決定 U56)
+function profileReload() {
+  const findings = [];
+  const page = (what) => findings.push(`Profile (開き直し): ${what}`);
+  const host = document.querySelector('.device[data-dev="host"]');
+  const emoji = host.querySelector('.menu-item.secondary .mi-emoji');
+  if (!emoji || emoji.textContent !== '\u{1F680}') page(`Online Battle の Profile の絵文字が ${emoji && emoji.textContent}`);
+  host.querySelector('.screen [data-ev="profile"]').click();
+  const sel = [...host.querySelectorAll('.pf-emoji.selected, .pf-greet.selected')].map((e) => e.textContent).join(' / ');
+  if (sel !== '\u{1F680} / Let\u2019s solve this!') page(`開き直した Profile で選ばれているのが ${sel}`);
+  // シナリオ 1 の VS 画面は保存した値に関係なく 👋 "Hello!"
+  MockApp.show('1', 11);
+  const greet = [...document.querySelectorAll('.device[data-dev="host"] .vs-card.host .vs-emoji, .device[data-dev="host"] .vs-card.host .vs-greet')].map((e) => e.textContent).join(' ');
+  if (greet !== '\u{1F44B} \u201cHello!\u201d') page(`シナリオ 1 の VS 画面が保存した値 (${greet}) を使う`);
+  if (localStorage.getItem(ProfileStore.KEY) === null) page('シナリオを開いたら保存した値が消えた');
+  return findings;
+}
+
 // ページの中で実行する。MockApp.show は同期的に描画する
 function scan() {
   const BAD_TEXT = [[/仮/, '「仮」'], [/未決/, '「未決」'], [/決定/, '「決定」'], [/\bU\d{1,2}\b/, 'U 番号'], [/[\u3040-\u30ff\u3400-\u9fff]/, '日本語']];
@@ -167,12 +230,15 @@ function scan() {
   const findings = [];
   const norow = {};
   let frames = 0;
+  let mutedVs = 0;
+  let current = null; // 描いている手順の遷移表の状態
   // 手順の移動は MockApp.show (#s=..&step=..&cd=.. の deep link と同じ) を直接呼んで行う。
   // hash を書き換えて回すと、Chromium が短時間の大量の history.replaceState を黙って捨てるため、途中から手順が進まなくなる。
   // 両端末の状態が遷移表の再生結果と同じかも確かめる
   const show = (where, sc, step, cd) => {
     try { MockApp.show(sc.id, step, cd); } catch (e) { findings.push(`${where}: 描画中の例外 ${e.stack || e}`); return false; }
     const st = Engine.replay(sc, step).state;
+    current = st;
     const want = ['host', 'client'].map((d) => st[d] + Engine.extrasLabel(st, d)).join(' / ');
     const got = [...document.querySelectorAll('.device .state-name')].map((e) => e.textContent).join(' / ');
     if (got !== want) { findings.push(`${where}: その手順を描けていない (${got}、期待: ${want})`); return false; }
@@ -246,6 +312,47 @@ function scan() {
         if (ratings.join() !== `Rating ${ELO.initial},Rating ${ELO.initial}`) findings.push(`${at}: VS 画面のレーティングが ${ratings.join(' / ')}`);
       }
       if (/\bRank\b/.test(text)) findings.push(`${at}: "Rank" が残っている`);
+      // VS 画面の絵文字とあいさつ (決定 U56): 部屋を作った・入った・探し始めたときに固定した値。スタンプのミュート (U49) でも隠さない
+      const d = dev.dataset.dev;
+      if (screen.querySelector('.vs')) {
+        ['host', 'client'].forEach((who) => {
+          const card = [...screen.querySelectorAll(`.vs-card.${who} .vs-emoji, .vs-card.${who} .vs-greet`)].map((e) => e.textContent).join(' ');
+          const want = `${current[who + 'ShownEmoji']} \u201c${current[who + 'ShownGreeting']}\u201d`;
+          if (card !== want) findings.push(`${at}: VS 画面の ${who} のカードが ${card} (期待: ${want})`);
+        });
+        if (current[d + 'Mute']) mutedVs++;
+      }
+      // Online Battle の Profile (決定 U56): 保存した絵文字を添える。押せるのは Online Battle とその中の通知のときだけ
+      const pItem = screen.querySelector('.menu-item.secondary');
+      if (/\.(MultiModeSelection|Matchmake\.(Stopped|MatchCancelled|ReconnectFailed|NotFound))$/.test(state) !== !!pItem) findings.push(`${at}: Profile のボタンが ${pItem ? 'ある' : '無い'}`);
+      if (pItem) {
+        if (pItem.textContent.replace('›', '').trim() !== `${current[d + 'Emoji']}Profile`) findings.push(`${at}: Profile のボタンが ${pItem.textContent}`);
+        if (pItem.hasAttribute('data-norow') !== /NotFound$/.test(state)) findings.push(`${at}: Profile のボタンを押せるかが違う`);
+      }
+      // Profile 画面 (決定 U56): 見本・絵文字 10・あいさつ 10・Save / Cancel が画面に収まって重ならず、選んだものが 1 つずつ
+      if (/\.Profile$/.test(state)) {
+        const emojis = [...screen.querySelectorAll('.pf-emoji')];
+        const greets = [...screen.querySelectorAll('.pf-greet')];
+        if (emojis.map((e) => e.textContent).join(' ') !== PROFILE_EMOJIS.map((e) => e.emoji).join(' ')) findings.push(`${at}: 絵文字の候補が ${emojis.map((e) => e.textContent).join(' ')}`);
+        if (greets.map((e) => e.textContent).join(' / ') !== PROFILE_GREETINGS.map((g) => g.text).join(' / ')) findings.push(`${at}: あいさつの候補が違う`);
+        const sel = [...screen.querySelectorAll('.selected')].map((e) => e.textContent);
+        if (sel.join(' / ') !== `${current[d + 'DraftEmoji']} / ${current[d + 'DraftGreeting']}`) findings.push(`${at}: 選ばれているのが ${sel.join(' / ')}`);
+        if ([...screen.querySelectorAll('[aria-pressed="true"]')].length !== 2) findings.push(`${at}: aria-pressed が 2 つでない`);
+        const pv = [...screen.querySelectorAll('.pf-card > div')].map((e) => e.textContent).join(' ');
+        if (pv !== `${current[d + 'DraftEmoji']} ${d === 'host' ? 'Yasuhito' : 'ogwssk'} \u201c${current[d + 'DraftGreeting']}\u201d`) findings.push(`${at}: 見本が ${pv}`);
+        if (screen.querySelector('input, textarea, [contenteditable]')) findings.push(`${at}: 自由入力の欄がある`);
+        const btns = [...screen.querySelectorAll('.pf-actions .btn')].map((b) => b.textContent);
+        if (btns.join() !== 'Save,Cancel') findings.push(`${at}: ボタンが ${btns.join(' / ')}`);
+        if (screen.querySelector('.pf-emoji[data-norow], .pf-greet[data-norow], .pf-actions [data-norow], .back[data-norow]')) findings.push(`${at}: Profile 画面に押せない部品がある`);
+        const sr = screen.getBoundingClientRect();
+        const parts = [...screen.querySelectorAll('.hdr, .pf-card, .pf-emojis, .pf-greets, .pf-actions .btn')].map((el) => [el, el.getBoundingClientRect()]);
+        parts.forEach(([el, r]) => { if (r.top < sr.top || r.bottom > sr.bottom || r.left < sr.left || r.right > sr.right) findings.push(`${at}: ${el.className} が画面からはみ出している`); });
+        for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
+          const [a, ra] = parts[i]; const [b, rb] = parts[j];
+          if (ra.bottom > rb.top + 0.5 && rb.bottom > ra.top + 0.5 && ra.right > rb.left && rb.right > ra.left) findings.push(`${at}: ${a.className} と ${b.className} が重なっている`);
+        }
+        greets.forEach((g) => { if (g.scrollWidth > g.clientWidth + 1 || g.scrollHeight > g.clientHeight + 1) findings.push(`${at}: あいさつ "${g.textContent}" がはみ出している`); });
+      }
       // 部屋のお知らせ (決定 U52): モーダルではない帯で、Close を押せる。画面に収まり、ほかの部品と重ならない
       const notice = screen.querySelector('.room-notice');
       if (/\.FriendMatch\.Room\.(HostLeft|HostDisconnected|RoomClosed|ReconnectFailed|MatchCancelled)\b/.test(state) !== !!notice) findings.push(`${at}: 部屋のお知らせの帯が ${notice ? 'ある' : '無い'}`);
@@ -355,5 +462,5 @@ function scan() {
       }
     }
   });
-  return { frames, findings, norow };
+  return { frames, findings, norow, mutedVs };
 }

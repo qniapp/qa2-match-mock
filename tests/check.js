@@ -7,7 +7,7 @@ const path = require('path');
 const vm = require('vm');
 
 const ctx = vm.createContext({});
-for (const f of ['transitions.js', 'engine.js', 'scenarios.js']) {
+for (const f of ['transitions.js', 'engine.js', 'profile-store.js', 'scenarios.js']) {
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 }
 const eachSideAll = [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']];
@@ -22,7 +22,7 @@ const openIds = new Set(UNDECIDED.filter((u) => !u.decided).map((u) => u.id));
 const states = (pat) => (pat === '*' || pat === '=' ? [] : [].concat(pat));
 
 // js/ のファイルの最上位の var は 1 つの名前空間を共有するので、同じ名前を 2 回宣言すると前の値を黙って上書きする
-const topVars = ['transitions.js', 'engine.js', 'scenarios.js'].flatMap((f) => [...read('js', f).matchAll(/^var (\w+)/gm)].map((m) => m[1]));
+const topVars = ['transitions.js', 'engine.js', 'profile-store.js', 'scenarios.js'].flatMap((f) => [...read('js', f).matchAll(/^var (\w+)/gm)].map((m) => m[1]));
 for (const v of new Set(topVars)) if (topVars.filter((x) => x === v).length > 1) fail(`js/ の最上位の var ${v} が 2 回宣言されている`);
 
 // 遷移表そのものの整合性
@@ -1244,6 +1244,147 @@ for (const h of ctx.STATE_GROUPS['Host.FriendMatch.Lobby.Closable']) {
 }
 if (/Back to Online Battle/.test(shownText + appJs)) fail('"Back to Online Battle" が残っている (すべて "Back to Online")');
 console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、切断で止める 20 秒、次の相手の検索停止、Rating、ミュート、再戦の一行、部屋のお知らせ、開始前の切断の取りやめ、"Friend is in the room"');
+
+// 決定 U56 (高宮さん 2026-10-08): Profile。相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ
+{
+  const { PROFILE_EMOJIS, PROFILE_GREETINGS, PROFILE_DEFAULT, PLAYERS, ProfileStore } = ctx;
+  const u56 = UNDECIDED.find((u) => u.id === 'U56');
+  if (!u56 || !u56.decided || u56.decided.by !== '高宮さん' || u56.decided.date !== '2026-10-08') fail('U56 (Profile) が 高宮さん 2026-10-08 の決定になっていない');
+  if (UNDECIDED.some((u) => !u.decided)) fail('Profile を足して未決ができた (期待: 0 件)');
+  // 候補 (内容と順番)。アポストロフィは相手の今のあいさつ "Let’s go!" と同じ ’
+  const EMOJIS = ['\u{1F44B}', '\u{1F642}', '\u{1F60E}', '\u{1F916}', '\u{1F9E0}', '\u269B\uFE0F', '\u{1F52C}', '\u{1F31F}', '\u{1F340}', '\u{1F680}'];
+  const GREETINGS = ['Hello!', 'Let\u2019s go!', 'Have fun!', 'Good luck!', 'Ready when you are!', 'Let\u2019s solve this!', 'A fair match!', 'Here we go!', 'Happy puzzling!', 'Let\u2019s try our best!'];
+  if (PROFILE_EMOJIS.map((e) => e.emoji).join('|') !== EMOJIS.join('|')) fail(`絵文字の候補が ${PROFILE_EMOJIS.map((e) => e.emoji).join(' ')} (期待: ${EMOJIS.join(' ')})`);
+  if (PROFILE_GREETINGS.map((g) => g.text).join('|') !== GREETINGS.join('|')) fail(`あいさつの候補が ${PROFILE_GREETINGS.map((g) => g.text).join(' / ')}`);
+  for (const list of [PROFILE_EMOJIS, PROFILE_GREETINGS]) if (new Set(list.map((x) => x.id)).size !== 10) fail('候補の id が 10 個そろっていない');
+  for (const e of PROFILE_EMOJIS) if (!/^[A-Z][a-z ]+$/.test(e.name)) fail(`絵文字 ${e.emoji} の読み上げ名が英語でない (${e.name})`);
+  // 既定値は全員 👋 "Hello!"。相手の役 (ogwssk 😎 "Let’s go!") は前からの値のまま。名前は変えられず、ほかの名前は足さない
+  if (PROFILE_DEFAULT.emoji !== EMOJIS[0] || PROFILE_DEFAULT.greeting !== 'Hello!') fail('既定値が 👋 "Hello!" でない');
+  const init = Engine.initialState();
+  if (`${init.hostEmoji} ${init.hostGreeting}` !== `${EMOJIS[0]} Hello!`) fail(`ホストの最初の値が ${init.hostEmoji} ${init.hostGreeting}`);
+  if (`${init.clientEmoji} ${init.clientGreeting}` !== '\u{1F60E} Let\u2019s go!') fail(`クライアント (ogwssk) の最初の値が ${init.clientEmoji} ${init.clientGreeting}`);
+  if (JSON.stringify(PLAYERS) !== JSON.stringify({ host: { name: 'Yasuhito' }, client: { name: 'ogwssk', emoji: '\u{1F60E}', greeting: 'Let\u2019s go!' } })) fail(`PLAYERS が ${JSON.stringify(PLAYERS)}`);
+  if (/PLAYERS\[[^\]]+\]\.(emoji|greeting)|\bp\.(emoji|greeting)/.test(appJs)) fail('app.js が絵文字とあいさつを PLAYERS から読んでいる (保存した値・固定した値を使う)');
+
+  // 開けるのは Online Battle (と、その中の通知を出している間) だけ。探している間・部屋・対戦中には行もボタンも無い
+  for (const [d, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Host']]) {
+    const openable = [`${R}.MultiModeSelection`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.MatchCancelled`, `${R}.Matchmake.ReconnectFailed`];
+    const others = [`${O}.MultiModeSelection`, `${O}.Profile`, L(O, 'Ready'), `${O}.Game.Play`, `${O}.Matchmake`];
+    for (const name of Object.keys(SCREENS).filter((n) => n.startsWith(R + '.'))) {
+      for (const o of others) {
+        const st = d === 'host' ? at(name, o) : at(o, name);
+        const ok = Engine.canFire(st, `${d}.profile`);
+        if (ok !== openable.includes(name)) fail(`${name} (相手 ${o}) で Profile の行が ${ok ? 'ある' : '無い'}`);
+      }
+      const hasButton = (SCREENS[name].items || []).some((it) => it.event === 'profile');
+      if (hasButton !== (SCREENS[name].view === 'online')) fail(`${name} の Profile のボタンが ${hasButton ? 'ある' : '無い'}`);
+    }
+    for (const r of TRANSITIONS.filter((x) => x.event === `${d}.profile`)) {
+      if (states(r.from[d]).join() !== openable.join() || r.to[d] !== `${R}.Profile`) fail(`${r.id}: Profile を開く行が ${states(r.from[d]).join()} → ${r.to[d]}`);
+    }
+    // Profile 画面の操作は、絵文字 10 個・あいさつ 10 個・Save・Cancel・‹ だけ。どれも Online Battle かこの画面のまま
+    const fromProfile = TRANSITIONS.filter((r) => states(r.from[d]).includes(`${R}.Profile`)).map((r) => r.event.slice(d.length + 1));
+    const want = PROFILE_EMOJIS.map((e) => `pickEmoji.${e.id}`).concat(PROFILE_GREETINGS.map((g) => `pickGreeting.${g.id}`), ['saveProfile', 'cancelProfile', 'back']);
+    if (fromProfile.join() !== want.join()) fail(`${R}.Profile の操作が ${fromProfile.join(', ')}`);
+    if (SCREENS[`${R}.Profile`].back !== 'back' || SCREENS[`${R}.Profile`].view !== 'profile') fail(`${R}.Profile の ‹ が無い`);
+    // 見本は選ぶたびに変わる (Draft)。Save で保存し、Cancel と ‹ は捨てる。保存した値で次に開く
+    const open = (st) => Engine.fire(st, `${d}.profile`);
+    let st = Engine.initialState();
+    const pick = (s, e, g) => [`${d}.pickEmoji.${e}`, `${d}.pickGreeting.${g}`].reduce((x, ev) => { const r = Engine.fire(x, ev); if (!r) fail(`${ev} の行が無い`); return r ? r.state : x; }, s);
+    const before = `${st[d + 'Emoji']} ${st[d + 'Greeting']}`;
+    let o = open(st).state;
+    if (`${o[d + 'DraftEmoji']} ${o[d + 'DraftGreeting']}` !== before) fail(`${R}.Profile を開いたときの見本が保存した値でない`);
+    o = pick(o, 'robot', 'goodLuck');
+    if (`${o[d + 'DraftEmoji']} ${o[d + 'DraftGreeting']}` !== '\u{1F916} Good luck!' || `${o[d + 'Emoji']} ${o[d + 'Greeting']}` !== before) fail(`${R}.Profile で選んでも見本が変わらないか、保存前に保存した値が変わる`);
+    for (const ev of ['cancelProfile', 'back']) {
+      const c = Engine.fire(o, `${d}.${ev}`).state;
+      if (c[d] !== `${R}.MultiModeSelection` || `${c[d + 'Emoji']} ${c[d + 'Greeting']}` !== before || c[d + 'DraftEmoji'] !== null) fail(`${R}.Profile の ${ev} で捨てられない`);
+    }
+    const saved = Engine.fire(o, `${d}.saveProfile`).state;
+    if (saved[d] !== `${R}.MultiModeSelection` || `${saved[d + 'Emoji']} ${saved[d + 'Greeting']}` !== '\u{1F916} Good luck!') fail(`${R}.Profile の Save で保存されない`);
+    if (`${open(saved).state[d + 'DraftEmoji']}` !== '\u{1F916}') fail(`${R}.Profile をもう一度開くと保存した値から始まらない`);
+  }
+
+  // 値を固定するのは部屋を作る・入る・相手を探し始めるとき。変えたものが相手に見えるのは次の部屋・次の検索から
+  const run = (st, evs, where) => evs.reduce((s, ev) => { if (!s) return s; const r = Engine.fire(s, ev); if (!r) fail(`${where}: ${ev} の行が無い (${s.host} / ${s.client})`); return r && r.state; }, st);
+  const shown = (st, d) => st && `${st[d + 'ShownEmoji']} ${st[d + 'ShownGreeting']}`;
+  const sc1 = SCENARIOS.find((x) => x.id === '1');
+  let room = Engine.replay(sc1, 6).state; // 両者が Ready 画面
+  // 部屋にいる間に (ほかのタブなどで) 保存した値が変わっても、この部屋で相手に見えるのは部屋に入ったときの値
+  room = Object.assign({}, room, { hostEmoji: '\u{1F680}', hostGreeting: 'Let\u2019s solve this!', clientEmoji: '\u{1F340}', clientGreeting: 'Have fun!' });
+  let vs = run(room, sc1.steps.slice(6, 11), '固定');
+  if (!vs || vs.host !== 'Host.Opponent' || shown(vs, 'host') !== `${EMOJIS[0]} Hello!` || shown(vs, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`部屋に入ったあとに変えた値が、その部屋の VS 画面に出る (${shown(vs, 'host')} / ${shown(vs, 'client')})`);
+  // 次の部屋 (ホストが作る・クライアントが入る) から新しい値
+  let next = run(vs, ['vs.done', 'game.countdownDone', 'host.win', 'host.backToFriendMatch', 'client.backToFriendMatch'], '次の部屋');
+  if (next && shown(next, 'host') !== `${EMOJIS[0]} Hello!`) fail('結果画面を抜けただけで固定した値が変わる');
+  next = run(next, ['host.createMatch'], '次の部屋');
+  if (shown(next, 'host') !== '\u{1F680} Let\u2019s solve this!' || shown(next, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`次の部屋を作っても新しい値にならない (${shown(next, 'host')} / ${shown(next, 'client')})`);
+  next = run(next, ['client.enterCode', 'client.joinMatch'], '次の部屋');
+  if (shown(next, 'client') !== '\u{1F340} Have fun!') fail(`次の部屋に入っても新しい値にならない (${shown(next, 'client')})`);
+  // 次の検索から: 保存しただけでは変わらず、Random Match / Search again / Find Next Opponent で新しい値
+  let srch = run(Engine.initialState(), ['host.profile', 'host.pickEmoji.robot', 'host.saveProfile'], '検索');
+  if (srch && srch.hostShownEmoji !== null) fail('検索の前に相手に見せる値が決まっている');
+  srch = run(srch, ['host.randomMatch'], '検索');
+  if (srch && srch.hostShownEmoji !== '\u{1F916}') fail('Random Match で値が固定されない');
+  srch = run(srch, ['host.leaveApp', 'host.profile', 'host.pickEmoji.star', 'host.saveProfile'], '検索');
+  if (srch && srch.hostShownEmoji !== '\u{1F916}') fail('探していないときに保存しただけで、相手に見せる値が変わる');
+  srch = run(srch, ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound'], '検索');
+  if (shown(srch, 'host') !== '\u{1F31F} Hello!') fail(`次の検索で新しい値にならない (${shown(srch, 'host')})`);
+  srch = Object.assign({}, run(srch, ['vs.done', 'game.countdownDone', 'client.win'], '検索'), { hostEmoji: '\u{1F9E0}' });
+  const nextOpp = run(srch, ['host.findNextOpponent'], '検索');
+  if (nextOpp && nextOpp.hostShownEmoji !== '\u{1F9E0}') fail('Find Next Opponent で値が固定されない');
+  const rematch = run(srch, ['host.rematch', 'client.rematch'], '再戦');
+  if (rematch && rematch.hostShownEmoji !== '\u{1F31F}') fail('同じ相手との再戦で固定した値が変わる (次の部屋・次の検索ではない)');
+  // 固定する行の一覧: イベントが部屋を作る・入る・探し始めるもので、行き先が部屋の画面か相手を探す画面 (失敗や Match Code の誤りの行には無い)
+  for (const r of TRANSITIONS) {
+    const d = Engine.deviceOf(r.event);
+    const copies = !!(r.copy && r.copy[d + 'ShownEmoji']);
+    const want = d !== null && /\.(createMatch|dialog\.createMatch|joinMatch|randomMatch|searchAgain|findNextOpponent)$/.test(r.event) &&
+      /\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/.test(r.to[d]);
+    if (copies !== want) fail(`${r.id} (${r.event} → ${r.to[d]}): 相手に見せる値を${copies ? '固定する' : '固定しない'}`);
+    if (copies && !r.decided.includes('U56')) fail(`${r.id}: 値を固定する行に決定 U56 が無い`);
+  }
+  // どのシナリオでも、相手と向き合う画面 (VS・ゲーム・結果) では両者の値が決まっている
+  for (const sc of SCENARIOS) {
+    for (let n = 0; n <= sc.steps.length; n++) {
+      const st = Engine.replay(sc, n).state;
+      for (const d of Engine.DEVICES) if (ctx.isWithOpponent(st[d]) && (!st[d + 'ShownEmoji'] || !st[d + 'ShownGreeting'] || !st[d === 'host' ? 'clientShownEmoji' : 'hostShownEmoji'])) fail(`シナリオ ${sc.id} 手順 ${n}: ${st[d]} で相手に見せる値が決まっていない`);
+    }
+  }
+
+  // シナリオ 22: 変えて Save → ランダム対戦の VS 画面に出る。スタンプをミュートして再戦しても VS 画面のあいさつは出る (U49 はスタンプだけ)
+  const sc22 = SCENARIOS.find((x) => x.id === '22');
+  const vs22 = sc22 && Engine.replay(sc22, 7).state;
+  if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Let\u2019s solve this!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
+  const end22 = sc22 && Engine.replay(sc22);
+  if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || !end22.state.clientMute || shown(end22.state, 'host') !== '\u{1F680} Let\u2019s solve this!') fail('シナリオ 22 の最後がミュートしたままの再戦の VS 画面 (ホストのあいさつ付き) でない');
+  if (/Mute/.test(appJs.slice(appJs.indexOf('    vs: function'), appJs.indexOf('    // ゲーム画面のプレースホルダー')))) fail('VS 画面の描画がミュートを見ている (あいさつはミュートで隠さない)');
+  if (STAMPS.map((x) => `${x.emoji} ${x.text}`).join(' / ') !== '\u{1F44F} Good game / \u{1F91D} Thanks for the match / \u{1F44D} Nice') fail('結果画面のスタンプ (U27) が変わった');
+  const sc22b = SCENARIOS.find((x) => x.id === '22b');
+  const end22b = sc22b && Engine.replay(sc22b).state;
+  if (!end22b || end22b.host !== 'Host.MultiModeSelection' || `${end22b.hostEmoji} ${end22b.hostGreeting}` !== `${EMOJIS[0]} Hello!`) fail('シナリオ 22b の Cancel / ‹ で値が変わる');
+
+  // localStorage: モックの名前で区切ったキーに保存し、読み直す (新しく開いたアプリ) と同じ値。壊れた値・候補に無い値は最初の値に戻す
+  const mem = new Map();
+  const storage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) };
+  if (!/^qa2-match-mock\./.test(ProfileStore.KEY)) fail(`localStorage のキー ${ProfileStore.KEY} がモックの名前で区切られていない`);
+  const fresh = ProfileStore.load(storage);
+  if (JSON.stringify(fresh) !== JSON.stringify({ host: { emoji: EMOJIS[0], greeting: 'Hello!' }, client: { emoji: '\u{1F60E}', greeting: 'Let\u2019s go!' } })) fail(`何も保存していないときの値が ${JSON.stringify(fresh)}`);
+  const savedState = run(Engine.initialState(ctx.Engine.defaultCtx(), fresh), ['host.profile', 'host.pickEmoji.rocket', 'host.pickGreeting.happyPuzzling', 'host.saveProfile'], '保存');
+  ProfileStore.save(storage, { host: { emoji: savedState.hostEmoji, greeting: savedState.hostGreeting }, client: { emoji: savedState.clientEmoji, greeting: savedState.clientGreeting } });
+  const reopened = Engine.initialState(Engine.defaultCtx(), ProfileStore.load(storage));
+  if (`${reopened.hostEmoji} ${reopened.hostGreeting}` !== '\u{1F680} Happy puzzling!' || reopened.clientEmoji !== '\u{1F60E}') fail(`保存して開き直した値が ${reopened.hostEmoji} ${reopened.hostGreeting}`);
+  const opened = Engine.fire(reopened, 'host.profile').state;
+  if (`${opened.hostDraftEmoji} ${opened.hostDraftGreeting}` !== '\u{1F680} Happy puzzling!') fail('開き直したあとの Profile の見本が保存した値でない');
+  for (const bad of ['{', 'null', JSON.stringify({ host: { emoji: 'X', greeting: 'Hello!' } }), JSON.stringify({ host: { emoji: EMOJIS[1], greeting: 'Hi!' } })]) {
+    mem.set(ProfileStore.KEY, bad);
+    if (ProfileStore.load(storage).host.emoji !== EMOJIS[0]) fail(`壊れた値 ${bad} で最初の値に戻らない`);
+  }
+  // シナリオは localStorage に関係なく、いつも最初の値から (Engine.replay は保存した値を受け取らない)
+  if (Engine.replay(sc22, 0).state.hostEmoji !== EMOJIS[0]) fail('シナリオが最初の値から始まらない');
+  if (!/if \(app\.scenario \|\| !storage\) return;/.test(appJs)) fail('app.js がシナリオの再生中にも localStorage に書く');
+  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・ミュートでもあいさつは出る');
+}
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));
 console.log(`\n遷移表 ${TRANSITIONS.length} 行のうち ${used.size} 行をシナリオで再生 (残り ${unused.length} 行は自由操作で到達)`);

@@ -197,10 +197,10 @@ function profileSave() {
   if (localStorage.getItem(KEY) !== null) page('‹ で保存された');
   press('[data-ev="profile"]');
   press('[data-ev="pickEmoji.rocket"]');
-  press('[data-ev="pickGreeting.letsSolveThis"]');
+  press('[data-ev="pickGreeting.bringItOn"]');
   press('[data-ev="saveProfile"]');
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-  if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'Let\u2019s solve this!' || saved.client.emoji !== '\u{1F60E}') page(`Save で保存されない (${localStorage.getItem(KEY)})`);
+  if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'Bring it on!' || saved.client.emoji !== '\u{1F60E}') page(`Save で保存されない (${localStorage.getItem(KEY)})`);
   return findings;
 }
 
@@ -213,7 +213,7 @@ function profileReload() {
   if (!emoji || emoji.textContent !== '\u{1F680}') page(`Online Battle の Profile の絵文字が ${emoji && emoji.textContent}`);
   host.querySelector('.screen [data-ev="profile"]').click();
   const sel = [...host.querySelectorAll('.pf-emoji.selected, .pf-greet.selected')].map((e) => e.textContent).join(' / ');
-  if (sel !== '\u{1F680} / Let\u2019s solve this!') page(`開き直した Profile で選ばれているのが ${sel}`);
+  if (sel !== '\u{1F680} / Bring it on!') page(`開き直した Profile で選ばれているのが ${sel}`);
   // シナリオ 1 の VS 画面は保存した値に関係なく 👋 "Hello!"
   MockApp.show('1', 11);
   const greet = [...document.querySelectorAll('.device[data-dev="host"] .vs-card.host .vs-emoji, .device[data-dev="host"] .vs-card.host .vs-greet')].map((e) => e.textContent).join(' ');
@@ -319,6 +319,7 @@ function scan() {
           const card = [...screen.querySelectorAll(`.vs-card.${who} .vs-emoji, .vs-card.${who} .vs-greet`)].map((e) => e.textContent).join(' ');
           const want = `${current[who + 'ShownEmoji']} \u201c${current[who + 'ShownGreeting']}\u201d`;
           if (card !== want) findings.push(`${at}: VS 画面の ${who} のカードが ${card} (期待: ${want})`);
+          if (card.includes("'")) findings.push(`${at}: VS 画面の ${who} のあいさつにまっすぐな ' (’ にそろえる)`);
         });
         if (current[d + 'Mute']) mutedVs++;
       }

@@ -1251,9 +1251,9 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   const u56 = UNDECIDED.find((u) => u.id === 'U56');
   if (!u56 || !u56.decided || u56.decided.by !== '高宮さん' || u56.decided.date !== '2026-10-08') fail('U56 (Profile) が 高宮さん 2026-10-08 の決定になっていない');
   if (UNDECIDED.some((u) => !u.decided)) fail('Profile を足して未決ができた (期待: 0 件)');
-  // 候補 (内容と順番)。アポストロフィは相手の今のあいさつ "Let’s go!" と同じ ’
+  // 候補 (内容と順番、10-08 に 6 番目と 10 番目を変えた)。アポストロフィはどれも ’ (U+2019)
   const EMOJIS = ['\u{1F44B}', '\u{1F642}', '\u{1F60E}', '\u{1F916}', '\u{1F9E0}', '\u269B\uFE0F', '\u{1F52C}', '\u{1F31F}', '\u{1F340}', '\u{1F680}'];
-  const GREETINGS = ['Hello!', 'Let\u2019s go!', 'Have fun!', 'Good luck!', 'Ready when you are!', 'Let\u2019s solve this!', 'A fair match!', 'Here we go!', 'Happy puzzling!', 'Let\u2019s try our best!'];
+  const GREETINGS = ['Hello!', 'Let\u2019s go!', 'Have fun!', 'Good luck!', 'Ready when you are!', 'Bring it on!', 'A fair match!', 'Here we go!', 'Happy puzzling!', 'May the best player win!'];
   if (PROFILE_EMOJIS.map((e) => e.emoji).join('|') !== EMOJIS.join('|')) fail(`絵文字の候補が ${PROFILE_EMOJIS.map((e) => e.emoji).join(' ')} (期待: ${EMOJIS.join(' ')})`);
   if (PROFILE_GREETINGS.map((g) => g.text).join('|') !== GREETINGS.join('|')) fail(`あいさつの候補が ${PROFILE_GREETINGS.map((g) => g.text).join(' / ')}`);
   for (const list of [PROFILE_EMOJIS, PROFILE_GREETINGS]) if (new Set(list.map((x) => x.id)).size !== 10) fail('候補の id が 10 個そろっていない');
@@ -1264,6 +1264,24 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   if (`${init.hostEmoji} ${init.hostGreeting}` !== `${EMOJIS[0]} Hello!`) fail(`ホストの最初の値が ${init.hostEmoji} ${init.hostGreeting}`);
   if (`${init.clientEmoji} ${init.clientGreeting}` !== '\u{1F60E} Let\u2019s go!') fail(`クライアント (ogwssk) の最初の値が ${init.clientEmoji} ${init.clientGreeting}`);
   if (JSON.stringify(PLAYERS) !== JSON.stringify({ host: { name: 'Yasuhito' }, client: { name: 'ogwssk', emoji: '\u{1F60E}', greeting: 'Let\u2019s go!' } })) fail(`PLAYERS が ${JSON.stringify(PLAYERS)}`);
+  // アポストロフィは ’ (U+2019) だけ: 候補、ホストの既定値、相手 (ogwssk) の値、どのシナリオの VS 画面のあいさつにも ' (U+0027) が無い
+  const straight = (t) => typeof t === 'string' && t.includes("'");
+  for (const t of PROFILE_GREETINGS.map((g) => g.text).concat(PROFILE_DEFAULT.greeting, PLAYERS.client.greeting)) if (straight(t)) fail(`あいさつ ${t} にまっすぐな ' がある (’ にそろえる)`);
+  if (!PROFILE_GREETINGS.some((g) => g.text.includes('\u2019'))) fail('あいさつの候補に ’ が 1 つも無い');
+  let vsGreetings = 0;
+  for (const sc of SCENARIOS) {
+    for (let n = 0; n <= sc.steps.length; n++) {
+      const st = Engine.replay(sc, n).state;
+      for (const d of Engine.DEVICES) {
+        if (!SCREENS[st[d]] || SCREENS[st[d]].view !== 'vs') continue;
+        for (const who of Engine.DEVICES) {
+          vsGreetings++;
+          if (straight(st[who + 'ShownGreeting'])) fail(`シナリオ ${sc.id} 手順 ${n}: VS 画面のあいさつ ${st[who + 'ShownGreeting']} にまっすぐな '`);
+        }
+      }
+    }
+  }
+  if (vsGreetings === 0) fail('VS 画面のあいさつを 1 つも確かめていない');
   if (/PLAYERS\[[^\]]+\]\.(emoji|greeting)|\bp\.(emoji|greeting)/.test(appJs)) fail('app.js が絵文字とあいさつを PLAYERS から読んでいる (保存した値・固定した値を使う)');
 
   // 開けるのは Online Battle (と、その中の通知を出している間) だけ。探している間・部屋・対戦中には行もボタンも無い
@@ -1311,14 +1329,14 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   const sc1 = SCENARIOS.find((x) => x.id === '1');
   let room = Engine.replay(sc1, 6).state; // 両者が Ready 画面
   // 部屋にいる間に (ほかのタブなどで) 保存した値が変わっても、この部屋で相手に見えるのは部屋に入ったときの値
-  room = Object.assign({}, room, { hostEmoji: '\u{1F680}', hostGreeting: 'Let\u2019s solve this!', clientEmoji: '\u{1F340}', clientGreeting: 'Have fun!' });
+  room = Object.assign({}, room, { hostEmoji: '\u{1F680}', hostGreeting: 'Bring it on!', clientEmoji: '\u{1F340}', clientGreeting: 'Have fun!' });
   let vs = run(room, sc1.steps.slice(6, 11), '固定');
   if (!vs || vs.host !== 'Host.Opponent' || shown(vs, 'host') !== `${EMOJIS[0]} Hello!` || shown(vs, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`部屋に入ったあとに変えた値が、その部屋の VS 画面に出る (${shown(vs, 'host')} / ${shown(vs, 'client')})`);
   // 次の部屋 (ホストが作る・クライアントが入る) から新しい値
   let next = run(vs, ['vs.done', 'game.countdownDone', 'host.win', 'host.backToFriendMatch', 'client.backToFriendMatch'], '次の部屋');
   if (next && shown(next, 'host') !== `${EMOJIS[0]} Hello!`) fail('結果画面を抜けただけで固定した値が変わる');
   next = run(next, ['host.createMatch'], '次の部屋');
-  if (shown(next, 'host') !== '\u{1F680} Let\u2019s solve this!' || shown(next, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`次の部屋を作っても新しい値にならない (${shown(next, 'host')} / ${shown(next, 'client')})`);
+  if (shown(next, 'host') !== '\u{1F680} Bring it on!' || shown(next, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`次の部屋を作っても新しい値にならない (${shown(next, 'host')} / ${shown(next, 'client')})`);
   next = run(next, ['client.enterCode', 'client.joinMatch'], '次の部屋');
   if (shown(next, 'client') !== '\u{1F340} Have fun!') fail(`次の部屋に入っても新しい値にならない (${shown(next, 'client')})`);
   // 次の検索から: 保存しただけでは変わらず、Random Match / Search again / Find Next Opponent で新しい値
@@ -1355,9 +1373,9 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   // シナリオ 22: 変えて Save → ランダム対戦の VS 画面に出る。スタンプをミュートして再戦しても VS 画面のあいさつは出る (U49 はスタンプだけ)
   const sc22 = SCENARIOS.find((x) => x.id === '22');
   const vs22 = sc22 && Engine.replay(sc22, 7).state;
-  if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Let\u2019s solve this!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
+  if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Bring it on!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
   const end22 = sc22 && Engine.replay(sc22);
-  if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || !end22.state.clientMute || shown(end22.state, 'host') !== '\u{1F680} Let\u2019s solve this!') fail('シナリオ 22 の最後がミュートしたままの再戦の VS 画面 (ホストのあいさつ付き) でない');
+  if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || !end22.state.clientMute || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後がミュートしたままの再戦の VS 画面 (ホストのあいさつ付き) でない');
   if (/Mute/.test(appJs.slice(appJs.indexOf('    vs: function'), appJs.indexOf('    // ゲーム画面のプレースホルダー')))) fail('VS 画面の描画がミュートを見ている (あいさつはミュートで隠さない)');
   if (STAMPS.map((x) => `${x.emoji} ${x.text}`).join(' / ') !== '\u{1F44F} Good game / \u{1F91D} Thanks for the match / \u{1F44D} Nice') fail('結果画面のスタンプ (U27) が変わった');
   const sc22b = SCENARIOS.find((x) => x.id === '22b');
@@ -1383,7 +1401,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   // シナリオは localStorage に関係なく、いつも最初の値から (Engine.replay は保存した値を受け取らない)
   if (Engine.replay(sc22, 0).state.hostEmoji !== EMOJIS[0]) fail('シナリオが最初の値から始まらない');
   if (!/if \(app\.scenario \|\| !storage\) return;/.test(appJs)) fail('app.js がシナリオの再生中にも localStorage に書く');
-  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・ミュートでもあいさつは出る');
+  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10 (アポストロフィは ’)・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・ミュートでもあいさつは出る');
 }
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));

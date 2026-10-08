@@ -258,18 +258,18 @@ var PROFILE_EMOJIS = [
   { id: 'clover', emoji: '\u{1F340}', name: 'Four leaf clover' },
   { id: 'rocket', emoji: '\u{1F680}', name: 'Rocket' },
 ];
-// アポストロフィは今の相手のあいさつ ("Let’s go!") と同じ \u2019
+// アポストロフィはどれも \u2019 (’、決定 U56)。まっすぐな ' は使わない
 var PROFILE_GREETINGS = [
   { id: 'hello', text: 'Hello!' },
   { id: 'letsGo', text: 'Let\u2019s go!' },
   { id: 'haveFun', text: 'Have fun!' },
   { id: 'goodLuck', text: 'Good luck!' },
   { id: 'readyWhenYouAre', text: 'Ready when you are!' },
-  { id: 'letsSolveThis', text: 'Let\u2019s solve this!' },
+  { id: 'bringItOn', text: 'Bring it on!' },
   { id: 'fairMatch', text: 'A fair match!' },
   { id: 'hereWeGo', text: 'Here we go!' },
   { id: 'happyPuzzling', text: 'Happy puzzling!' },
-  { id: 'tryOurBest', text: 'Let\u2019s try our best!' },
+  { id: 'mayTheBestPlayerWin', text: 'May the best player win!' },
 ];
 var PROFILE_DEFAULT = { emoji: PROFILE_EMOJIS[0].emoji, greeting: PROFILE_GREETINGS[0].text };
 // Online Battle で Profile を開ける画面: Online Battle と、その中の通知 (U43 / U54) を出している間。開くと通知は消える (U43: ほかの画面へ移ると消える)。
@@ -279,6 +279,7 @@ STATE_GROUPS['Host.MultiModeSelection.Any'] = profileOpenable('Host');
 STATE_GROUPS['Client.MultiModeSelection.Any'] = profileOpenable('Client');
 // 部屋を作る・部屋に入る・相手を探し始める行で、保存した絵文字とあいさつを相手に見せる値として写す (U56)。
 // イベントがこれらで、その端末の行き先が部屋の画面か相手を探す画面の行 (接続失敗や Match Code の誤りの行は写さない)
+// 同じ相手との再戦では写し直さない。ホストの "Join another match" はモックが入室を省いているので写さない (どちらも 2026-10-08 に確認)
 var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'dialog.createMatch', 'joinMatch', 'randomMatch', 'searchAgain', 'findNextOpponent'];
 var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/;
 
@@ -1007,7 +1008,7 @@ var TRANSITIONS = (function () {
     };
     var profile = R + '.Profile';
     T({ from: row(profileOpenable(R)), event: d + '.profile', to: row(profile), copy: fields({ DraftEmoji: 'Emoji', DraftGreeting: 'Greeting' }),
-      note: '決定 (U56): Online Battle の Profile で開く。保存した絵文字とあいさつが選ばれた状態で始まる。Online Battle の中の通知は、ほかの画面へ移るので消える (U43)', decided: ['U56', 'U43'] });
+      note: '決定 (U56): Online Battle の Profile で開く。保存した絵文字とあいさつが選ばれた状態で始まる。Online Battle の中の "Search stopped\u2026" などの通知を出している間も開け、通知はほかの画面へ移るので消える (U43)。"No opponent found." を出している間は開けない (2026-10-08 に確認)', decided: ['U56', 'U43'] });
     PROFILE_EMOJIS.forEach(function (e) {
       var set = {};
       set[d + 'DraftEmoji'] = e.emoji;
@@ -1025,7 +1026,7 @@ var TRANSITIONS = (function () {
     T({ from: row(profile), event: d + '.cancelProfile', to: row(R + '.MultiModeSelection'),
       note: '決定 (U56): Cancel で選んだものを捨てて Online Battle へ (保存した値のまま)', decided: ['U56'] });
     T({ from: row(profile), event: d + '.back', to: row(R + '.MultiModeSelection'),
-      note: '決定 (U56): ‹ は Cancel と同じ (選んだものを捨てて Online Battle へ。確認は出さない)', decided: ['U56'] });
+      note: '決定 (U56): ‹ は Cancel と同じ (選んだものを捨てて Online Battle へ。確認は出さない、2026-10-08 に確認)', decided: ['U56'] });
   });
 
   rows.forEach(function (r, i) {
@@ -1416,7 +1417,9 @@ var ROOM_CONTEXT = {
 
 var PROFILE_CONTEXT = 'Profile (決定 U56)。上の見本は、相手の VS 画面に出る自分のカード。絵文字とあいさつを 1 つずつ選ぶと見本がすぐ変わる。名前は変えられない。' +
   'Save で保存し、Cancel と \u2039 は選んだものを捨てる。保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから (今いる部屋や探している相手には前の値のまま)。' +
-  '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。値はブラウザの localStorage にだけ残し、モックでは自由操作のときだけ読み書きする (シナリオはいつも最初の値から)。';
+  '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。あいさつのアポストロフィはどれも \u2019。相手 (ogwssk) も変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
+  '値はブラウザの localStorage にだけ残し、モックでは自由操作のときだけ読み書きする (シナリオはいつも最初の値から始まり、読みも書きもしない。2026-10-08 に確認)。' +
+  '同じ相手との再戦では値を固定し直さない (2026-10-08 に確認)。';
 
 var SCREENS = (function () {
   var S = {};
@@ -1977,6 +1980,11 @@ var UNDECIDED = [
       PROFILE_GREETINGS.map(function (g) { return '"' + g.text + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
       '全員の既定値は \u{1F44B} "Hello!"。開けるのは対戦の外だけで、相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
       '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から。保存はブラウザ (localStorage) だけ。' +
-      '結果画面のスタンプ (U27) は変わらず、スタンプのミュート (U49) で VS 画面のあいさつは隠れない。候補と既定値は QA² 側の仮の値 (変わりうる)。',
+      '結果画面のスタンプ (U27) は変わらず、スタンプのミュート (U49) で VS 画面のあいさつは隠れない。候補と既定値は QA² 側の仮の値 (変わりうる)。' +
+      'あいさつのアポストロフィはどれも \u2019 (10-08 に、協力しているように聞こえる "Let\u2019s solve this!" を "Bring it on!" に、"Let\u2019s try our best!" を "May the best player win!" に変えた)。' +
+      '相手 (ogwssk) も Profile を変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
+      '次のことも 2026-10-08 に確認: \u2039 は Cancel と同じで確認を出さない。Online Battle の中の "Search stopped\u2026" などの通知を出している間も開け (開くと通知は消える、U43)、"No opponent found." を出している間は開けない。' +
+      'モックの localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。' +
+      '同じ相手との再戦では値を固定し直さず、ホストの "Join another match" はモックでは固定するときに含めない。Online Battle の Profile のボタンには保存した絵文字を添える。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
 ];

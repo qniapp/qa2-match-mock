@@ -144,7 +144,7 @@ U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用�
 ランダム対戦は Online Battle の中の通知 (Search again / Close) になること (U54)、"Friend is in the room" と "Your friend left." の 5 秒 (U55)、
 部屋での切断の再接続待ちの間に Match Code の期限が切れ、戻った側も "Match code expired." になること (pi の仮定 3)、ホストの ‹ に確認が無いこと (仮定 1)、"Back to Online Battle" が無いこと (仮定 5) を確かめます。
 再戦の取り消し (2026-10-08) については、両者のすべての取り消しの状態の一行が "Rematch request cancelled" であることと、リポジトリの文章 (js・README・テストなど) に以前の "was" 付きの文言が残っていないことを確かめます。
-Profile (U56、2026-10-08) については、U56 が高宮さん 2026-10-08 の決定で未決が 0 件のままであること、絵文字 10 個とあいさつ 10 個の候補 (内容と順番)、既定値 👋 "Hello!" とクライアント (ogwssk) の最初の値、
+Profile (U56、2026-10-08) については、U56 が高宮さん 2026-10-08 の決定で未決が 0 件のままであること、絵文字 10 個とあいさつ 10 個の候補 (内容と順番)、あいさつの候補・既定値・相手の値・どのシナリオの VS 画面のあいさつにもまっすぐな `'` が無いこと、既定値 👋 "Hello!" とクライアント (ogwssk) の最初の値、
 Profile を開く行とボタンが Online Battle (と、その中の通知) だけにあり、探している間・部屋・対戦中には無いこと (両端末のすべての状態)、Profile 画面の操作と、Save で保存し Cancel / ‹ で捨てること、
 相手に見せる値を固定するのが部屋を作る・入る・探し始める行だけで、固定したあとに保存した値が変わってもその部屋・その相手には前の値が出て、次の部屋・次の検索から新しい値になること (再戦では変わらない)、
 どのシナリオでも VS・ゲーム・結果画面で両者の値が決まっていること、シナリオ 22 / 22b の流れ (ミュートしたままの再戦の VS 画面を含む)、結果画面のスタンプが変わっていないこと、
@@ -173,7 +173,7 @@ Ready 画面 (U31 / U32 / U36) では、カードが 2 枚 ("✓ Ready" / "Not r
 ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" で状態と合っていること (U49) も確かめます。
 Profile (U56) では、自由操作で Cancel と ‹ は localStorage に書かず、Save した値がページを開き直しても Online Battle と Profile に残ること、
 localStorage に既定値と違う値がある状態で全シナリオを描いても、シナリオの画面が最初の値のままであることを確かめます (シナリオの画面は localStorage に左右されない)。
-各手順では、VS 画面の両者の絵文字とあいさつが固定した値であること (ミュートしたままの VS 画面を含む)、Online Battle の Profile のボタンに保存した絵文字があること、
+各手順では、VS 画面の両者の絵文字とあいさつが固定した値で、まっすぐな `'` が無いこと (ミュートしたままの VS 画面を含む)、Online Battle の Profile のボタンに保存した絵文字があること、
 Profile 画面の候補・選ばれているもの (1 つずつ)・見本・Save / Cancel が画面に収まって重ならず、自由入力の欄が無いことも確かめます。
 遷移表に行が無いボタンの破線・半透明 (`[data-norow]`) はモックの操作の手がかりとして残しているので、数を表示するだけです。
 
@@ -394,7 +394,7 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 | [21](https://qniapp.github.io/qa2-match-mock/#s=21&step=0) | ランダム対戦の VS 画面中に切断 → 20 秒のうちに戻る → VS 画面からやり直す | なし (10-08 の決定 U54) | ランダム対戦の VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」)。試合はまだ始まっていないが、Ready 画面は無いので VS 画面のまま 20 秒 (仮) 待つ (U54)。表示は対戦中の切断 (U46) と同じで、ホストは "Your opponent disconnected"、クライアントは "Connection lost" と、どちらも残りの秒数。20 秒のうちに戻る (端末の下のモック操作「再接続する」か右パネルの環境イベント) と、VS 画面からやり直してゲーム本体のカウントダウン → プレイ開始。 |
 | [21b](https://qniapp.github.io/qa2-match-mock/#s=21b&step=0) | ランダム対戦のカウントダウン中に切断 → 戻らない → 取りやめ → Search again | なし (10-08 の決定 U52 / U54) | ランダム対戦のゲーム本体のカウントダウン中にホストの接続が切れ、20 秒 (仮) たっても戻らない (端末の下のモック操作「20 秒たつ」) と、試合を取りやめる (U54)。勝敗は無く、レートも変わらない。ホストは Online Battle の中に "Could not reconnect. The match did not start." (U52)、クライアントは "Match cancelled. Opponent did not reconnect."。どちらも Search again / Close (U54。U43 と同じくモーダルではない)。両者が Search again で探し直すと、相手が見つかって新しいランダム対戦の VS 画面 (レートが変わる対戦)。 |
 | [21c](https://qniapp.github.io/qa2-match-mock/#s=21c&step=0) | Friend Match の再戦の VS 画面中に切断 → 戻らない → Friend Match トップ | なし (10-08 の決定 U52 / U54) | Friend Match の対戦のあと再戦が成立し、VS 画面中にクライアントの接続が切れる。再戦は Ready 画面に戻らず (U54)、VS 画面のまま 20 秒 (仮) 待つ (表示は U46 と同じ)。戻らないと試合を取りやめ (勝敗なし)、両者とも Friend Match トップへ: ホストは "Match cancelled. Opponent did not reconnect."、クライアントは "Could not reconnect. The match did not start." の帯 (U52)。行き先 (Back to Friend Match と同じ Friend Match トップ、U24) と帯の文言は 2026-10-08 に確認。両者とも Close で帯を閉じる。 |
-| [22](https://qniapp.github.io/qa2-match-mock/#s=22&step=0) | Profile で絵文字とあいさつを変えて Save → ランダム対戦の VS 画面に出る | なし (10-08 の決定 U56) | ホストが Online Battle の Profile を開く。上に VS 画面のカードの見本 (Yasuhito、👋、"Hello!") があり、絵文字 🚀 とあいさつ "Let’s solve this!" を選ぶたびに見本がすぐ変わる。Save で保存して Online Battle に戻ると、Profile のボタンの絵文字も 🚀。両者が Random Match を選ぶと、相手を探し始めたときの値で固定され、VS 画面のホストのカードに 🚀 "Let’s solve this!" が出る (クライアントは ogwssk 😎 "Let’s go!" のまま)。クライアントが勝ったあと、結果画面でスタンプをミュートしてから再戦しても、VS 画面のあいさつは隠れない (ミュートはスタンプだけ、U49)。 |
+| [22](https://qniapp.github.io/qa2-match-mock/#s=22&step=0) | Profile で絵文字とあいさつを変えて Save → ランダム対戦の VS 画面に出る | なし (10-08 の決定 U56) | ホストが Online Battle の Profile を開く。上に VS 画面のカードの見本 (Yasuhito、👋、"Hello!") があり、絵文字 🚀 とあいさつ "Bring it on!" を選ぶたびに見本がすぐ変わる。Save で保存して Online Battle に戻ると、Profile のボタンの絵文字も 🚀。両者が Random Match を選ぶと、相手を探し始めたときの値で固定され、VS 画面のホストのカードに 🚀 "Bring it on!" が出る (クライアントは ogwssk 😎 "Let’s go!" のまま)。クライアントが勝ったあと、結果画面でスタンプをミュートしてから再戦しても、VS 画面のあいさつは隠れない (ミュートはスタンプだけ、U49)。 |
 | [22b](https://qniapp.github.io/qa2-match-mock/#s=22b&step=0) | Profile で選んだものを Cancel / ‹ で捨てる | なし (10-08 の決定 U56) | ホストが Profile で 🤖 と "Good luck!" を選んでから Cancel を押すと、選んだものは捨てられ、保存した値 (👋 "Hello!") のまま Online Battle に戻る。もう一度開くと見本は保存した値から始まる。🌟 を選んで ‹ を押しても Cancel と同じで、保存しない。 |
 
 次の注記は、いくつかのシナリオに共通です。
@@ -409,21 +409,23 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 
 高宮さんの決定 (2026-10-08、U56) で、相手に見せる絵文字とあいさつを選べるようにしました。**未決は 0 件のまま** です。
 
-- **入口**: Online Battle の Profile (両端末)。Random Match / Friend Match の下に、保存した絵文字を添えて控えめに置いています。
+- **入口**: Online Battle の Profile (両端末)。Random Match / Friend Match の下に、保存した絵文字を添えて控えめに置いています (絵文字を添えるのは 2026-10-08 に決定)。
 - **画面**: いちばん上に VS 画面のカードの見本 (名前・絵文字・あいさつ。レーティングは出さない)。絵文字かあいさつを選ぶたびに、見本がすぐ変わります。
   その下に絵文字 (5 x 2) とあいさつ (2 列 x 5)、画面のいちばん下に Save / Cancel。Save で保存して Online Battle へ、Cancel は選んだものを捨てて Online Battle へ戻ります。
-  ‹ は Cancel と同じです (確認は出しません。保存していないものを捨てるだけで、ほかの画面の ‹ と同じく「戻る」だから)。
+  ‹ は Cancel と同じで、確認は出しません (2026-10-08 に決定)。
 - **候補** (どちらも 1 つだけ選ぶ。この順):
   - 絵文字: 👋 🙂 😎 🤖 🧠 ⚛️ 🔬 🌟 🍀 🚀
-  - あいさつ: "Hello!" / "Let’s go!" / "Have fun!" / "Good luck!" / "Ready when you are!" / "Let’s solve this!" / "A fair match!" / "Here we go!" / "Happy puzzling!" / "Let’s try our best!"
+  - あいさつ: "Hello!" / "Let’s go!" / "Have fun!" / "Good luck!" / "Ready when you are!" / "Bring it on!" / "A fair match!" / "Here we go!" / "Happy puzzling!" / "May the best player win!"
   - 自由入力と二つ組みの称号はありません。名前は変えられません (見本に出すだけ)。
-- **既定値**: 全員 👋 "Hello!"。モックのホスト (Yasuhito) はこの既定値から始まります。相手の役 (クライアントの ogwssk) は前からの 😎 "Let’s go!" のまま始まります (すでに選んである人として扱う)。
-- **開ける場所**: 対戦の外だけ。Online Battle (と、その中の "Search stopped…" などの通知を出している間。開くと通知は消える、U43) から開けます。
-  相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中には、Profile の行もボタンもありません。"No opponent found." の通知はモーダルなので、閉じるまで開けません。
+  - アポストロフィはどれも `’` (U+2019) で、まっすぐな `'` は使いません。相手のあいさつと VS 画面のあいさつも同じです。
+  - 6 番目の "Bring it on!" と 10 番目の "May the best player win!" は、2026-10-08 に差し替えた候補です (前の候補は下の「決定済み」の U56)。
+- **既定値**: 全員 👋 "Hello!"。モックのホスト (Yasuhito) はこの既定値から始まります。相手の役 (クライアントの ogwssk) は 😎 "Let’s go!" から始まります (すでに選んである人として扱う)。相手も Profile を変えられます (どちらも 2026-10-08 に決定)。
+- **開ける場所**: 対戦の外だけ。Online Battle と、その中の "Search stopped…" などの通知を出している間に開けます (開くと通知は消える、U43)。
+  "No opponent found." を出している間は開けません (2026-10-08 に決定)。相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中には、Profile の行もボタンもありません。
 - **値を固定するとき**: 部屋を作る・部屋に入る・相手を探し始める (Random Match / Search again / Find Next Opponent) ときに、保存した値を相手に見せる値として固定します。
-  変えたものが相手に見えるのは、次の部屋・次の検索からです (今いる部屋や、同じ相手との再戦には前の値のまま)。遷移表では、固定する行のメモに「写す: hostShownEmoji←hostEmoji, …」と出します。
+  変えたものが相手に見えるのは、次の部屋・次の検索からです。今いる部屋と同じ相手との再戦では固定し直しません。ホストの "Join another match" はモックが入室を省いているので、固定するときに含めません (2026-10-08 に決定)。遷移表では、固定する行のメモに「写す: hostShownEmoji←hostEmoji, …」と出します。
 - **保存先**: ブラウザの localStorage だけ (キーは `qa2-match-mock.profile`、端末ごとに `host` / `client`)。読めない・候補に無い値は最初の値に戻します。
-  モックでは自由操作のときだけ読み書きします。シナリオ (外れて操作したときも含む) は localStorage を読まず書かず、いつも最初の値から始まるので、スクリーンショットとテストは保存した値に左右されません。
+  モックでは自由操作のときだけ読み書きします。シナリオ (外れて操作したときも含む) は localStorage を読まず書かず、いつも最初の値から始まります (2026-10-08 に決定)。スクリーンショットとテストは保存した値に左右されません。
 - **変わらないもの**: 結果画面のスタンプ (U27 の 3 種類) は変わりません。スタンプのミュート (U49) は VS 画面のあいさつを隠しません。
 - **仮の値**: 10 個ずつの候補と既定値は QA² 側の仮の値です (変わりうる)。仮であることは右パネルの説明とこの README にだけ書き、端末の画面には出しません。
 
@@ -438,10 +440,10 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 
 遷移表は 360 行から 408 行に、状態は 211 から 213 に、グループは 66 から 68 に、シナリオは 61 から 63 (22 / 22b) になりました。
 
-- `index.html#s=22&step=3` - Profile で 🚀 と "Let’s solve this!" を選んだところ (見本がすぐ変わる)
-- `index.html#s=22&step=7` - Save したあと相手を探し始めて、VS 画面のホストのカードに 🚀 "Let’s solve this!"
+- `index.html#s=22&step=3` - Profile で 🚀 と "Bring it on!" を選んだところ (見本がすぐ変わる)
+- `index.html#s=22&step=7` - Save したあと相手を探し始めて、VS 画面のホストのカードに 🚀 "Bring it on!"
 
-![Profile: 🚀 と Let’s solve this! を選んだところ](docs/screenshots/78-profile-picked.png)
+![Profile: 🚀 と Bring it on! を選んだところ](docs/screenshots/78-profile-picked.png)
 
 ![VS 画面に変えた絵文字とあいさつが出る](docs/screenshots/79-profile-vs.png)
 
@@ -1561,6 +1563,10 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 - **U56 Profile (絵文字とあいさつ)** - 決定 (高宮さん 2026-10-08)  
   - Online Battle の Profile で、相手に見せる絵文字 (10 個) とあいさつ (10 個) を 1 つずつ選ぶ。既定値は 👋 "Hello!"。名前は変えられない。
   - 開けるのは対戦の外だけ。値は部屋を作る・入る・探し始めるときに固定し、次の部屋・次の検索から相手に見える。保存はブラウザ (localStorage) だけ。
+  - あいさつのアポストロフィはどれも `’`。10-08 に、協力しているように聞こえる "Let’s solve this!" を "Bring it on!" に、"Let’s try our best!" を "May the best player win!" に変えた (同じ位置)。
+  - 相手 (ogwssk) も Profile を変えられ、最初の値は 😎 "Let’s go!"。
+  - 次の 5 点も決定 (高宮さん 2026-10-08): (a) ‹ は Cancel と同じで確認なし。(b) Online Battle の中の "Search stopped…" などの通知の間も開ける (開くと消える、U43)。"No opponent found." の間は開けない。
+    (c) localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。(d) 同じ相手との再戦では固定し直さず、ホストの "Join another match" はモックでは固定するときに含めない。(e) Online Battle の Profile のボタンに保存した絵文字を添える。
   詳しくは「Profile (絵文字とあいさつ)」を見てください。
 - **再戦取り消し文言の統一と仮定の確定** - 決定 (高宮さん 2026-10-08)  
   - 再戦の申し込みを取り消したら、両者とも "Rematch request cancelled" (U30 の申し込まれた側の文言を U50 にそろえた)。

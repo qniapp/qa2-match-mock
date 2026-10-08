@@ -415,10 +415,11 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
   ‹ は Cancel と同じで、確認は出しません (2026-10-08 に決定)。
 - **候補** (どちらも 1 つだけ選ぶ。この順):
   - 絵文字: 👋 🙂 😎 🤖 🧠 ⚛️ 🔬 🌟 🍀 🚀
-  - あいさつ: "Hello!" / "Let’s go!" / "Have fun!" / "Good luck!" / "Ready when you are!" / "Bring it on!" / "A fair match!" / "Here we go!" / "Happy puzzling!" / "May the best player win!"
+  - あいさつ: "Hello!" / "Let’s go!" / "Have fun!" / "Good luck!" / "Let’s do this!" / "Bring it on!" / "Ready?" / "Here we go!" / "Happy puzzling!" / "May the best player win!"
   - 自由入力と二つ組みの称号はありません。名前は変えられません (見本に出すだけ)。
   - アポストロフィはどれも `’` (U+2019) で、まっすぐな `'` は使いません。相手のあいさつと VS 画面のあいさつも同じです。
-  - 6 番目の "Bring it on!" と 10 番目の "May the best player win!" は、2026-10-08 に差し替えた候補です (前の候補は下の「決定済み」の U56)。
+  - 5 番目の "Let’s do this!"、6 番目の "Bring it on!"、7 番目の "Ready?"、10 番目の "May the best player win!" は、2026-10-08 に差し替えた候補です (前の候補は下の「決定済み」の U56)。
+  - "Ready?" はあいさつです。Friend Match の Ready ボタンや Ready 画面とは関係ありません。
 - **既定値**: 全員 👋 "Hello!"。モックのホスト (Yasuhito) はこの既定値から始まります。相手の役 (クライアントの ogwssk) は 😎 "Let’s go!" から始まります (すでに選んである人として扱う)。相手も Profile を変えられます (どちらも 2026-10-08 に決定)。
 - **開ける場所**: 対戦の外だけ。Online Battle と、その中の "Search stopped…" などの通知を出している間に開けます (開くと通知は消える、U43)。
   "No opponent found." を出している間は開けません (2026-10-08 に決定)。相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中には、Profile の行もボタンもありません。
@@ -1563,7 +1564,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 - **U56 Profile (絵文字とあいさつ)** - 決定 (高宮さん 2026-10-08)  
   - Online Battle の Profile で、相手に見せる絵文字 (10 個) とあいさつ (10 個) を 1 つずつ選ぶ。既定値は 👋 "Hello!"。名前は変えられない。
   - 開けるのは対戦の外だけ。値は部屋を作る・入る・探し始めるときに固定し、次の部屋・次の検索から相手に見える。保存はブラウザ (localStorage) だけ。
-  - あいさつのアポストロフィはどれも `’`。10-08 に、協力しているように聞こえる "Let’s solve this!" を "Bring it on!" に、"Let’s try our best!" を "May the best player win!" に変えた (同じ位置)。
+  - あいさつのアポストロフィはどれも `’`。10-08 に 4 つを同じ位置で変えた: 協力しているように聞こえる "Let’s solve this!" を "Bring it on!" に、"Let’s try our best!" を "May the best player win!" に。"Ready when you are!" を "Let’s do this!" に、"A fair match!" を "Ready?" に。
   - 相手 (ogwssk) も Profile を変えられ、最初の値は 😎 "Let’s go!"。
   - 次の 5 点も決定 (高宮さん 2026-10-08): (a) ‹ は Cancel と同じで確認なし。(b) Online Battle の中の "Search stopped…" などの通知の間も開ける (開くと消える、U43)。"No opponent found." の間は開けない。
     (c) localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。(d) 同じ相手との再戦では固定し直さず、ホストの "Join another match" はモックでは固定するときに含めない。(e) Online Battle の Profile のボタンに保存した絵文字を添える。

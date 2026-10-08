@@ -264,9 +264,9 @@ var PROFILE_GREETINGS = [
   { id: 'letsGo', text: 'Let\u2019s go!' },
   { id: 'haveFun', text: 'Have fun!' },
   { id: 'goodLuck', text: 'Good luck!' },
-  { id: 'readyWhenYouAre', text: 'Ready when you are!' },
+  { id: 'letsDoThis', text: 'Let\u2019s do this!' },
   { id: 'bringItOn', text: 'Bring it on!' },
-  { id: 'fairMatch', text: 'A fair match!' },
+  { id: 'ready', text: 'Ready?' },
   { id: 'hereWeGo', text: 'Here we go!' },
   { id: 'happyPuzzling', text: 'Happy puzzling!' },
   { id: 'mayTheBestPlayerWin', text: 'May the best player win!' },
@@ -1981,7 +1981,7 @@ var UNDECIDED = [
       '全員の既定値は \u{1F44B} "Hello!"。開けるのは対戦の外だけで、相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
       '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から。保存はブラウザ (localStorage) だけ。' +
       '結果画面のスタンプ (U27) は変わらず、スタンプのミュート (U49) で VS 画面のあいさつは隠れない。候補と既定値は QA² 側の仮の値 (変わりうる)。' +
-      'あいさつのアポストロフィはどれも \u2019 (10-08 に、協力しているように聞こえる "Let\u2019s solve this!" を "Bring it on!" に、"Let\u2019s try our best!" を "May the best player win!" に変えた)。' +
+      'あいさつのアポストロフィはどれも \u2019 (10-08 に 4 つを同じ位置で変えた: 協力しているように聞こえる "Let\u2019s solve this!" を "Bring it on!" に、"Let\u2019s try our best!" を "May the best player win!" に。"Ready when you are!" を "Let\u2019s do this!" に、"A fair match!" を "Ready?" に)。' +
       '相手 (ogwssk) も Profile を変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
       '次のことも 2026-10-08 に確認: \u2039 は Cancel と同じで確認を出さない。Online Battle の中の "Search stopped\u2026" などの通知を出している間も開け (開くと通知は消える、U43)、"No opponent found." を出している間は開けない。' +
       'モックの localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。' +

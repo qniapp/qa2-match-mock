@@ -1251,9 +1251,9 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   const u56 = UNDECIDED.find((u) => u.id === 'U56');
   if (!u56 || !u56.decided || u56.decided.by !== '高宮さん' || u56.decided.date !== '2026-10-08') fail('U56 (Profile) が 高宮さん 2026-10-08 の決定になっていない');
   if (UNDECIDED.some((u) => !u.decided)) fail('Profile を足して未決ができた (期待: 0 件)');
-  // 候補 (内容と順番、10-08 に 6 番目と 10 番目を変えた)。アポストロフィはどれも ’ (U+2019)
+  // 候補 (内容と順番、10-08 に 5・6・7・10 番目を変えた)。アポストロフィはどれも ’ (U+2019)
   const EMOJIS = ['\u{1F44B}', '\u{1F642}', '\u{1F60E}', '\u{1F916}', '\u{1F9E0}', '\u269B\uFE0F', '\u{1F52C}', '\u{1F31F}', '\u{1F340}', '\u{1F680}'];
-  const GREETINGS = ['Hello!', 'Let\u2019s go!', 'Have fun!', 'Good luck!', 'Ready when you are!', 'Bring it on!', 'A fair match!', 'Here we go!', 'Happy puzzling!', 'May the best player win!'];
+  const GREETINGS = ['Hello!', 'Let\u2019s go!', 'Have fun!', 'Good luck!', 'Let\u2019s do this!', 'Bring it on!', 'Ready?', 'Here we go!', 'Happy puzzling!', 'May the best player win!'];
   if (PROFILE_EMOJIS.map((e) => e.emoji).join('|') !== EMOJIS.join('|')) fail(`絵文字の候補が ${PROFILE_EMOJIS.map((e) => e.emoji).join(' ')} (期待: ${EMOJIS.join(' ')})`);
   if (PROFILE_GREETINGS.map((g) => g.text).join('|') !== GREETINGS.join('|')) fail(`あいさつの候補が ${PROFILE_GREETINGS.map((g) => g.text).join(' / ')}`);
   for (const list of [PROFILE_EMOJIS, PROFILE_GREETINGS]) if (new Set(list.map((x) => x.id)).size !== 10) fail('候補の id が 10 個そろっていない');
@@ -1282,6 +1282,17 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     }
   }
   if (vsGreetings === 0) fail('VS 画面のあいさつを 1 つも確かめていない');
+  // 10-08 に変えた前の 4 つのあいさつ (と id) は、U56 の経緯のほかには残さない
+  const OLD_GREETINGS = /Let(\\u2019|\u2019)s solve this|Let(\\u2019|\u2019)s try our best|Ready when you are|A fair match|letsSolveThis|letsTryOurBest|readyWhenYouAre|fairMatch/;
+  const u56Src = /\{ id: 'U56',[\s\S]*?decided: \{ by: [^}]*\} \},/;
+  for (const f of ['index.html', 'README.md', ...fs.readdirSync(path.join(__dirname, '..', 'js')).map((n) => `js/${n}`)]) {
+    let src = read(f);
+    if (f === 'js/transitions.js') src = src.replace(u56Src, '');
+    if (f === 'README.md') src = src.replace(/^- \*\*U56 [^\n]*\n(  [^\n]*\n)*/m, '');
+    const m = src.match(OLD_GREETINGS);
+    if (m) fail(`${f} に前のあいさつ ${m[0]} が残っている (U56 の経緯のほか)`);
+  }
+  if (!OLD_GREETINGS.test(u56.desc)) fail('U56 に前のあいさつからの経緯が無い');
   if (/PLAYERS\[[^\]]+\]\.(emoji|greeting)|\bp\.(emoji|greeting)/.test(appJs)) fail('app.js が絵文字とあいさつを PLAYERS から読んでいる (保存した値・固定した値を使う)');
 
   // 開けるのは Online Battle (と、その中の通知を出している間) だけ。探している間・部屋・対戦中には行もボタンも無い

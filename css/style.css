@@ -1,0 +1,558 @@
+@font-face { font-family: 'Oxanium'; src: url('../assets/fonts/Oxanium-Regular.ttf') format('truetype'); font-weight: 400; }
+@font-face { font-family: 'Oxanium'; src: url('../assets/fonts/Oxanium-SemiBold.ttf') format('truetype'); font-weight: 600; }
+@font-face { font-family: 'Oxanium'; src: url('../assets/fonts/Oxanium-Bold.ttf') format('truetype'); font-weight: 700; }
+
+:root {
+  --frost: #09121A;
+  --navy: #0D1126;
+  --purple: #1E0C35;
+  --text: #E6E6E6;
+  --muted: #8A93A6;
+  --line: #26304A;
+  --h: #5FC9FA;
+  --x: #F88A8A;
+  --y: #45C3A0;
+  --z: #F79DC8;
+  --cnot: #F97316;
+  --swap: #FACC15;
+  --host: #2F6FED;
+  --client: #F59E0B;
+  --undecided: #FACC15;
+  --decided: #34D399;
+  --countdown: #D3F7FB; /* ゲーム本体のカウントダウンの色 (RGBA 0.827, 0.969, 0.984) */
+  --jp: 'Noto Sans JP', 'Hiragino Sans', 'Yu Gothic UI', system-ui, sans-serif;
+  --game: 'Oxanium', var(--jp);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+body {
+  background: var(--frost);
+  color: var(--text);
+  font: 13px/1.5 var(--jp);
+  overflow: hidden;
+}
+button { font: inherit; color: inherit; }
+code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size: 0.92em; }
+
+/* ---- 上部バー ---------------------------------------------------------- */
+.topbar {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--line);
+  background: linear-gradient(90deg, var(--navy), var(--purple));
+}
+.topbar h1 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap; }
+/* 狭いウィンドウでは出典の行を … で切り、見出しと凡例を 1 行に保つ */
+.topbar-sub { flex: 1; min-width: 0; color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.legend { margin-left: auto; display: flex; gap: 12px; align-items: center; color: var(--muted); font-size: 12px; white-space: nowrap; }
+
+/* ---- 2 カラム (端末と右パネル) ----------------------------------------- */
+.layout {
+  display: grid;
+  grid-template-columns: auto minmax(420px, 1fr);
+  height: calc(100vh - 40px);
+}
+.panel { overflow-y: auto; padding: 12px 14px; background: rgba(13, 17, 38, 0.6); }
+.panel h3 { margin: 0 0 4px; font-size: 13px; }
+.panel h3 small { color: var(--muted); font-weight: 400; }
+.table-panel { border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+
+/* ---- 環境イベントとモック設定 (右パネルの上) --------------------------- */
+.free-play { flex: none; padding-bottom: 8px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.env-events { display: flex; flex-wrap: wrap; gap: 4px; }
+.env-events button { padding: 3px 8px; border: 1px solid var(--line); border-radius: 6px; background: #141B33; cursor: pointer; font-size: 12px; }
+.env-events button:hover { border-color: var(--h); }
+.auto-next { color: var(--muted); font-size: 11px; margin: 4px 0 0; }
+.auto-next:empty { display: none; }
+/* モック設定はふだん閉じておく (シナリオ 8〜10 / 13 などで値を変えるときだけ開く) */
+.mock-settings { margin-top: 6px; }
+.mock-settings summary { cursor: pointer; font-size: 13px; font-weight: 700; width: max-content; }
+.mock-settings summary small { color: var(--muted); font-weight: 400; }
+/* 開いたら 1 行に 1 つずつ並べ、2 つの選択の左端をそろえる */
+.mock-settings summary + label { margin-top: 4px; }
+.free-play label { display: flex; align-items: center; gap: 6px; font-size: 12px; }
+.free-play .mock-settings label { display: grid; grid-template-columns: 10em max-content; margin-top: 2px; }
+.free-play select { background: #141B33; color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; }
+.muted { color: var(--muted); font-size: 12px; }
+
+/* ---- 端末 -------------------------------------------------------------- */
+/* 幅が足りないときは中央寄せをやめて左から並べる (center のままだと、はみ出した左側にスクロールで届かず、ホストの端末が切れる) */
+.devices { display: flex; justify-content: safe center; gap: 18px; padding: 10px 14px; overflow: auto; }
+.device { width: 380px; display: flex; flex-direction: column; }
+/* 縦に狭いウィンドウでも端末の部品を縮めない (縮むと状態名の行数でホストとクライアントの電話の高さがずれる) */
+.device > * { flex: none; }
+.device-head { display: flex; align-items: center; gap: 8px; height: 30px; }
+/* 状態名 (Host.FriendMatch.Lobby.Ready.WaitingForFriend など) は . の後ろで折り返し、2 行まで */
+.state-name { color: var(--muted); font-size: 11px; line-height: 1.25; }
+.sn { display: inline-block; }
+.role-badge { flex: none; white-space: nowrap; display: inline-block; padding: 1px 10px; border-radius: 4px; font-weight: 700; color: #fff; font-size: 13px; }
+.role-badge.host { background: var(--host); }
+.role-badge.client { background: var(--client); }
+.role-badge.small { padding: 0 6px; font-size: 11px; }
+
+/* 端末の下のモック操作 (Win / Lose) */
+.mock-controls { display: flex; align-items: center; justify-content: center; gap: 6px; height: 30px; margin-top: 8px; }
+.mc-label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+.mc-btn {
+  min-width: 54px; padding: 3px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 700;
+  background: #141B33; border: 1px solid var(--undecided); color: var(--undecided);
+}
+.mc-btn:hover:not([data-norow]) { background: rgba(250, 204, 21, 0.12); }
+.mc-btn { white-space: nowrap; }
+/* 時間切れの勝ち / 負け / 同点 (決定 U44) は 2 文字なので幅を詰め、「切断する」と 1 行に収める */
+.mc-btn.compact { min-width: 0; padding: 3px 10px; }
+.mc-btn[data-norow] { opacity: 0.38; border-style: dashed; cursor: not-allowed; }
+/* 時間切れの決着 (勝ち / 負け / 同点) と「切断する」の間の区切り */
+.mc-sep { width: 1px; height: 18px; margin: 0 2px; background: #3A4466; }
+
+.pill-undecided {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  padding: 1px 7px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--undecided); color: #1A1400; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.pill-undecided.small { padding: 0 5px; font-size: 10px; margin-right: 2px; }
+.pill-decided {
+  display: inline-flex; align-items: center; gap: 4px; max-width: 100%;
+  padding: 1px 7px; border-radius: 999px; border: 0; cursor: pointer;
+  background: var(--decided); color: #022C1C; font-size: 11px; font-weight: 700; white-space: nowrap;
+}
+.pill-decided span { font-weight: 400; overflow: hidden; text-overflow: ellipsis; }
+.pill-decided.small { padding: 0 5px; font-size: 10px; margin-right: 2px; }
+.legend .pill-decided { cursor: default; }
+
+.phone {
+  width: 380px; height: 760px; padding: 10px; border-radius: 34px;
+  background: #1A1F2E; box-shadow: 0 0 0 1px #2E3650, 0 12px 40px rgba(0, 0, 0, 0.6);
+}
+.screen {
+  position: relative; width: 360px; height: 740px; border-radius: 26px; overflow: hidden;
+  background: radial-gradient(120% 80% at 50% 0%, var(--purple) 0%, var(--navy) 55%, var(--frost) 100%);
+  font-family: var(--game); color: var(--text);
+  display: flex; flex-direction: column;
+}
+
+/* 画面の部品 (ゲーム内 UI) */
+.hdr { display: flex; align-items: center; height: 64px; padding: 18px 16px 0; flex: none; }
+.hdr .back {
+  width: 36px; height: 36px; font-size: 30px; line-height: 30px; background: none; border: 0; cursor: pointer; color: var(--text); padding: 0;
+}
+.hdr .back.disabled { color: #3D4560; cursor: default; }
+.hdr .back.hidden-back { visibility: hidden; }
+.hdr .title { flex: 1; text-align: center; margin-right: 36px; font-size: 18px; font-weight: 600; letter-spacing: 0.04em; }
+
+.menu { display: flex; flex-direction: column; gap: 14px; padding: 48px 28px; }
+.menu-item {
+  display: flex; justify-content: space-between; align-items: center; padding: 18px 20px; border-radius: 12px; cursor: pointer;
+  font-size: 18px; font-weight: 600; background: rgba(95, 201, 250, 0.08); border: 1px solid rgba(95, 201, 250, 0.45);
+  box-shadow: 0 0 12px rgba(95, 201, 250, 0.15);
+}
+.menu-item .chev { color: var(--h); font-size: 22px; }
+/* Profile (決定 U56): 対戦の入口 (Random Match / Friend Match) と分け、控えめな見た目で下に置く */
+.menu-item.secondary {
+  margin-top: 10px; padding: 14px 20px; font-size: 16px; background: rgba(255, 255, 255, 0.04); border-color: #56607E; box-shadow: none;
+}
+.menu-item.secondary .chev { color: #B9C0D0; }
+.mi-label { display: flex; align-items: center; gap: 12px; }
+.mi-emoji { font-size: 20px; line-height: 1; }
+/* アプリを離れて検索が止まったときの通知 (決定 U43)。モーダルにせず、メニューの下に置いてメニューの位置を変えない */
+.inline-notice {
+  margin-top: 10px; padding: 16px 16px 14px; border-radius: 12px; background: #161C36; border: 1px solid #3A4466;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.45);
+}
+.in-text { margin: 0 0 14px; text-align: center; font-family: var(--game); font-size: 15px; font-weight: 600; line-height: 1.45; text-wrap: balance; }
+
+.body { padding: 20px 28px 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.body.center { align-items: center; justify-content: center; text-align: center; }
+.sec-label { font-size: 13px; color: #B9C0D0; margin-bottom: 8px; }
+.sec-label.second { margin-top: 44px; }
+
+.btn {
+  display: block; width: 100%; padding: 10px 12px; border-radius: 8px; cursor: pointer;
+  background: rgba(255, 255, 255, 0.04); border: 1px solid #56607E; color: var(--text);
+  font-family: var(--game); font-size: 14px; font-weight: 600; letter-spacing: 0.04em;
+}
+.btn:hover { border-color: var(--h); }
+.btn.big { padding: 20px 12px; font-size: 16px; }
+.btn.primary { background: rgba(95, 201, 250, 0.16); border-color: var(--h); box-shadow: 0 0 14px rgba(95, 201, 250, 0.3); }
+.btn.danger { border-color: var(--x); color: #FFD3D3; }
+.btn.is-disabled, .btn.is-disabled:hover { cursor: default; opacity: 0.45; box-shadow: none; border-color: #56607E; background: rgba(255, 255, 255, 0.04); }
+.input {
+  display: flex; align-items: center; justify-content: center; width: 100%; height: 56px; margin-bottom: 8px; border-radius: 8px; cursor: pointer;
+  background: rgba(0, 0, 0, 0.35); border: 1px solid #56607E; text-align: center; font-family: var(--game);
+}
+.input .value { font-size: 24px; letter-spacing: 0.06em; }
+.input .placeholder { color: #4D566F; font-size: 14px; }
+.error { color: #FF6B6B; font-size: 13px; margin: 10px 2px 0; }
+
+.code-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: #B9C0D0; margin-bottom: 6px; }
+.code-head .copy { font-size: 11px; color: var(--h); }
+.code {
+  text-align: center; padding: 12px 0; border-radius: 8px; font-size: 24px; letter-spacing: 0.08em;
+  background: rgba(95, 201, 250, 0.07); border: 1px solid rgba(95, 201, 250, 0.3);
+}
+/* Match Code の期限 (決定 U7)。モックは "30:00" のまま描く */
+.code-expiry { margin-top: 6px; text-align: center; font-size: 12px; color: #9AA3B8; letter-spacing: 0.02em; }
+.status-block { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding-bottom: 40px; }
+.peer { font-size: 22px; font-weight: 700; margin-bottom: 10px; }
+.status { font-size: 16px; color: #C9CED8; line-height: 1.5; }
+/* Ready 画面 (決定 U36): プレイヤーごとのカード。Ready なら緑のチップ "✓ Ready"、まだなら灰色の "Not ready" */
+.ready-block { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 22px 0 16px; }
+.rd-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rd-card {
+  position: relative; padding: 20px 6px 14px; border-radius: 12px; text-align: center;
+  background: rgba(255, 255, 255, 0.03); border: 1px solid #3A4466;
+}
+.rd-card.me { border-color: rgba(95, 201, 250, 0.55); }
+.rd-card.ready { border-color: rgba(74, 222, 128, 0.6); box-shadow: 0 0 14px rgba(74, 222, 128, 0.16); }
+.rd-card .you {
+  position: absolute; top: -8px; left: 50%; transform: translateX(-50%); padding: 0 6px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; line-height: 16px; background: var(--text); color: var(--navy);
+}
+.rd-name { font-size: 16px; font-weight: 700; margin-bottom: 10px; white-space: nowrap; }
+.rd-state {
+  display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
+  color: #9AA3B8; background: rgba(255, 255, 255, 0.05); border: 1px solid #3A4466;
+}
+/* ホストが部屋の画面を離れている間のクライアントのカード (決定 U14、図02 の "Away") */
+.rd-card.away .rd-state { color: #F5C26B; background: rgba(245, 194, 107, 0.1); border-color: rgba(245, 194, 107, 0.45); }
+.rd-card.ready .rd-state { color: #B8F5C8; background: rgba(74, 222, 128, 0.14); border-color: rgba(74, 222, 128, 0.55); }
+.rd-info { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; text-align: center; }
+.rd-notice, .room-notice {
+  margin: 0; padding: 12px 14px; border-radius: 10px; background: #161C36; border: 1px solid #3A4466;
+  font-size: 14px; font-weight: 600; line-height: 1.45; text-align: center; text-wrap: balance;
+}
+.rd-notice { align-self: stretch; }
+/* Friend Match トップの部屋のお知らせ (決定 U52): モーダルではない帯。Close で閉じる */
+.room-notice { display: flex; align-items: center; gap: 10px; margin-bottom: 18px; padding: 10px 10px 10px 14px; text-align: left; }
+.rn-text { flex: 1; margin: 0; }
+/* お知らせは文の切れ目で改行する (1 文はなるべく 1 行に) */
+.rn-text .sen, .in-text .sen { display: inline-block; }
+.rn-close {
+  flex: none; padding: 6px 12px; border-radius: 8px; cursor: pointer; font: inherit; font-size: 13px; font-weight: 600;
+  color: var(--text); background: rgba(255, 255, 255, 0.06); border: 1px solid #56607E;
+}
+.rn-close:hover:not([data-norow]) { border-color: var(--h); }
+/* カウントダウン (Ready の 60 秒・再接続の 20 秒)。モックは始まった直後の秒数のまま描く */
+.rd-timer {
+  display: flex; align-items: baseline; justify-content: center; width: 64px; height: 64px; box-sizing: border-box; padding-top: 15px;
+  border-radius: 50%; border: 2px solid rgba(95, 201, 250, 0.6); box-shadow: 0 0 12px rgba(95, 201, 250, 0.2);
+  font-size: 14px; color: #B9C0D0;
+}
+.rd-timer b { font-size: 24px; line-height: 1; color: var(--text); }
+.status.solo { font-size: 16px; }
+
+.actions { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 0 28px 76px; }
+.view-random .actions, .view-lobby .actions { padding-bottom: 76px; }
+
+/* Profile 画面 (決定 U56): 上に VS 画面のカードの見本、絵文字 5 x 2、あいさつ 2 列 x 5、下に Save / Cancel */
+.profile { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 6px 24px 0; }
+/* 見本は選ぶたびに描き直すので、VS 画面の滑り込みのアニメーションはしない */
+.vs-card.pf-card { flex: none; padding: 14px 18px; margin-bottom: 18px; animation: none; }
+.pf-card .vs-greet { margin-top: 4px; }
+.pf-emojis { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-bottom: 18px; }
+.pf-greets { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.pf-emoji, .pf-greet {
+  border-radius: 10px; cursor: pointer; color: var(--text); background: rgba(255, 255, 255, 0.04); border: 1px solid #56607E;
+}
+.pf-emoji { height: 46px; padding: 0; font-size: 24px; line-height: 1; }
+.pf-greet { min-height: 36px; padding: 6px 4px; font-family: var(--game); font-size: 12px; font-weight: 600; line-height: 1.2; letter-spacing: 0; }
+.pf-emoji:hover, .pf-greet:hover { border-color: var(--h); }
+.pf-emoji.selected, .pf-greet.selected { border-color: var(--h); background: rgba(95, 201, 250, 0.18); box-shadow: 0 0 12px rgba(95, 201, 250, 0.35); }
+.view-profile .actions.pf-actions { padding: 18px 24px 28px; }
+
+/* 手順実行中はアニメーションを止める */
+.static .screen *, .static .screen *::before { animation: none !important; }
+.static .vs-bar { display: none; }
+
+/* 遷移表に行が無い操作 (押しても何も起きない) */
+.screen [data-norow] { opacity: 0.38; border-style: dashed; cursor: not-allowed; box-shadow: none; }
+.screen .back[data-norow] { border: 0; }
+
+/* トースト (画面下部に固定) */
+.toast {
+  position: absolute; left: 24px; right: 24px; bottom: 22px; padding: 9px 12px; border-radius: 8px; border: 0;
+  font-family: var(--game); font-size: 14px; font-weight: 600; text-align: center; color: #fff; letter-spacing: 0.03em;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.5);
+}
+.toast.tappable { cursor: pointer; }
+.toast .chev { position: absolute; right: 12px; top: 50%; transform: translateY(-50%); }
+.toast.blue { background: #1E88E5; }
+.toast.green { background: #1FB57E; }
+.toast.red { background: #E5352B; box-shadow: 0 0 18px rgba(229, 53, 43, 0.55); }
+.toast.darkred { background: #5E0B0B; }
+.toast.grey { background: #3A3F4B; }
+/* 2 行のトースト ("Connection failed" と説明、決定 U6) */
+.toast.two-line { padding: 8px 28px; line-height: 1.35; }
+.toast .t-sub { display: block; font-size: 12px; font-weight: 500; letter-spacing: 0.01em; opacity: 0.9; }
+
+/* ステージ選択 (別画面の例) */
+.stage-label { padding: 0 24px 10px; font-size: 13px; color: var(--muted); }
+.stage-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 0 24px; }
+.tile {
+  height: 128px; border-radius: 10px; background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px;
+}
+.tile .glyph { display: flex; flex-direction: column; gap: 4px; }
+.tile .glyph i { display: block; width: 22px; height: 22px; border-radius: 4px; background: var(--c); box-shadow: 0 0 10px var(--c); opacity: 0.85; }
+.tile span { font-size: 13px; min-height: 1.2em; }
+
+/* ランダム対戦で相手を探している間の点 (順に光る) */
+.dots { display: flex; gap: 10px; margin-top: 18px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--z); animation: pulse 1.2s infinite ease-in-out; }
+.dots i:nth-child(2) { animation-delay: 0.2s; }
+.dots i:nth-child(3) { animation-delay: 0.4s; }
+@keyframes pulse { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } }
+
+/* VS 画面 */
+.vs { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px; position: relative; }
+.vs-card {
+  position: relative; text-align: center; padding: 18px; border-radius: 14px; background: rgba(0, 0, 0, 0.25);
+  border: 1px solid; animation: slide-in 0.4s ease-out both;
+}
+.vs-card.host { border-color: var(--h); box-shadow: 0 0 22px rgba(95, 201, 250, 0.3); }
+.vs-card.client { border-color: var(--z); box-shadow: 0 0 22px rgba(247, 157, 200, 0.3); animation-name: slide-in-r; }
+.vs-card .you { position: absolute; top: 10px; left: 12px; font-size: 11px; font-weight: 700; padding: 0 6px; border-radius: 4px; background: var(--text); color: var(--navy); }
+.vs-emoji { font-size: 34px; }
+.vs-name { font-size: 22px; font-weight: 700; }
+.vs-rating { font-size: 13px; color: var(--muted); }
+.vs-greet { margin-top: 6px; font-size: 15px; }
+.vs-mark { text-align: center; font-size: 40px; font-weight: 700; color: var(--swap); text-shadow: 0 0 16px rgba(250, 204, 21, 0.7); }
+.vs-bar { position: absolute; left: 24px; right: 24px; bottom: 24px; height: 3px; background: rgba(255, 255, 255, 0.1); }
+.vs-bar i { display: block; height: 100%; background: var(--swap); animation: grow 2.5s linear both; }
+@keyframes slide-in { from { transform: translateX(-30px); opacity: 0; } }
+@keyframes slide-in-r { from { transform: translateX(30px); opacity: 0; } }
+@keyframes grow { from { width: 0; } to { width: 100%; } }
+
+/* ゲーム画面 (プレースホルダー)。上が相手の小さなフィールド、下が自分のフィールド (実機の VsAI 画面にならう) */
+.game { flex: 1; display: flex; flex-direction: column; min-height: 0; background: radial-gradient(90% 60% at 50% 60%, #1B2440 0%, #0B0F1E 100%); }
+.g-opp { position: relative; flex: none; height: 160px; border-bottom: 2px solid #05070D; background: rgba(0, 0, 0, 0.3); }
+.g-opp .g-score { position: absolute; top: 10px; left: 12px; }
+.g-opp-name { position: absolute; top: 12px; right: 12px; font-size: 11px; color: var(--muted); }
+.g-opp-gauge { position: absolute; left: 50%; bottom: 8px; width: 76px; height: 8px; margin-left: -38px; border: 1px solid #E5534B; border-radius: 3px; background: #1F3A4D; }
+.g-me { position: relative; flex: 1; min-height: 0; }
+.g-hud { position: absolute; top: 8px; left: 0; right: 0; height: 50px; }
+.g-time { position: absolute; left: 50%; transform: translateX(-50%); text-align: center; }
+.g-score { position: absolute; right: 12px; text-align: right; }
+.g-time span, .g-score span { display: block; font-size: 11px; font-weight: 600; letter-spacing: 0.04em; color: #E6E6E6; }
+.g-time b { font-size: 22px; color: #9FEAF4; letter-spacing: 0.04em; }
+.g-score b { font-size: 18px; color: #F5A623; }
+.g-score.small { right: auto; text-align: left; }
+.g-score.small b { font-size: 14px; color: #E6E6E6; }
+/* メニューボタン (☰、決定 U37)。枠と位置は実機のポーズボタンと同じで、中の印を 3 本の横線にした */
+.g-menu {
+  position: absolute; top: 64px; right: 12px; width: 26px; height: 26px; padding: 0; border: 1.5px solid #E6E6E6; background: none; cursor: pointer;
+  display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 3px;
+}
+.g-menu i { width: 12px; height: 2px; background: #E6E6E6; }
+.g-col { display: flex; flex-direction: column-reverse; gap: 2px; }
+.g-field, .g-mini { display: flex; align-items: flex-end; justify-content: center; }
+.g-field { position: absolute; left: 0; right: 0; bottom: 64px; gap: 2px; }
+.g-mini { position: absolute; left: 0; right: 0; top: 0; gap: 1px; transform: scaleY(-1); } /* 相手のフィールドは上下反転 */
+.g-mini .g-col { gap: 1px; }
+.blk {
+  display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; border-radius: 3px;
+  font-style: normal; font-size: 15px; color: #E6E6E6; border: 1px solid rgba(255, 255, 255, 0.35);
+}
+.g-mini .blk { width: 15px; height: 15px; font-size: 0; }
+.blk.b-H { background: rgba(95, 201, 250, 0.45); }
+.blk.b-S { background: rgba(122, 92, 214, 0.55); }
+.blk.b-Z { background: rgba(247, 157, 200, 0.45); }
+.blk.b-T { background: rgba(75, 79, 122, 0.7); }
+.blk.b-Y { background: rgba(69, 195, 160, 0.5); }
+.blk.plus { border-radius: 50%; background: rgba(248, 138, 138, 0.75); border-color: rgba(255, 255, 255, 0.5); }
+.g-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 56px; display: flex; align-items: center; gap: 12px; padding: 0 14px; background: #121A2E; }
+.g-gauge { flex: 1; height: 20px; border: 2px solid #29B6E8; border-radius: 10px; background: #1F3A4D; position: relative; }
+.g-gauge i { position: absolute; right: -4px; top: -6px; width: 28px; height: 28px; border-radius: 50%; border: 2px solid #29B6E8; background: #1F3A4D; }
+.g-up { width: 44px; height: 44px; border-radius: 50%; border: 2px solid #29B6E8; background: #0F5E86; display: flex; align-items: center; justify-content: center; font-size: 22px; font-weight: 700; }
+
+/* MATCH MENU と降参の確認 (決定 U37 / U40)。パネルとボタンは実機のポーズポップアップ (Menu_Pause) の値を画面幅 360px に縮めたもの (× 0.3077):
+   パネル 880 幅 → 271px、ボタン 800 x 130 → 246 x 40、padding 60 → 18.5、spacing 30 → 9.2、文字 54 → 16.6px、文字間隔 0.05em。
+   ポーズと違って試合は止まらないので、暗幕は実機の α 0.784 より薄い α 0.35 にしてゲーム画面が見えたままにする */
+.m-dim { position: absolute; inset: 0; z-index: 3; background: rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; }
+/* 切断を待つ間 (決定 U46 / U54) はサーバーが両者のゲームを止めるので、実機のポーズと同じ濃さ (α 0.784) にして止まっていることを示す */
+.m-dim.paused { background: rgba(0, 0, 0, 0.784); }
+.p-panel {
+  width: 271px; padding: 18.5px 12.3px; display: flex; flex-direction: column; gap: 9.2px;
+  background: rgba(11, 11, 11, 0.9); border: 2px solid #fff; border-radius: 4px;
+}
+.m-title { font-family: 'Oxanium', sans-serif; font-weight: 600; font-size: 16.6px; letter-spacing: 0.05em; text-align: center; color: #fff; }
+.m-body { margin: 0 0 4px; font-size: 12.5px; line-height: 1.4; text-align: center; text-wrap: balance; color: #C9CED8; }
+.p-btn {
+  height: 40px; border-radius: 6px; border: 1px solid rgba(255, 255, 255, 0.31); cursor: pointer; color: #fff;
+  font-family: 'Oxanium', sans-serif; font-weight: 400; font-size: 16.6px; letter-spacing: 0.05em; text-align: center;
+}
+.p-btn.continue { background: #020202; letter-spacing: 0; }
+/* SURRENDER は実機の QUIT と同じ赤の半透明の塗りに、白 α 0.04 の走査線が重なる */
+.p-btn.surrender {
+  background-color: rgba(239, 43, 43, 0.51);
+  background-image: repeating-linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 0 1px, transparent 1px 2px);
+}
+
+/* ゲーム本体の開始カウントダウン (VsAI の CountdownTimer): 1 秒待ってから 3 → 2 → 1 を 0.8 秒ずつ。
+   数字は 0.5 → 0.66 倍に拡大しながら 0.15 秒で現れ、0.55 秒まで少しずつ大きくなり、最後の 0.25 秒で 1.6 倍に広がって消える。
+   リングは同じタイミングで 0.2 → 0.34 → 1.6 倍 */
+.g-cd { position: absolute; left: 0; right: 0; top: 0; bottom: 56px; pointer-events: none; }
+.g-cd-step { position: absolute; left: 50%; top: 250px; width: 0; height: 0; }
+.g-cd-ring, .g-cd-digit { position: absolute; opacity: 0; animation-duration: 0.8s; animation-fill-mode: both; animation-delay: inherit; }
+.g-cd-ring { left: -162px; top: -162px; width: 324px; height: 324px; border-radius: 50%; border: 3px solid var(--countdown); animation-name: cd-ring; }
+.g-cd-digit {
+  left: -100px; top: -80px; width: 200px; height: 160px; display: flex; align-items: center; justify-content: center;
+  font-family: 'Oxanium', sans-serif; font-weight: 400; font-size: 124px; line-height: 1; color: var(--countdown); animation-name: cd-digit;
+}
+@keyframes cd-digit {
+  0% { opacity: 0; transform: scale(0.5); animation-timing-function: cubic-bezier(0.5, 1, 0.89, 1); }
+  18.75% { opacity: 1; }
+  31.25% { transform: scale(0.66); animation-timing-function: linear; }
+  68.75% { opacity: 1; transform: scale(0.7); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+@keyframes cd-ring {
+  0% { opacity: 0; transform: scale(0.2); animation-timing-function: cubic-bezier(0.5, 1, 0.89, 1); }
+  18.75% { opacity: 1; }
+  31.25% { transform: scale(0.34); animation-timing-function: linear; }
+  68.75% { opacity: 1; transform: scale(0.36); animation-timing-function: cubic-bezier(0, 0.55, 0.45, 1); }
+  100% { opacity: 0; transform: scale(1.6); }
+}
+/* 手順で止めているときは、その数字の「静止」の姿勢 (拡大し終えたところ) */
+.g-cd.frozen .g-cd-digit { opacity: 1; transform: scale(0.68); }
+.g-cd.frozen .g-cd-ring { opacity: 1; transform: scale(0.35); }
+
+/* 対戦後の結果画面 (決定 U20〜U30) */
+.result { flex: 1; display: flex; flex-direction: column; align-items: center; padding: 14px 24px 0; min-height: 0; }
+.r-outcome { font-size: 64px; font-weight: 700; letter-spacing: 0.04em; line-height: 1.1; }
+.r-outcome.win { color: var(--h); text-shadow: 0 0 28px rgba(95, 201, 250, 0.8); }
+.r-outcome.lose { color: var(--x); text-shadow: 0 0 22px rgba(248, 138, 138, 0.45); }
+.r-outcome.draw { color: var(--swap); text-shadow: 0 0 22px rgba(250, 204, 21, 0.4); }
+.r-outcome.nocontest { margin: 14px 0 6px; font-size: 38px; color: #C9CED8; text-shadow: none; }
+.r-reason { margin-top: 2px; font-size: 14px; color: #C9CED8; text-align: center; }
+/* 両者の名前。スタンプの吹き出しは名前の上に出すので、その分の高さを空けておく */
+.r-players { align-self: stretch; display: flex; align-items: center; gap: 8px; margin-top: 50px; }
+.r-player {
+  position: relative; flex: 1; min-width: 0; padding: 10px 8px; border-radius: 10px; text-align: center;
+  background: rgba(0, 0, 0, 0.25); border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.r-player.me { border-color: rgba(95, 201, 250, 0.55); }
+.r-player b { display: block; font-size: 16px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.r-player .you { display: inline-block; margin-bottom: 2px; padding: 0 6px; border-radius: 4px; font-size: 10px; font-weight: 700; background: var(--text); color: var(--navy); }
+.r-player:not(.me) b { margin-top: 17px; }
+.r-vs { flex: none; font-size: 13px; color: var(--muted); }
+.r-bubble {
+  position: absolute; left: 50%; bottom: calc(100% + 8px); transform: translateX(-50%); white-space: nowrap;
+  padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--navy); background: #F4F6FB;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.45);
+}
+.r-bubble::after {
+  content: ''; position: absolute; left: 50%; top: 100%; margin-left: -5px; border: 5px solid transparent; border-top-color: #F4F6FB;
+}
+.r-emoji { margin-right: 4px; font-size: 15px; }
+.r-stats {
+  align-self: stretch; margin-top: 14px; padding: 2px 14px; border-radius: 10px;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.r-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; font-size: 14px; }
+.r-row + .r-row { border-top: 1px solid rgba(255, 255, 255, 0.08); }
+.r-row > span:first-child { flex: 1; color: var(--muted); }
+.r-row b { font-size: 16px; letter-spacing: 0.03em; }
+.r-row.r-note { justify-content: center; color: #C9CED8; }
+.r-status { margin-top: auto; padding-bottom: 10px; min-height: 2.5em; font-size: 14px; text-align: center; line-height: 1.4; text-wrap: balance; }
+.r-status.wait { color: var(--h); }
+.r-status.asked { color: var(--y); }
+.r-status.info { color: #C9CED8; }
+.r-stamps { display: flex; justify-content: center; gap: 10px; padding-bottom: 8px; }
+.r-stamp {
+  width: 44px; height: 40px; padding: 0; border-radius: 10px; cursor: pointer; font-size: 20px; line-height: 1;
+  background: rgba(255, 255, 255, 0.05); border: 1px solid #56607E;
+}
+.r-stamp:hover:not(:disabled) { border-color: var(--h); }
+.r-stamp.is-disabled { cursor: default; opacity: 0.4; }
+/* 相手のスタンプのミュート (決定 U49)。スタンプの下の小さな文字のボタン */
+.r-mute {
+  display: inline-flex; align-items: center; gap: 6px; margin: 0 auto 12px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
+  font: inherit; font-size: 12.5px; color: #C9CED8; background: none; border: 1px solid transparent;
+}
+.r-mute:hover:not([data-norow]) { border-color: #56607E; }
+.r-mute-icon { font-size: 14px; }
+.r-mute.muted { color: #F8B4B4; border-color: rgba(248, 138, 138, 0.45); background: rgba(248, 138, 138, 0.1); }
+.view-result .actions { padding-bottom: 28px; gap: 8px; }
+.btn-row { display: flex; gap: 8px; }
+.btn-row .btn { flex: 1; }
+
+/* ダイアログ */
+.dim { position: absolute; inset: 0; background: rgba(0, 0, 0, 0.6); display: flex; align-items: center; justify-content: center; }
+.dialog {
+  width: 280px; padding: 20px 18px 16px; border-radius: 14px; background: #161C36; border: 1px solid #3A4466;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); display: flex; flex-direction: column; gap: 10px;
+}
+.d-title { text-align: center; font-size: 17px; font-weight: 700; }
+.d-body { margin: 0 0 6px; text-align: center; font-size: 13px; color: #B9C0D0; }
+/* ランダム対戦で相手を探すのをやめたときの通知 (決定 U13)。文だけで本文は無いので、ボタンとの間を少し空ける */
+.d-title.notice { margin-bottom: 6px; line-height: 1.4; text-wrap: balance; }
+
+/* ---- 右パネル ---------------------------------------------------------- */
+/* 決定済みや画面の説明が増えても遷移表が見えるように、上の部分は高さの上限を超えたらスクロールする */
+.current-state { flex: none; max-height: 46%; overflow-y: auto; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+.cs-session { font-size: 12px; color: #C9CED8; }
+.cs-session code { color: #fff; }
+.cs-last { color: var(--muted); font-size: 12px; margin-top: 2px; }
+.cs-last a, .u-rows a { color: var(--h); }
+.cs-context { margin-top: 4px; font-size: 12px; color: #C9CED8; }
+.cs-decided { margin-top: 6px; font-size: 11.5px; color: var(--muted); }
+.cs-decided .cs-label { font-weight: 700; color: #A7F3D0; }
+.cs-decided ul { margin: 2px 0 0; padding: 0; list-style: none; }
+.cs-decided li { padding: 1px 0; color: var(--text); }
+.cs-premise { margin-left: 52px; font-size: 11px; }
+
+.tabs { flex: none; display: flex; gap: 2px; margin-top: 8px; border-bottom: 1px solid var(--line); }
+.tabs button { padding: 5px 12px; border: 1px solid var(--line); border-bottom: 0; border-radius: 6px 6px 0 0; background: none; cursor: pointer; color: var(--muted); }
+.tabs button.active { background: #141B33; color: var(--text); }
+.tab-body { flex: 1; overflow-y: auto; padding: 0 0 12px; min-height: 0; }
+.tab-body > :first-child { margin-top: 8px; }
+.tab-body[hidden] { display: none; }
+.filter { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+.hint { color: var(--muted); font-size: 12px; margin: 0 0 8px; }
+
+/* 罫線はセルの右と下に描く (border-collapse: collapse の罫線は sticky の見出しと一緒に動かず、継ぎ目から下の行が透けるため) */
+table.transitions {
+  width: 100%; table-layout: fixed; border-collapse: separate; border-spacing: 0; font-size: 11px;
+  border-left: 1px solid var(--line);
+}
+table.transitions th, table.transitions td { border: 0; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+/* 見出しは thead ごと固定する */
+table.transitions thead { position: sticky; top: 0; z-index: 1; }
+table.transitions th { background: #141B33; font-weight: 600; padding: 3px 4px; }
+table.transitions thead tr:first-child th { border-top: 1px solid var(--line); }
+table.transitions .memo-head { font-weight: 400; color: var(--muted); text-align: left; }
+table.transitions tbody tr:first-child td { border-top: 1px solid var(--line); } /* 前の行の下線と合わせて 2px の区切り */
+table.transitions tbody tr:first-child td:not(.rid) { border-bottom: 0; }
+table.transitions td.memo { padding-top: 0; font-size: 11px; }
+table.transitions td { padding: 3px 4px; vertical-align: top; overflow-wrap: anywhere; }
+table.transitions td.rid { color: var(--muted); white-space: nowrap; }
+table.transitions .any { color: var(--muted); }
+table.transitions .group { color: #D7C4FF; border-bottom: 1px dotted; cursor: help; }
+table.transitions .group small { color: var(--muted); }
+table.transitions .dlg { color: var(--swap); }
+table.transitions .ev code { color: var(--h); }
+table.transitions .ev-label { color: #E6E6E6; }
+table.transitions .memo { word-break: normal; color: #C9CED8; }
+table.transitions .auto { color: var(--y); white-space: nowrap; }
+table.transitions .when { color: var(--swap); }
+tbody.available td.rid { box-shadow: inset 3px 0 0 var(--y); }
+tbody.fired td { background: rgba(95, 201, 250, 0.2); }
+tbody.fired td.rid { box-shadow: inset 3px 0 0 var(--h); color: #fff; }
+
+.undecided-list { margin: 0; padding: 0; list-style: none; }
+.undecided-list li { padding: 8px 10px; margin-bottom: 6px; border: 1px solid var(--line); border-radius: 8px; }
+.undecided-list p { margin: 4px 0; font-size: 12px; color: #C9CED8; }
+.undecided-list li.decided { border-color: rgba(52, 211, 153, 0.55); background: rgba(52, 211, 153, 0.06); }
+.undecided-list li.decided small { color: var(--muted); font-weight: 400; }
+.u-head { font-weight: 700; }
+.u-rows { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+.flash { animation: flash 1.6s ease-out; }
+@keyframes flash { 0%, 30% { background: rgba(250, 204, 21, 0.35); } 100% { background: transparent; } }
+/* 片方が切断して待っている間の表示 (決定 U46 / U54): MATCH MENU と同じパネルに、ボタンの代わりの残りの秒数 (Ready 画面のカウントダウンと同じ円) */
+.m-panel .m-timer { align-self: center; margin: 4px 0 6px; }

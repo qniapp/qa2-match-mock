@@ -56,8 +56,11 @@ const cleanup = async () => {
 
 try {
   const portFile = join(profile, 'DevToolsActivePort');
-  for (let i = 0; i < 100 && !existsSync(portFile); i++) await new Promise((r) => setTimeout(r, 100));
-  const port = readFileSync(portFile, 'utf8').split('\n')[0];
+  // Chromium はファイルを作ってから中身を書くので、ポートの行が書き終わるまで待つ (空のまま読むと 127.0.0.1:80 につなぎにいく)
+  const readPort = () => (existsSync(portFile) ? /^(\d+)\n/.exec(readFileSync(portFile, 'utf8')) : null);
+  for (let i = 0; i < 100 && !readPort(); i++) await new Promise((r) => setTimeout(r, 100));
+  if (!readPort()) throw new Error(`Chromium の DevToolsActivePort が 10 秒で書かれない (${profile} に書けるか、一時ディレクトリの空きと quota を確認)`);
+  const port = readPort()[1];
   const page = (await (await fetch(`http://127.0.0.1:${port}/json/list`)).json()).find((t) => t.type === 'page');
   const ws = new WebSocket(page.webSocketDebuggerUrl);
   await new Promise((r, j) => { ws.onopen = r; ws.onerror = j; });

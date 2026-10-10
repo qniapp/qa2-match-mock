@@ -1499,7 +1499,7 @@ var UNDECIDED = [
   { id: 'U1', title: '"Friend is ready!" の帯をタップしても部屋の画面に戻るだけ (Ready は押さない)',
     desc: '離席中のホストに、友だちが Ready を押したことを赤い帯 "Friend is ready!" で知らせる (以前の "Ready to start" から変更)。帯をタップすると部屋の画面 (Ready 画面) に戻るだけで、Ready は押さない。' +
       '戻った画面のボタンは、これまでどおり Ready (押すと Cancel Ready)。開始は両者が Ready を押してから (U31)。以前のトグル (ロビーへ戻る / タップで押した扱い) は削除した。 ' +
-      '2026-10-09 の U57 で無くなった (ホストは部屋を残して離れられないので、帯は出ない)。',
+      '2026-10-10 の U57 で無くなった (ホストは部屋を残して離れられないので、帯は出ない)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U2', title: '開始のカウントダウン',
     desc: '元の論点は「開始は両者が開始ボタン (今の Ready、U31) を押すか、自動カウントダウンか」。このうちカウントダウンの部分が決まった: VS 画面のあと (ランダム対戦・Friend Match・再戦とも) はモック独自の 3·2·1 を出さず、ゲーム画面に移ってゲーム本体のカウントダウン (VsAI と同じ 3 → 2 → 1) を使う。' +
@@ -1513,7 +1513,7 @@ var UNDECIDED = [
     desc: 'サーバーが参加を確認し、両者が部屋の画面にいて、同期が終わったら Ready を押せる。以前のモックの「1.5 秒たったら自動で Ready」はやめた。' +
       '同期の前は、ホストに "Friend joined!"、クライアントに "Connecting…" を出し、どちらも Ready は押せない表示。ホストが別の画面にいる間は同期が終わらない (戻ると進む)。' +
       'モックの自動遷移の 0.8 秒はサーバーの応答の代わりで、待ち時間を決めたものではない。同期が終わってからホストが離れても、クライアントは Ready を押せる (U1 の場面)。 ' +
-      '2026-10-09 の U57 で、ホストが部屋の画面を離れることは無くなった (‹ は部屋を閉じる確認)。',
+      '2026-10-10 の U57 で、ホストが部屋の画面を離れることは無くなった (‹ は部屋を閉じる確認)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U5', title: '部屋での切断: 20 秒まで自動で再接続。戻れなければ "Could not reconnect." と Retry / Leave Room',
     desc: '部屋 (Ready 画面・読み込み) で切断したら、20 秒まで自動で再接続し、その間は両者の Ready を消す。切れた側には "Connection lost. Reconnecting…"、' +
@@ -1539,7 +1539,7 @@ var UNDECIDED = [
     desc: '以前ボタンの無かった待機中 ("Connecting…") も含めて、クライアントの部屋の画面にはいつも Leave Room を出す。Leave Room と ‹ (端末の戻る) はどちらも同じ確認を出す: ' +
       '題名 "Leave this room?"、本文は U34 で決まった "No match has started. No win or loss will be recorded."、ボタンは Leave Room / Keep Waiting (U11)。' +
       '以前の Leave Match と "Leave this match?" はこの確認にまとめた。 ' +
-      '2026-10-09 の U57 で Leave Room のボタンは無くなり、出口は ‹ だけ (確認 "Leave this room?" はそのまま)。',
+      '2026-10-10 の U57 で Leave Room のボタンは無くなり、出口は ‹ だけ (確認 "Leave this room?" はそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U10', title: '期限切れの画面には Ready を出さない。ホストは Create Match、クライアントは Join Match',
     desc: '"Match code expired." の画面には Ready を出さない (図07 の "Match expired." の画面にあった開始ボタンは無くなった)。ホストには Create Match (新しい部屋を作る)、クライアントには Join Match (新しい Match Code を入れる Friend Match トップへ) を出す。',
@@ -1551,7 +1551,7 @@ var UNDECIDED = [
     desc: '本文はホストが "This will close your current room. Your friend will return to Friend Match."、クライアントが "This will leave your current room. Your friend’s room will stay open."。' +
       '古い部屋を閉じるのは、新しい部屋を作れた・入れたときだけ (作れなければ古い部屋はそのまま。モックではモック設定「Create Match の結果 = 接続失敗」で試せる)。' +
       'ボタンは 10-01 の合意どおり Create Match / Join Match と Keep Current Match。クライアント向けの本文を出す場面はモックに無いので保留 (U51、2026-10-08)。 ' +
-      '2026-10-09 の U57 で無くなった (部屋を残したまま Friend Match トップへ戻れないので、この確認を出す場面が無い)。',
+      '2026-10-10 の U57 で無くなった (部屋を残したまま Friend Match トップへ戻れないので、この確認を出す場面が無い)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U13', title: 'ランダム対戦の待機中: Cancel と ‹ は確認なしで戻る。アプリを離れたら検索を止める。見つからなければ "No opponent found."',
     desc: '相手を探している間 ("Searching for an opponent…") の操作。Cancel を押すと、確認ダイアログを出さずに Online Battle へ戻る。' +
@@ -1570,7 +1570,7 @@ var UNDECIDED = [
       '別の画面へ移ると自分の Ready は消える (友だちには "Opponent is no longer ready.")。U35 の「‹ は退出と同じ確認」はクライアントにだけ残る (U9)。' +
       'Close Room の確認の本文は U34、残るボタンは Keep Waiting (U11)、題名は "Close this room?" (U51)。以前のトグル (維持 / キャンセル確認) は削除した。' +
       'ホストの ‹ には確認を出さない (確認を出すのはクライアントだけ、2026-10-08 に確認)。 ' +
-      '2026-10-09 の U57 で置き換えた: ホストの ‹ は確認 "Close this room?" のあと部屋を閉じ、Close Room のボタンと部屋を残す離席・帯は無くなった。',
+      '2026-10-10 の U57 で置き換えた: ホストの ‹ は確認 "Close this room?" のあと部屋を閉じ、Close Room のボタンと部屋を残す離席・帯は無くなった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U15', title: '同期に失敗したら両者の Ready を消し、ふつうの Ready の流れからやり直す ("Couldn’t start the match. Please ready up again.")',
     desc: '開始の同期に失敗したら、両者の Ready を消して "Couldn’t start the match. Please ready up again." を出し、ふつうの Ready の流れ (60 秒の期限つき、U33) からやり直す。' +
@@ -1579,13 +1579,13 @@ var UNDECIDED = [
   { id: 'U16', title: '青 / 緑の帯もタップすると部屋の画面に戻る。タップで Ready にはならない',
     desc: '離席中のホストの帯は、青 ("Waiting for your friend…" など) も緑 ("Friend joined!") も、タップすると部屋の画面に戻る (赤 "Friend is ready!" と濃い赤 "Match code expired." も同じ)。' +
       'どの帯のタップでも Ready は押さない (U1)。以前のトグル (タップできない / ロビーへ) は削除した。 ' +
-      '2026-10-09 の U57 で無くなった (離席中の帯が無い)。',
+      '2026-10-10 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U17', title: '"Friend joined!" は本当に入った・入り直したときだけ。ホスト離席中に友だちが抜けたら "Your friend left." を一度',
     desc: '"Friend joined!" は、友だちが本当に部屋に入った・入り直したとき (Leave Room のあとの Join Match、"Could not reconnect." のあとの Retry など) だけ出す。' +
       'ホストが戻ったとき・再接続できたときには出さない (以前の図02 の「Away → Friend joined! → Ready」の 2 回目は無くなった)。' +
       'ホストの離席中に友だちが抜けたら、ホストの帯に "Your friend left." を一度だけ出し、そのあとは青い "Waiting for your friend…" に戻る (出す長さは 5 秒、U55 で 2026-10-08 に決定)。 ' +
-      '2026-10-09 の U57 で離席が無くなったので、"Your friend left." の帯は無い ("Friend joined!" の決まりはそのまま)。',
+      '2026-10-10 の U57 で離席が無くなったので、"Your friend left." の帯は無い ("Friend joined!" の決まりはそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U18', title: '期限切れでもクライアントを今の画面から動かさない。その場で "Match code expired." と Join Match',
     desc: 'Match Code の期限が切れても、クライアントを別の画面へ移さない。今の画面 (部屋の画面) のまま "Match code expired." と Join Match を出す (U10)。' +
@@ -1594,7 +1594,7 @@ var UNDECIDED = [
   { id: 'U19', title: '友だちの再接続を待っている間の帯は "Reconnecting…"。20 秒たつと "Waiting for your friend…"',
     desc: '友だちの再接続を待っている間 (U5 / U32) にホストが部屋の画面を離れると、帯は青い "Waiting for your friend…" ではなく "Reconnecting…" を出す。' +
       '20 秒たっても戻らなければ "Waiting for your friend…" に戻す (空の部屋を残している)。図03 の「Connection lost から ‹ で青い待機の帯」は、この決定で置き換えた。20 秒は QA² 側の仮の値。 ' +
-      '2026-10-09 の U57 で無くなった (離席中の帯が無い)。',
+      '2026-10-10 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U20', title: '結果画面: 勝敗・両者の名前・スコア・終わった理由を出す',
     desc: '結果画面には、勝敗 (Win / Lose / Draw / No contest。画面は "WIN!" / "LOSE" / "DRAW" / "NO CONTEST")、両者の名前、スコア、終わった理由を出す。' +
@@ -1668,19 +1668,19 @@ var UNDECIDED = [
     desc: 'Cancel Ready で Ready を取り消してもルームに残り、相手には "Opponent is no longer ready." を出す。クライアントが抜けると、ホストには "Your friend left. Waiting for another friend…" を出し、Match Code は変えない。' +
       'ホストがルームを閉じると、クライアントには "Room closed. The host left." を出して Friend Match トップへ移す。抜ける前に確認 "No match has started. No win or loss will be recorded." を出す。' +
       'ボタンはクライアントが Leave Room (U9)、ホストが Close Room (U14)。確認の題名はクライアントが "Leave this room?" (U9)、残るボタンは Keep Waiting (U11)。ホストの確認の題名は "Close this room?" (U51)。確認の本文は "No match has started. No win or loss will be recorded." (2026-10-08 に確認)。 ' +
-      '2026-10-09 の U57 で Close Room / Leave Room のボタンは無くなり、どちらも ‹ の確認になった (題名・本文・Keep Waiting はそのまま)。',
+      '2026-10-10 の U57 で Close Room / Leave Room のボタンは無くなり、どちらも ‹ の確認になった (題名・本文・Keep Waiting はそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U35', title: 'クライアントが別画面へ移る / ‹ は退出と同じ確認。アプリを離れるとその人の Ready が消える',
     desc: 'Ready 画面からほかの画面へ移るとき・‹ を押したときは、Leave Room と同じ確認 ("No match has started. No win or loss will be recorded.") を出す。' +
       'アプリを離れる (バックグラウンドへ移る・画面ロック) と、その人の Ready は消える (ルームには残る)。' +
       'そのため、図07 の「クライアントが別画面へ移ってもマッチを残し、赤い "Ready to start" トーストで戻る」流れは無くなった (U10 / U18 も解消)。アプリを離れたときに相手に出す表示は U53 ("Opponent is no longer ready.")。ホストの ‹ は U14 (2026-10-07) で変わった: 部屋を残して帯で示し、ホストの Ready は消える。確認を出すのはクライアントだけ (U9)。 ' +
-      '2026-10-09 の U57 で、ホストの ‹ も確認 ("Close this room?") を出すようになった。',
+      '2026-10-10 の U57 で、ホストの ‹ も確認 ("Close this room?") を出すようになった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U36', title: 'Ready 画面: プレイヤーごとのカード ("✓ Ready" / "Not ready")。押した側に "Waiting for opponent…"・60 秒のカウントダウン・Cancel Ready',
     desc: 'Ready 画面にはプレイヤーごとにカードを出し (ホストが離れている間、クライアントのカードのホストは "Away")、"✓ Ready" か "Not ready" を表示する。Ready を押した側には "Waiting for opponent…"、60 秒のカウントダウン、Cancel Ready を出す。' +
       '押していない側には "Opponent is ready. Are you?" を出す。押して送っている間は "Confirming…" を出す。' +
       'モックではカードの順は自分が左 (YOU 付き)、"Confirming…" は Ready ボタンの場所に無効表示で出す。カウントダウンは押した直後の "60s" のまま描く (実時間では減らさない)。 ' +
-      '2026-10-09 の U57 でホストは部屋を離れられなくなったので、カードの "Away" は無い。',
+      '2026-10-10 の U57 でホストは部屋を離れられなくなったので、カードの "Away" は無い。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U37', title: 'オンライン対戦は ☰ MATCH MENU。開いても試合は止まらない',
     desc: '案A。オンライン対戦では VsAI のポーズポップアップの代わりに MATCH MENU (☰) を出す。VsAI やソロのポーズのように Time.timeScale = 0 でゲームを止めることはせず、メニューを開いている間も試合は続く。' +
@@ -1745,7 +1745,7 @@ var UNDECIDED = [
   { id: 'U51', title: 'ホストの Close Room の確認の題名は "Close this room?"。U12 のクライアント向けの本文は保留',
     desc: 'ホストの Close Room の確認の題名は "Close this room?" のまま (本文は U34、ボタンは Close Room / Keep Waiting)。' +
       'U12 で決まったクライアント向けの本文 ("This will leave your current room. Your friend’s room will stay open.") は、出す場面が無い (クライアントは部屋に入ったまま別の画面へは移れない、U9) ので保留。 ' +
-      '2026-10-09 の U57 で、"Close this room?" はホストの ‹ の確認になった。U12 は U57 で無くなった。',
+      '2026-10-10 の U57 で、"Close this room?" はホストの ‹ の確認になった。U12 は U57 で無くなった。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U52', title: '開始前の切断の表示: 切れた側も "Connection lost. Reconnecting…" と残りの秒数。部屋のお知らせは Close で閉じる帯',
     desc: '切断した側には "Connection lost. Reconnecting…" と残りの秒数を出す (VS 画面・カウントダウン中の切断 (U32) も)。' +
@@ -1756,7 +1756,7 @@ var UNDECIDED = [
     desc: '今のモックのまま。Ready を送っている間 ("Confirming…") と、読み込み ("Starting match…")・VS 画面から先は Ready を取り消せない (「VS 画面までは取り消せる」案は採らない)。' +
       '送っている間は Close Room / Leave Room / ‹ も押せない。アプリを離れて Ready が消えたとき (U35) とホストが別の画面へ移って Ready が消えたとき (U14) は、相手に Cancel Ready と同じ "Opponent is no longer ready."。' +
       '相手が Ready を送っている途中で取り消したときは、相手の Ready が届いて相手が待つ側になる。戻ってきた・再接続したあとにお知らせは出さない。 ' +
-      '2026-10-09 の U57 で Close Room / Leave Room のボタンは無くなった (送っている間に ‹ を押せないのはそのまま)。',
+      '2026-10-10 の U57 で Close Room / Leave Room のボタンは無くなった (送っている間に ‹ を押せないのはそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U54', title: 'ランダム対戦と再戦の開始前の切断: 20 秒待ち、戻らなければ取りやめ (勝敗なし・レートは変わらない)。戻ったら VS 画面から',
     desc: 'ランダム対戦と再戦 (Friend Match の再戦も) の VS 画面・カウントダウン中に切断したら、20 秒待つ。戻らなければ試合を取りやめ、勝敗はつけず、レートも変わらない。' +
@@ -1767,7 +1767,7 @@ var UNDECIDED = [
   { id: 'U55', title: '離席中の帯: 友だちがいて Ready していなければ "Friend is in the room"。"Your friend left." は 5 秒',
     desc: 'ホストの離席中、友だちが部屋にいて Ready していないときの帯は "Friend is in the room" (以前のモックの青い "Waiting for your friend…" から変更)。' +
       '"Your friend left." は 5 秒出す (以前のモックは 3 秒)。5 秒は QA² 側の仮の値 (変わりうる)。 ' +
-      '2026-10-09 の U57 で無くなった (離席中の帯が無い)。',
+      '2026-10-10 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U56', title: 'Profile: 相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ。次の部屋・次の検索から相手に見える',
     desc: 'Online Battle に Profile を置く (両端末)。Profile 画面の上には VS 画面のカードの見本 (名前・絵文字・あいさつ) を出し、選ぶたびにすぐ変える。下に Save / Cancel (\u2039 は Cancel と同じ)。' +
@@ -1789,5 +1789,5 @@ var UNDECIDED = [
       '(本文は U34 の "No match has started. No win or loss will be recorded."、ボタンは Close Room / Leave Room と Keep Waiting (U11))。Keep Waiting で部屋に残る。' +
       'ホストが閉じると、相手 (クライアント) は "Room closed. The host left." で Friend Match トップへ (U34)。"Could not reconnect." の画面も Retry と ‹ だけ。' +
       '部屋を作ったまま他のモードを遊べるのは便利だが、バグの原因になり今は仕様として重いので、部屋を残したまま別の画面へ移ることはできない (以前の U14 の離席と帯 (U1 / U16 / U19 / U55)、U12 の確認は無くなった)。',
-    decided: { by: 'YoshiyukiN さんの FB (#1891、1・2 番目)', date: '2026-10-09' } },
+    decided: { by: 'YoshiyukiN さんの FB (#1891、1・2 番目)', date: '2026-10-10' } },
 ];

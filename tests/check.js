@@ -125,7 +125,7 @@ if (u31 && (!/Ready/.test(u31.title) || !/2026-10-07/.test(u31.decided.date))) f
 const OLD_EVENTS = ['sys.autoStart', 'host.startMatch', 'client.startMatch', 'sys.startFailed', 'sys.resetWaiting', 'net.lostDuringVs', 'sys.ready',
   'sys.peerConnected', 'sys.readyScreen', 'net.unstable', 'net.lost', 'host.cancelMatch', 'host.dialog.cancelMatch', 'client.leaveMatch', 'client.dialog.leaveMatch',
   'client.dialog.goBack', 'host.dialog.stay', 'client.dialog.stay',
-  // 2026-10-09 (U57): Close Room / Leave Room のボタンと、部屋を残す離席 (帯・"Your friend left."・作り直しの確認) は無くなった
+  // 2026-10-10 (U57): Close Room / Leave Room のボタンと、部屋を残す離席 (帯・"Your friend left."・作り直しの確認) は無くなった
   'host.closeRoom', 'host.leaveRoom', 'client.leaveRoom', 'host.dialog.leaveRoom', 'host.joinMatch', 'host.dialog.createMatch', 'host.dialog.joinMatch',
   'host.dialog.keepCurrent', 'sys.friendLeftShown'];
 for (const ev of OLD_EVENTS) if (EVENT_LABELS[ev]) fail(`古いイベント ${ev} のラベルが残っている`);
@@ -411,12 +411,12 @@ for (const [name, text] of [['Client.FriendMatch.Room.HostLeft', 'Room closed. T
 expectFire(at('Host.Game.Play', 'Client.Game.Play'), 'host.disconnect', 'Host.Game.Disconnected', 'Client.Game.OpponentDisconnected');
 console.log('ok  U32 / U15: VS 画面・カウントダウン中の切断は Ready を消して 20 秒待つ (Match cancelled・Room closed)、読み込みは 20 秒で "Match could not start."、同期の失敗は "Couldn’t start the match."、勝敗なし (両端末)');
 
-// 決定 U57 (YoshiyukiN さんの FB、#1891 の 1・2 番目、2026-10-09): 部屋の画面の出口は ‹ だけ。
+// 決定 U57 (YoshiyukiN さんの FB、#1891 の 1・2 番目、2026-10-10): 部屋の画面の出口は ‹ だけ。
 // ホストの ‹ は "Close this room?" → 部屋を閉じる (クライアントは "Room closed. The host left.")、クライアントの ‹ は "Leave this room?" → 部屋を抜ける。
 // どちらも Keep Waiting で部屋に残る。部屋を残したまま別の画面へは移れない (以前の U14 の離席・帯 U1 / U16 / U19 / U55 と U12 の確認は無くなった)
 {
   const u57 = UNDECIDED.find((u) => u.id === 'U57');
-  if (!u57 || !u57.decided || !/YoshiyukiN/.test(u57.decided.by) || u57.decided.date !== '2026-10-09' || !/#1891/.test(u57.desc)) fail('U57 が #1891 の YoshiyukiN さんの FB (2026-10-09) の決定になっていない');
+  if (!u57 || !u57.decided || !/YoshiyukiN/.test(u57.decided.by) || u57.decided.date !== '2026-10-10' || !/#1891/.test(u57.desc)) fail('U57 が #1891 の YoshiyukiN さんの FB (2026-10-10) の決定になっていない');
   for (const id of ['U1', 'U9', 'U12', 'U14', 'U16', 'U19', 'U34', 'U55']) if (!/U57/.test(UNDECIDED.find((u) => u.id === id).desc)) fail(`${id} の説明に、U57 で変わったことが無い`);
   // 部屋を残す離席が無い: 状態・帯・グループ・ステージ選択の画面・クライアントのカードの "Away"
   for (const name of Object.keys(SCREENS).concat(Object.keys(STATE_GROUPS))) if (/\.Away(\.|$)/.test(name)) fail(`離席の ${name} が残っている (U57)`);
@@ -1190,13 +1190,13 @@ for (const [d, R, , O] of eachSideAll) {
     expectFire(st, `${d}.friendMatch`, ...side(`${R}.FriendMatch.Room`, `${O}.MultiModeSelection`));
   }
 }
-// U55: 離席中の帯は 2026-10-09 の U57 で無くなった (上の U57 の確認)
+// U55: 離席中の帯は 2026-10-10 の U57 で無くなった (上の U57 の確認)
 // pi の仮定 3 (2026-10-08 に確認): 部屋での切断 (U5) の再接続待ちの間は Match Code の期限の時計が止まらない
 expectFire(at(L('Host', 'FriendDisconnected'), L('Client', 'ConnectionLost')), 'timer.codeExpired', L('Host', 'CodeExpired'), L('Client', 'ConnectionLost'));
 expectFire(at(L('Host', 'ConnectionLost'), L('Client', 'FriendDisconnected')), 'timer.codeExpired', L('Host', 'ConnectionLost'), L('Client', 'CodeExpired'));
 expectFire(at(L('Host', 'CodeExpired'), L('Client', 'ConnectionLost')), 'net.recovered', L('Host', 'CodeExpired'), L('Client', 'CodeExpired'));
 expectFire(at(L('Host', 'ConnectionLost'), L('Client', 'CodeExpired')), 'net.recovered', L('Host', 'CodeExpired'), L('Client', 'CodeExpired'));
-// pi の仮定 1 (ホストの ‹ は確認を出さない) は 2026-10-09 の U57 で変わった (ホストの ‹ は "Close this room?"。上の U57 の確認)。
+// pi の仮定 1 (ホストの ‹ は確認を出さない) は 2026-10-10 の U57 で変わった (ホストの ‹ は "Close this room?"。上の U57 の確認)。
 // 仮定 5: Online Battle へ戻るボタンは降参のあとも "Back to Online"
 if (/Back to Online Battle/.test(shownText + appJs)) fail('"Back to Online Battle" が残っている (すべて "Back to Online")');
 console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、切断で止める 20 秒、次の相手の検索停止、Rating、ミュート、再戦の一行、部屋のお知らせ、開始前の切断の取りやめ');

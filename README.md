@@ -92,7 +92,7 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Ho
 (Ready していない側が離れても変わらないこと)、60 秒で両者の Ready が消えて "Ready check timed out…" になること、
 部屋の画面の出口が左上の ‹ だけで Close Room / Leave Room のボタンが無いこと (U57)、クライアントの ‹ が確認 "Leave this room?" を出し、Keep Waiting で Ready のまま残り、Leave Room でホストに "Your friend left. Waiting for another friend…" が出ること、
 ホストの ‹ が確認 "Close this room?" を出し、Keep Waiting で残り、閉じるとクライアントに "Room closed. The host left." が出ること、お知らせ付きの Ready 画面 (同期の失敗を含む 4 種類) からも Ready を押せること、
-部屋の画面のカード・文言・カウントダウン (60 / 20)・ボタン・"Code expires in 30:00"、期限切れと "Could not reconnect." の画面、2 つの確認の題名・本文・ボタンを確かめます。
+部屋の画面のカード・文言・カウントダウン (60 / 20)・ボタン、Match Code の下の一行がホストにだけあること (U58)、期限切れと "Could not reconnect." の画面、2 つの確認の題名・本文・ボタンを確かめます。
 フレンド対戦の部屋 (U1〜U19 で決定) については、参加のあとホスト "Friend joined!" / クライアント "Connecting…" で Ready を押せず、同期 (`sys.roomSynced`、1.5 秒の固定ではない) のあと Ready 画面になること、
 部屋での切断のすべての組み合わせで "Connection lost. Reconnecting…" / "Your friend disconnected…" になり、回復・20 秒で "Could not reconnect."・Retry・‹・残った側の ‹ の行き先 (U5)、
 部屋を残したまま離れる状態 (以前の U14 の離席) と帯が無いこと (U57)、"Friend joined!" になるのは本当に入った・入り直したときだけであること (U17)、
@@ -166,7 +166,7 @@ No contest にスコアの行が無いこと、モック操作 (時間切れの�
 Ready 画面 (U31 / U32 / U36) では、カードが 2 枚 ("✓ Ready" / "Not ready"、自分のカードに `YOU`) あること、数字は決定どおりのカウントダウン (Ready の "60s"、再接続を待つ両者の "20s"、U5 / U32 / U52) だけであること、
 カード・お知らせ・文言・ボタンが画面に収まって重ならないこと、‹ の確認 (Close this room? / Leave this room?) を開いても後ろのボタンが消えないこと、
 「アプリを離れる」「切断する」が端末の画面の中には無く、端末の下にあることも確かめます。
-部屋の画面 (U1〜U19) では、Match Code の下の "Code expires in 30:00" (期限切れと "Could not reconnect." の画面には無い)、数字が Match Code・期限・カウントダウンだけであること、
+部屋の画面 (U1〜U19) では、Match Code の期限の表示がどこにも無く、ホストにだけ Match Code の下に "Share this code with your friend!" があること (クライアントと、期限切れ・"Could not reconnect." の画面には無い、U58)、数字が Match Code・カウントダウンだけであること、
 クライアントのカードに "Away" が無いこと、古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まり、ボタン・入力欄・お知らせと重ならず、文字と › がはみ出さないことも確かめます。
 部屋の画面 (U57) では、Close Room / Leave Room のボタンがどこにも無く、‹ を押すとホストは "Close this room?"、クライアントは "Leave this room?" の確認が画面に収まって開き、Close Room / Leave Room と Keep Waiting を押せることも確かめます。
@@ -335,7 +335,7 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 
 | ID | シナリオ | 元の図 | 説明 |
 |---|---|---|---|
-| [1](https://qniapp.github.io/qa2-match-mock/#s=1&step=0) | 通常対戦 (ホストが先に Ready) | 01 | ホストが Create Match、クライアントが Match Code で Join Match。サーバーが参加を確認すると、ホストは "Friend joined!"、クライアントは "Connecting…" (どちらも Ready はまだ押せない、U4)。両者が部屋の画面にそろって同期が終わると Ready 画面になる (決まった待ち時間ではない、U4)。Ready 画面にはプレイヤーごとのカード (どちらも "Not ready")、Match Code の下に "Code expires in 30:00" (U7)、ボタンは両者とも Ready だけで、部屋の出口は左上の ‹ (U57)。両者が Ready を押したら開始 (U31)。ホストが Ready を押すと送っている間 "Confirming…"、届くとホストのカードが "✓ Ready" になり、ホストは "Waiting for opponent…" と 60 秒のカウントダウンと Cancel Ready、クライアントは "Opponent is ready. Are you?"。クライアントも押すと両者 "Starting match…" → VS 画面 → ゲーム画面に移り、ゲーム本体のカウントダウン (3 → 2 → 1) のあとプレイ開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。モック独自の 3·2·1 は置かない (U2 で決定)。 |
+| [1](https://qniapp.github.io/qa2-match-mock/#s=1&step=0) | 通常対戦 (ホストが先に Ready) | 01 | ホストが Create Match、クライアントが Match Code で Join Match。サーバーが参加を確認すると、ホストは "Friend joined!"、クライアントは "Connecting…" (どちらも Ready はまだ押せない、U4)。両者が部屋の画面にそろって同期が終わると Ready 画面になる (決まった待ち時間ではない、U4)。Ready 画面にはプレイヤーごとのカード (どちらも "Not ready")、ホストにだけ Match Code の下に "Share this code with your friend!" (U58)、ボタンは両者とも Ready だけで、部屋の出口は左上の ‹ (U57)。両者が Ready を押したら開始 (U31)。ホストが Ready を押すと送っている間 "Confirming…"、届くとホストのカードが "✓ Ready" になり、ホストは "Waiting for opponent…" と 60 秒のカウントダウンと Cancel Ready、クライアントは "Opponent is ready. Are you?"。クライアントも押すと両者 "Starting match…" → VS 画面 → ゲーム画面に移り、ゲーム本体のカウントダウン (3 → 2 → 1) のあとプレイ開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。モック独自の 3·2·1 は置かない (U2 で決定)。 |
 | [1b](https://qniapp.github.io/qa2-match-mock/#s=1b&step=0) | 通常対戦 (クライアントが先に Ready) | 01 | シナリオ 1 と同じだが、クライアントが先に Ready を押す。クライアントは "Waiting for opponent…" と 60 秒のカウントダウン、ホストは "Opponent is ready. Are you?"。ホストも押すと両者 "Starting match…" → VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (U31 / U36)。 |
 | [3a](https://qniapp.github.io/qa2-match-mock/#s=3a&step=0) | Ready 画面でホストが切断 → 20 秒のうちに戻る → もう一度 Ready | 03 (10-07 の決定 U5 で置き換え) | クライアントが Ready を押して待っている間にホストの接続が切れる (端末の下のモック操作「切断する」)。両者の Ready は消え、20 秒 (仮) まで自動で再接続する (U5)。ホストは "Connection lost. Reconnecting…"、クライアントは "Your friend disconnected. Waiting for them to reconnect…"。20 秒のうちに戻る (右パネルの環境イベント「通信が回復する」) と、両者とも Ready していない Ready 画面に戻る (入り直しではないので "Friend joined!" は出さない、U17)。両者が Ready を押して開始。図03 の「両者が "Connecting…" → "Connection lost." → Cancel Match」の流れは、この決定で置き換えた。 |
 | [3b](https://qniapp.github.io/qa2-match-mock/#s=3b&step=0) | Ready 画面でクライアントが切断 → 戻らない → Could not reconnect → ‹ で抜ける | 03 (10-07 の決定 U5 で置き換え、10-09 の U57 で ‹ に) | クライアントの接続が切れ、20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、クライアントは "Could not reconnect." と Retry (U5)。ホストは空の部屋を残して "Waiting for your friend…" (同じ Match Code)。クライアントが ‹ → 確認 "Leave this room?" → Leave Room で Friend Match トップへ戻る (U5 / U57)。 |
@@ -402,6 +402,28 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 - **Profile** (シナリオ 22 / 22b): 2026-10-08 に決定 (U56)。開けるのは Online Battle からだけ。候補と既定値は QA² 側の仮の値。シナリオは localStorage に関係なく、いつも最初の値 (ホスト 👋 "Hello!"、クライアント 😎 "Let’s go!") から始まる。
 - **MATCH MENU** (シナリオ 16 / 16b / 16c): オンライン対戦の MATCH MENU は 2026-10-07 に決定 (案A、U37〜U42)。試合は止まらず (Time.timeScale = 0 にしない、BGM も下げない)、暗幕は薄くゲーム画面が見えたまま。ボタンは CONTINUE と SURRENDER だけで、対戦中に REMATCH / RETRY は無い (U39)。
 
+## 2026-10-10 の決定 (U58: Match Code の期限を出さず、ホストに一行)
+
+qniapp/qa2#1891 の YoshiyukiN さんの「FB意見まとめ」の 3 番目を反映しました (4 番目以降は未反映)。**未決は 0 件のまま** です。
+
+- **3 番目**: Match Code の期限の表示は固い表現なので、出さなくてよい。出すなら、このコードを友だちに伝えることを書いたほうがよい (ホストのみ)。
+
+モックでは次のようにしました。
+
+| | ホスト | クライアント |
+|---|---|---|
+| Match Code の下 | "Share this code with your friend!" | 何も出さない |
+
+- 一行を出すのは、以前に期限を出していた部屋の画面です: 友だちを待っている間、入った直後 (同期の前)、Ready 画面 (お知らせ付きを含む)、切断を待っている間、友だちが抜けたあと。
+  期限切れと "Could not reconnect." の画面には出しません (以前の期限の表示と同じ)。
+- 期限そのもの (30 分 (仮)、サーバーが数える、切れたら両者に "Match code expired."、U7 / U10 / U18) は変えていません。画面に残り時間を出さないだけです。
+- 状態・イベント・遷移表の行・シナリオの数は変わりません (199 状態・61 グループ・325 行・58 シナリオ)。画面の部品は `.code-expiry` → `.code-hint`、データは `CODE_EXPIRY` → `CODE_HINT`、画面の項目は `expiry` → `codeHint` にしました。
+
+- `index.html#s=1&step=6` - Ready 画面。ホストにだけ "Share this code with your friend!"
+- `index.html#s=4c&step=2` - 友だちを待っているホスト
+
+![Ready 画面: ホストにだけ Share this code with your friend! (U58)](docs/screenshots/01-normal-ready.png)
+
 ## 2026-10-09 の決定 (U57: 部屋の出口は ‹ だけ)
 
 qniapp/qa2#1891 の YoshiyukiN さんの「FB意見まとめ」の 1・2 番目を反映しました (3 番目以降は未反映)。**未決は 0 件のまま** です。
@@ -426,7 +448,7 @@ qniapp/qa2#1891 の YoshiyukiN さんの「FB意見まとめ」の 1・2 番目�
 - 部屋を残したまま別の画面へ移ることはできません。以前のホストの ‹ (確認なしで部屋を残し、行った先の画面の帯で部屋の様子を示す、U14) と、
   その帯 (U1 / U16 / U17 の "Your friend left." / U19 / U55)、離席中の Create Match / Join Match の確認 (U12)、クライアントのカードの "Away" (U36) は無くなりました。
   それぞれの決定の説明 (右パネルの「決定」タブ) に、U57 で変わったことを書き足しています。
-- ダイアログの題名・本文・ボタンの文言は今のまま (U9 / U11 / U34 / U51) で、#1891 の 3 番目以降の FB (Code expires の表示、名前、コピーボタンなど) はまだ反映していません。
+- ダイアログの題名・本文・ボタンの文言は今のまま (U9 / U11 / U34 / U51) で、#1891 の 3 番目の FB (Match Code の期限の表示) は 2026-10-10 の U58 で反映し、4 番目以降 (名前、コピーボタンなど) はまだ反映していません。
 
 状態・イベント:
 
@@ -693,8 +715,8 @@ U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのク
 > 下の「部屋の画面」は今の動きに書き直し、離席の帯とシナリオ 2a〜2e / 3d / 14 は当時の記録として残しています。
 
 **秒数 (再接続の 20 秒) と Match Code の期限 30 分は QA² 側の仮の値です** (変わりうる)。
-電話の画面には決定どおり "Code expires in 30:00" を出しますが、それが仮の値であることは右パネルの説明・遷移表のメモ・この README にだけ書きます。
-モックの期限は数えず (30:00 のまま)、期限切れと再接続のタイムアウトは右パネルの環境イベントで起こします。
+電話の画面には Match Code の期限を出しません (2026-10-10 の U58。それまでは Match Code の下に残り時間を出していた)。仮の値であることは右パネルの説明・遷移表のメモ・この README にだけ書きます。
+期限切れと再接続のタイムアウトは右パネルの環境イベントで起こします。
 
 | ID | 決定 |
 |---|---|
@@ -702,7 +724,7 @@ U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのク
 | U4 | Ready を押せるのは、サーバーが参加を確認し、両者が部屋の画面にいて、同期が終わってから。以前の 1.5 秒の固定の待ち時間はやめた。同期の前は、ホストに "Friend joined!"、クライアントに "Connecting…" |
 | U5 | 部屋 (Ready 画面・読み込み) で切断したら、20 秒まで自動で再接続し、その間は両者の Ready を消す。切れた側は "Connection lost. Reconnecting…"、残った側は "Your friend disconnected. Waiting for them to reconnect…"。20 秒で戻れなければ、切れた側に "Could not reconnect." と Retry / Leave Room。クライアントは Friend Match トップへ戻り、ホストは空の部屋を残す |
 | U6 | "Connection failed" は Create / Join がサーバーに届かないときだけ。ホストは "Couldn’t create a room. Try again."、クライアントは "Couldn’t join the room. Try again."。Match Code の誤り・期限切れ・満員・閉じた部屋の表示とは別 |
-| U7 | Match Code の期限は 30 分 (仮) で、サーバーが数える。開始の読み込み・VS 画面・カウントダウンと U32 の再接続待ちの間は時計が止まる。部屋の画面に "Code expires in 30:00"。切れたら両者に "Match code expired." |
+| U7 | Match Code の期限は 30 分 (仮) で、サーバーが数える。開始の読み込み・VS 画面・カウントダウンと U32 の再接続待ちの間は時計が止まる。切れたら両者に "Match code expired."。部屋の画面に出していた残り時間は U58 (2026-10-10) で出さなくなった |
 | U9 | クライアントには Leave Room を出す (以前ボタンの無かった待機中も)。Leave Room と ‹ (端末の戻る) は同じ確認: 題名 "Leave this room?"、本文は決定済みの "No match has started. No win or loss will be recorded." (U34)、ボタン Leave Room / Keep Waiting |
 | U10 | 期限切れの画面に Ready を出さない。ホストは Create Match、クライアントは Join Match |
 | U11 | 確認の "Go Back" は "Keep Waiting" に |
@@ -727,7 +749,7 @@ U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのク
 | 20 秒で再接続できなかった (U5) | "Could not reconnect."、Retry | 同じ |
 | 期限切れ (U7 / U10 / U18) | "Match code expired."、Create Match | "Match code expired."、Join Match (今の画面のまま) |
 
-- Match Code の下にはいつも "Code expires in 30:00" を出します (期限切れと "Could not reconnect." の画面は除く、U7)。
+- Match Code の期限は画面に出しません。ホストにだけ Match Code の下に "Share this code with your friend!" を出します (期限切れと "Could not reconnect." の画面は除く、U58、2026-10-10)。クライアントには出しません。
 - 部屋を出るボタンはありません。出口はどの段階も左上の ‹ だけです (U57、2026-10-09)。以前はホストが Close Room (U14)、クライアントが Leave Room (U9) でした。
 - 確認: クライアントの ‹ は "Leave this room?" / "No match has started. No win or loss will be recorded." / [Leave Room] [Keep Waiting] (U9 / U11 / U34 / U57)。
   ホストの ‹ は "Close this room?" / 同じ本文 / [Close Room] [Keep Waiting] (題名は 2026-10-08 に U51 で決定)。"Could not reconnect." の画面の ‹ も、ホストは "Close this room?"、クライアントは "Leave this room?" です。
@@ -825,7 +847,7 @@ Friend Match のシナリオは、参加のあとの自動遷移が 2 つ (`sys.
 
 | ID | 手順 | 見られる画面 |
 |---|---|---|
-| 1 | 13 | 5: ホスト "Friend joined!" / クライアント "Connecting…" (Ready は押せない) → 6: 同期が終わって Ready 画面 ("Code expires in 30:00") |
+| 1 | 13 | 5: ホスト "Friend joined!" / クライアント "Connecting…" (Ready は押せない) → 6: 同期が終わって Ready 画面 (ホストにだけ "Share this code with your friend!") |
 | ~~2a~~ | - | 2026-10-09 の U57 で削除 (当時: 4: ステージ選択に青い帯 → 7: 友だちが入って緑の "Friend joined!" (クライアントは "Connecting…"、カードのホストは "Away") → 8: タップで戻る → 9: 同期して Ready 画面) |
 | ~~2b~~ | - | 2026-10-09 の U57 で削除 (当時: 8: 期限切れ。ホストの帯は "Match code expired."、クライアントはその場で "Match code expired." と Join Match → 9: ホストがタップして Create Match → 11: 新しい部屋 / クライアントは Friend Match トップ → 13: 入り直す) |
 | ~~2c~~ | - | 2026-10-09 の U57 で削除 (当時: 9: Ready していたホストが ‹ で離れて Ready が消える (クライアントに "Opponent is no longer ready.") → 11: 友だちが Ready して赤い "Friend is ready!" → 12: タップで戻るだけ ("Opponent is ready. Are you?") → 14: ホストも Ready して "Starting match…") |
@@ -1605,6 +1627,10 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 
 ### 決定済み
 
+- **U58 Match Code の期限を出さず、ホストにだけ "Share this code with your friend!"** - 決定 (YoshiyukiN さんの FB、#1891 の 3 番目、2026-10-10)  
+  - 部屋の画面の Match Code の下の期限の表示をやめる (固い表現のため)。期限そのもの (30 分 (仮)、U7) は変えない。
+  - 代わりにホストにだけ "Share this code with your friend!" を出す。クライアントには出さない。
+  詳しくは「2026-10-10 の決定 (U58: Match Code の期限を出さず、ホストに一行)」を見てください。
 - **U57 部屋の出口は左上の ‹ だけ** - 決定 (YoshiyukiN さんの FB、#1891 の 1・2 番目、2026-10-09)  
   - 部屋の画面の Close Room (ホスト) と Leave Room (クライアント) のボタンを無くし、左上の ‹ に統一する。ホストの ‹ は部屋を閉じ、クライアントの ‹ は部屋を抜ける。
   - ‹ でも確認を出す: ホストは "Close this room?" ([Close Room] / [Keep Waiting])、クライアントは "Leave this room?" ([Leave Room] / [Keep Waiting])。本文は U34。Keep Waiting で部屋に残る。
@@ -1647,7 +1673,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   - **U5** 部屋での切断は 20 秒まで自動で再接続し、その間は両者の Ready を消す。切れた側 "Connection lost. Reconnecting…"、残った側 "Your friend disconnected. Waiting for them to reconnect…"。
     20 秒で戻れなければ、切れた側に "Could not reconnect." と Retry / Leave Room。クライアントは Friend Match トップへ戻り、ホストは空の部屋を残す。**20 秒は QA² 側の仮の値**。
   - **U6** "Connection failed" は Create / Join がサーバーに届かないときだけ。ホスト "Couldn’t create a room. Try again."、クライアント "Couldn’t join the room. Try again."。Match Code の誤り・期限切れ・満員・閉じた部屋の表示とは別。
-  - **U7** Match Code の期限は 30 分で、サーバーが数える。読み込み・VS 画面・カウントダウンと U32 の再接続待ちの間は時計が止まる。"Code expires in 30:00"。切れたら両者に "Match code expired."。**30 分は QA² 側の仮の値**。
+  - **U7** Match Code の期限は 30 分で、サーバーが数える。読み込み・VS 画面・カウントダウンと U32 の再接続待ちの間は時計が止まる。切れたら両者に "Match code expired."。**30 分は QA² 側の仮の値**。部屋の画面の残り時間の表示は U58 (2026-10-10) で無くなった。
   - **U8** ホストが閉じたあとのクライアントは U34 で決まった ("Room closed. The host left." で Friend Match トップへ)。
   - **U9** クライアントには Leave Room。Leave Room と ‹ は同じ確認: "Leave this room?" / "No match has started. No win or loss will be recorded." / Leave Room・Keep Waiting。
   - **U10** 期限切れの画面に Ready を出さない。ホストは Create Match、クライアントは Join Match。

@@ -272,7 +272,7 @@ var TRANSITIONS = (function () {
     to: { host: 'Host.FriendMatch.Room.ConnectionFailed', client: '*' },
     note: 'モック設定「Create Match の結果 = 接続失敗」のとき。決定 (U6): サーバーに届かないときだけ "Connection failed" と "Couldn\u2019t create a room. Try again."', decided: ['U6'] });
   T({ from: { host: hostTop, client: '*' }, event: 'host.createMatch', to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' },
-    note: '図01: Match Code QWERTY123 が発行される。決定 (U7): 期限は 30 分 (仮)、"Code expires in 30:00"。部屋のお知らせは画面が変わるので消える (U52)', decided: ['U7', 'U52'] });
+    note: '図01: Match Code QWERTY123 が発行される。決定 (U7 / U58): 期限は 30 分 (仮) で画面には出さず、ホストに "Share this code with your friend!"。部屋のお知らせは画面が変わるので消える (U52)', decided: ['U7', 'U58', 'U52'] });
   T({ from: { host: 'Host.FriendMatch.Room.ConnectionFailed', client: '*' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Room', client: '*' },
     note: '決定 (U6): トーストをタップして閉じる', decided: ['U6'] });
   T({ from: { host: hostNoticeTop, client: '*' }, event: 'host.closeNotice', to: { host: 'Host.FriendMatch.Room', client: '*' },
@@ -1162,8 +1162,8 @@ var ROOM_TEXT = {
   couldNotReconnect: 'Could not reconnect.',
   codeExpired: 'Match code expired.',
 };
-// Match Code の期限 (決定 U7)。30 分は QA² 側の仮の値で、サーバーが数える。モックは "30:00" のまま描く
-var CODE_EXPIRY = { minutes: 30, text: 'Code expires in 30:00' };
+// Match Code の下の一行 (決定 U58、#1891 の FB 3)。ホストにだけ出す。期限 (U7) は画面に出さない
+var CODE_HINT = 'Share this code with your friend!';
 var READY_NOTICE_TEXT = {
   TimedOut: 'Ready check timed out. Press Ready when you\u2019re ready.',
   OpponentNotReady: 'Opponent is no longer ready.',
@@ -1171,7 +1171,8 @@ var READY_NOTICE_TEXT = {
   SyncFailed: 'Couldn\u2019t start the match. Please ready up again.',
 };
 var READY_TIMERS = { ready: 60, reconnect: 20 }; // 秒。どちらも QA² 側の仮の値 (U33 / U5 / U32 / U46 / U54)
-var ROOM_RULES_CONTEXT = 'Match Code の期限は 30 分 (QA² 側の仮の値) で、サーバーが数える。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は時計が止まり、部屋での切断 (U5) の再接続待ちの間は止まらない (決定 U7)。' +
+var ROOM_RULES_CONTEXT = 'Match Code の期限は 30 分 (QA² 側の仮の値) で、サーバーが数え、画面には出さない (決定 U7 / U58)。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は時計が止まり、部屋での切断 (U5) の再接続待ちの間は止まらない (U7)。' +
+  'ホストにだけ、Match Code の下に "Share this code with your friend!" を出す (U58)。' +
   '部屋の画面の出口は左上の \u2039 だけで、Close Room / Leave Room のボタンは無い (決定 U57、#1891 の FB 1・2)。ホストの \u2039 は確認 "Close this room?" のあと部屋を閉じ (U51)、' +
   'クライアントの \u2039 は確認 "Leave this room?" のあと部屋を抜ける (U9)。どちらも Keep Waiting で部屋に残る (U11)。部屋を残したまま別の画面へは移れない。';
 var READY_CONTEXT = 'Ready 画面 (決定 U31 変更 / U36)。プレイヤーごとのカードに "\u2713 Ready" / "Not ready"。両者が Ready を押したら "Starting match\u2026" → VS 画面 → ゲーム本体のカウントダウン。' +
@@ -1206,7 +1207,7 @@ var READY_PHASE_CONTEXT = {
 };
 var ROOM_NOTICE_CONTEXT = '部屋のお知らせは画面の上の帯で、モーダルではない (決定 U52)。Close で閉じるまで残り、Match Code を入れても消えない。ほかの画面へ移る (‹・Create Match・Join Match の結果) と消える。';
 var ROOM_CONTEXT = {
-  Waiting: '部屋を作った (図01)。"Code expires in 30:00" は Match Code の期限 (決定 U7。30 分は QA² 側の仮の値で、モックは数えない)。' + ROOM_RULES_CONTEXT,
+  Waiting: '部屋を作った (図01)。Match Code の下に "Share this code with your friend!" (決定 U58。ホストにだけ出す)。Match Code の期限 (U7。30 分は QA² 側の仮の値) は画面に出さない。' + ROOM_RULES_CONTEXT,
   ClientLeft: '友だちが抜けた (決定 U34)。同じ Match Code のまま、次の友だちを待つ。図05 の "left the match." → 自動で待機に戻る流れを、この 1 画面にまとめた。',
   MatchCancelled: 'VS 画面・カウントダウン中に切断した友だちが 20 秒 (仮) のうちに戻らなかった (決定 U32)。結果は無く、同じ Match Code のまま部屋に残って次の友だちを待つ。',
   HostLeft: 'ホストが部屋を閉じた (決定 U34)。Friend Match トップに "Room closed. The host left."。前の Match Code は使えない。' + ROOM_NOTICE_CONTEXT,
@@ -1301,14 +1302,14 @@ var SCREENS = (function () {
     return { roomNotice: { text: ROOM_NOTICES[key], buttons: [{ label: 'Close', event: 'closeNotice' }] }, decided: decided,
       context: ROOM_CONTEXT[key === 'MatchCancelled' ? 'RoomMatchCancelled' : key] };
   }
-  // 部屋の画面。Match Code の下に期限 "Code expires in 30:00" (決定 U7)。期限が切れた画面では出さない
-  function lobby(extra) {
-    return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [], expiry: true }, extra);
+  // 部屋の画面。ホストにだけ Match Code の下に "Share this code with your friend!" (決定 U58)。期限が切れた画面と再接続できなかった画面では出さない
+  function lobby(R, extra) {
+    return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [], codeHint: R === 'Host' }, extra);
   }
   // Ready 画面: プレイヤーごとのカード (自分・相手の Ready)、状況の一行、カウントダウン (秒)、お知らせ、ボタン。
   // 部屋を出るボタンは無く、‹ で確認を出す (決定 U57。ホストは "Close this room?"、クライアントは "Leave this room?")
   function readyLobby(R, mine, theirs, phase, extra) {
-    var spec = lobby({ cards: { me: mine, them: theirs }, buttons: [B.ready], decided: ['U31', 'U36', 'U7', 'U57'],
+    var spec = lobby(R, { cards: { me: mine, them: theirs }, buttons: [B.ready], decided: ['U31', 'U36', 'U7', 'U57'].concat(R === 'Host' ? ['U58'] : []),
       context: [READY_CONTEXT].concat(READY_PHASE_CONTEXT[phase] || []) });
     return Object.assign(spec, extra, { decided: spec.decided.concat((extra && extra.decided) || []) });
   }
@@ -1337,7 +1338,7 @@ var SCREENS = (function () {
       decided: ['U5', 'U52'] });
     S[L('FriendDisconnected')] = readyLobby(R, false, false, 'FriendDisconnected', { status: ROOM_TEXT.friendDisconnected, timer: READY_TIMERS.reconnect, buttons: [],
       decided: ['U5', 'U34'] });
-    S[L('CouldNotReconnect')] = lobby({ status: ROOM_TEXT.couldNotReconnect, buttons: [B.retry], expiry: false, decided: ['U5', 'U57'],
+    S[L('CouldNotReconnect')] = lobby(R, { status: ROOM_TEXT.couldNotReconnect, buttons: [B.retry], codeHint: false, decided: ['U5', 'U57'],
       context: [READY_PHASE_CONTEXT.CouldNotReconnect] });
     // VS 画面・カウントダウン中の切断 (決定 U32)。切れた側は "Connection lost. Reconnecting…" と残りの秒数 (U52)
     S[L('Reconnecting')] = readyLobby(R, false, false, 'Reconnecting', { status: ROOM_TEXT.connectionLost, timer: READY_TIMERS.reconnect, back: 'disabled', buttons: [],
@@ -1345,7 +1346,7 @@ var SCREENS = (function () {
     S[L('OpponentDisconnected')] = readyLobby(R, false, false, 'OpponentDisconnected', { status: READY_TEXT.opponentDisconnected, timer: READY_TIMERS.reconnect,
       buttons: [], decided: ['U32', 'U34'] });
     // 期限切れ (決定 U7 / U10 / U18): Ready は出さず、ホストは Create Match、クライアントは Join Match
-    S[L('CodeExpired')] = lobby({ status: ROOM_TEXT.codeExpired, expiry: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
+    S[L('CodeExpired')] = lobby(R, { status: ROOM_TEXT.codeExpired, codeHint: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
       decided: ['U7', 'U10'].concat(R === 'Client' ? ['U18'] : []), context: ROOM_CONTEXT.CodeExpired });
   }
   var errMsg = {
@@ -1360,12 +1361,12 @@ var SCREENS = (function () {
   S['Host.FriendMatch.Room.ConnectionFailed'] = top({ toast: 'failedCreate', decided: ['U6'], context: ROOM_CONTEXT.ConnectionFailed });
   S['Host.FriendMatch.Room.ReconnectFailed'] = top(roomNotice('ReconnectFailed', ['U52', 'U32', 'U54']));
   S['Host.FriendMatch.Room.MatchCancelled'] = top(roomNotice('MatchCancelled', ['U54', 'U52']));
-  S['Host.FriendMatch.Lobby.Waiting'] = lobby({ status: ROOM_TEXT.waiting, decided: ['U7', 'U57'], context: ROOM_CONTEXT.Waiting });
+  S['Host.FriendMatch.Lobby.Waiting'] = lobby('Host', { status: ROOM_TEXT.waiting, decided: ['U7', 'U57', 'U58'], context: ROOM_CONTEXT.Waiting });
   readyScreens('Host');
-  S['Host.FriendMatch.Lobby.ClientLeft'] = lobby({ status: 'Your friend left.\nWaiting for another friend\u2026',
-    decided: ['U34', 'U7', 'U57'], context: ROOM_CONTEXT.ClientLeft });
-  S['Host.FriendMatch.Lobby.MatchCancelled'] = lobby({ status: 'Match cancelled.\nOpponent did not reconnect.',
-    decided: ['U32', 'U7', 'U57'], context: ROOM_CONTEXT.MatchCancelled });
+  S['Host.FriendMatch.Lobby.ClientLeft'] = lobby('Host', { status: 'Your friend left.\nWaiting for another friend\u2026',
+    decided: ['U34', 'U7', 'U57', 'U58'], context: ROOM_CONTEXT.ClientLeft });
+  S['Host.FriendMatch.Lobby.MatchCancelled'] = lobby('Host', { status: 'Match cancelled.\nOpponent did not reconnect.',
+    decided: ['U32', 'U7', 'U57', 'U58'], context: ROOM_CONTEXT.MatchCancelled });
   S['Host.Matchmake'] = matchmake();
   S['Host.Matchmake.Stopped'] = inlineSearchNotice(SEARCH_NOTICES.stopped, { context: SEARCH_STOPPED_CONTEXT });
   S['Host.Matchmake.MatchCancelled'] = inlineSearchNotice(SEARCH_NOTICES.matchCancelled, { decided: ['U54', 'U43'], context: START_CANCELLED_CONTEXT.MatchCancelled });
@@ -1526,8 +1527,8 @@ var UNDECIDED = [
     desc: '"Connection failed" のトーストは、Create Match / Join Match がサーバーに届かないときだけ出す。文言はホストが "Couldn’t create a room. Try again."、クライアントが "Couldn’t join the room. Try again."。' +
       'Match Code の誤り・期限切れ・満員・閉じた部屋の赤字 (図08〜10 など) とは別。モックでは「モック設定」の Create Match / Join Match の結果を「接続失敗」にすると出る。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
-  { id: 'U7', title: 'Match Code の期限は 30 分 (サーバーが数える)。"Code expires in 30:00"、切れたら両者に "Match code expired."',
-    desc: 'Match Code の期限は 30 分で、サーバーが数える。部屋の画面の Match Code の下に "Code expires in 30:00" を出す (モックは数えずに 30:00 のまま)。' +
+  { id: 'U7', title: 'Match Code の期限は 30 分 (サーバーが数える)。切れたら両者に "Match code expired."',
+    desc: 'Match Code の期限は 30 分で、サーバーが数える。部屋の画面の Match Code の下には残り時間を出していたが、2026-10-10 の U58 で出さなくなった (ホストにだけ "Share this code with your friend!")。' +
       '開始の読み込み・VS 画面・カウントダウンと、U32 の再接続待ちの間は時計が止まる (その分は減らない)。切れたら両者に "Match code expired." (以前のクライアント側の "Match expired." とトーストの "Match code expired" をそろえた)。' +
       '30 分は QA² 側の仮の値 (変わりうる)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
@@ -1790,4 +1791,10 @@ var UNDECIDED = [
       'ホストが閉じると、相手 (クライアント) は "Room closed. The host left." で Friend Match トップへ (U34)。"Could not reconnect." の画面も Retry と ‹ だけ。' +
       '部屋を作ったまま他のモードを遊べるのは便利だが、バグの原因になり今は仕様として重いので、部屋を残したまま別の画面へ移ることはできない (以前の U14 の離席と帯 (U1 / U16 / U19 / U55)、U12 の確認は無くなった)。',
     decided: { by: 'YoshiyukiN さんの FB (#1891、1・2 番目)', date: '2026-10-10' } },
+  { id: 'U58', title: 'Match Code の期限は画面に出さない。ホストにだけ "Share this code with your friend!"',
+    desc: '#1891 の YoshiyukiN さんの FB の 3 番目。部屋の画面の Match Code の下の期限の表示は固い表現なので出さない。' +
+      '代わりにホストにだけ、Match Code を友だちに伝えることを示す一行 "Share this code with your friend!" を出す (クライアントには出さない)。' +
+      '出すのは以前に期限を出していた部屋の画面 (友だちを待っている間・Ready 画面・切断待ちなど) で、期限切れと "Could not reconnect." の画面には出さない。' +
+      '期限そのもの (30 分、切れたら "Match code expired.") は U7 のまま。',
+    decided: { by: 'YoshiyukiN さんの FB (#1891、3 番目)', date: '2026-10-10' } },
 ];

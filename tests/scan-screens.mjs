@@ -8,7 +8,7 @@
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
 // 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
-// 部屋の画面 (決定 U1〜U19) は、Match Code の下の "Code expires in 30:00" (U7)、クライアントのカードに "Away" が無いこと、
+// 部屋の画面 (決定 U1〜U19) は、Match Code の下にホストにだけ "Share this code with your friend!" があり期限の表示が無いこと (U58)、クライアントのカードに "Away" が無いこと、
 // 古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
 // 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
 // 部屋の画面の出口は左上の ‹ だけ (決定 U57): Close Room / Leave Room のボタンが無く、‹ はホストで "Close this room?"、クライアントで "Leave this room?" の確認を開き、
@@ -385,14 +385,16 @@ function scan() {
       // Ready 画面 (決定 U31 / U32 / U36) と部屋の画面 (決定 U1〜U19)。古い文言は出さない
       const OLD = text.match(/Start Match|Ready to start|Stay in Room|Go Back|Leave Match|Cancel Match|Cancel this match|Leave this match|Match expired\.|cancelled the match|left the match\./);
       if (OLD) findings.push(`${at}: 古い文言 "${OLD[0]}" が残っている`);
-      // 部屋の画面: Match Code の下に期限 "Code expires in 30:00" (U7)。期限切れと再接続できなかった画面には出さない。数字は Match Code・期限・カウントダウンだけ
+      // Match Code の期限は画面に出さない (U58)
+      if (/expires in/i.test(text)) findings.push(`${at}: Match Code の期限の表示が残っている`);
+      // 部屋の画面: ホストにだけ Match Code の下に "Share this code with your friend!" (U58)。期限切れと再接続できなかった画面には出さない。数字は Match Code・カウントダウンだけ
+      const hint = screen.querySelector('.code-hint');
+      const wantHint = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.(CodeExpired|CouldNotReconnect)\b/.test(state);
+      if (!!hint !== wantHint || (hint && hint.textContent !== CODE_HINT)) findings.push(`${at}: Match Code の下の一行が ${hint ? hint.textContent : 'なし'} (期待: ${wantHint ? CODE_HINT : 'なし'})`);
       if (/\.FriendMatch\.Lobby\./.test(state)) {
-        const exp = screen.querySelector('.code-expiry');
-        const wantExpiry = !/\.(CodeExpired|CouldNotReconnect)\b/.test(state);
-        if (!!exp !== wantExpiry || (exp && exp.textContent !== CODE_EXPIRY.text)) findings.push(`${at}: 期限の表示が ${exp ? exp.textContent : 'なし'} (期待: ${wantExpiry ? CODE_EXPIRY.text : 'なし'})`);
         const timerText = (screen.querySelector('.rd-timer') || { textContent: '\u0000' }).textContent;
-        const rest = text.replace(MATCH_CODE_TEXT, '').replace(CODE_EXPIRY.text, '').replace(timerText, '');
-        if (/\d/.test(rest)) findings.push(`${at}: Match Code・期限・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
+        const rest = text.replace(MATCH_CODE_TEXT, '').replace(timerText, '');
+        if (/\d/.test(rest)) findings.push(`${at}: Match Code・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
       }
       // 画面の下の帯 (トースト): 端末の画面に収まり、ボタンや入力欄・お知らせと重ならない。作り直しに失敗したとき (⚠ createFailed) は "Connection failed" (U6 / U12)
       const toast = screen.querySelector('.toast');
@@ -429,7 +431,7 @@ function scan() {
         }
         // カード・お知らせ・状況の一行・ボタンが端末の画面に収まり、重ならない
         const sr = screen.getBoundingClientRect();
-        const parts = [...screen.querySelectorAll('.code-expiry, .rd-cards, .rd-notice, .rd-info .status, .rd-timer, .actions')].map((el) => [el, el.getBoundingClientRect()]);
+        const parts = [...screen.querySelectorAll('.code-hint, .rd-cards, .rd-notice, .rd-info .status, .rd-timer, .actions')].map((el) => [el, el.getBoundingClientRect()]);
         parts.forEach(([el, r]) => { if (r.top < sr.top || r.bottom > sr.bottom) findings.push(`${at}: ${el.className} が画面からはみ出している`); });
         for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
           const [a, ra] = parts[i]; const [b, rb] = parts[j];

@@ -280,16 +280,16 @@ for (const R of ['Host', 'Client']) {
     if (!s || !s.cards) { fail(`${L(R, k)} が Ready 画面 (カード付き) でない`); continue; }
     const got = [s.cards.me, s.cards.them, s.status || null, s.timer || null, btns(s), s.back];
     if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${L(R, k)} の表示 ${JSON.stringify(got)} (期待: ${JSON.stringify(want)})`);
-    if (!s.expiry) fail(`${L(R, k)} に "Code expires in 30:00" が無い (U7)`);
+    if (s.codeHint !== (R === 'Host')) fail(`${L(R, k)} の "${ctx.CODE_HINT}" が ${s.codeHint ? 'ある' : '無い'} (U58: ホストにだけ出す)`);
   }
   const cnr = SCREENS[L(R, 'CouldNotReconnect')];
-  if (!cnr || cnr.status !== 'Could not reconnect.' || btns(cnr) !== 'Retry' || cnr.back !== 'back' || cnr.cards) fail(`${L(R, 'CouldNotReconnect')} が "Could not reconnect." と Retry / ‹ でない (U5 / U57)`);
+  if (!cnr || cnr.status !== 'Could not reconnect.' || btns(cnr) !== 'Retry' || cnr.back !== 'back' || cnr.codeHint || cnr.cards) fail(`${L(R, 'CouldNotReconnect')} が "Could not reconnect." と Retry / ‹ でない (U5 / U57)`);
   const exp = SCREENS[L(R, 'CodeExpired')];
-  if (!exp || exp.status !== 'Match code expired.' || btns(exp) !== (R === 'Host' ? 'Create Match' : 'Join Match') || exp.expiry || exp.cards) fail(`${L(R, 'CodeExpired')} が "Match code expired." と ${R === 'Host' ? 'Create Match' : 'Join Match'} だけでない (U7 / U10)`);
+  if (!exp || exp.status !== 'Match code expired.' || btns(exp) !== (R === 'Host' ? 'Create Match' : 'Join Match') || exp.codeHint || exp.cards) fail(`${L(R, 'CodeExpired')} が "Match code expired." と ${R === 'Host' ? 'Create Match' : 'Join Match'} だけでない (U7 / U10)`);
 }
 for (const k of ['Waiting', 'ClientLeft', 'MatchCancelled']) {
   const s = SCREENS[L('Host', k)];
-  if (btns(s) !== '' || s.back !== 'back' || !s.expiry) fail(`${L('Host', k)} にボタンがあるか、‹ か期限の表示が無い (U57 / U7)`);
+  if (btns(s) !== '' || s.back !== 'back' || !s.codeHint) fail(`${L('Host', k)} にボタンがあるか、‹ か "${ctx.CODE_HINT}" が無い (U57 / U58)`);
 }
 // U57: どの画面にも Close Room / Leave Room のボタンは無い (確認ダイアログのボタンにだけある)
 for (const [name, s] of Object.entries(SCREENS)) {
@@ -297,7 +297,15 @@ for (const [name, s] of Object.entries(SCREENS)) {
   if (labels.some((l) => /^(Close|Leave) Room$/.test(l))) fail(`${name} に ${labels.join(' / ')} のボタンがある (U57: 出口は ‹ だけ)`);
 }
 if (!/\\u2713 Ready/.test(appJs) || !/Not ready/.test(appJs) || !/rd-card/.test(appJs) || !/rd-timer/.test(appJs)) fail('app.js に Ready 画面のカード ("✓ Ready" / "Not ready") とカウントダウンの描画が無い');
-if (!/CODE_EXPIRY\.text/.test(appJs) || ctx.CODE_EXPIRY.text !== 'Code expires in 30:00' || ctx.CODE_EXPIRY.minutes !== 30) fail('部屋の画面に "Code expires in 30:00" (U7) が無い');
+// U58: Match Code の期限は画面に出さず、ホストにだけ "Share this code with your friend!"。クライアントの画面には出さない
+if (!/CODE_HINT/.test(appJs) || ctx.CODE_HINT !== 'Share this code with your friend!') fail('部屋の画面に "Share this code with your friend!" (U58) が無い');
+if ('CODE_EXPIRY' in ctx || /expires in/i.test(appJs) || Object.values(SCREENS).some((s) => 'expiry' in s)) fail('部屋の画面に Match Code の期限の表示が残っている (U58)');
+for (const [name, s] of Object.entries(SCREENS)) if (s.codeHint && !name.startsWith('Host.FriendMatch.Lobby.')) fail(`${name} に "${ctx.CODE_HINT}" がある (U58: ホストの部屋の画面だけ)`);
+{
+  const u58 = UNDECIDED.find((u) => u.id === 'U58');
+  if (!u58 || !u58.decided || !/YoshiyukiN/.test(u58.decided.by) || u58.decided.date !== '2026-10-10' || !/#1891/.test(u58.desc)) fail('U58 が #1891 の YoshiyukiN さんの FB (2026-10-10) の決定になっていない');
+  if (!/U58/.test(UNDECIDED.find((u) => u.id === 'U7').desc)) fail('U7 の説明に、U58 で変わったことが無い');
+}
 const dlgWant = {
   leaveRoom: ['Leave this room?', 'No match has started. No win or loss will be recorded.', 'Leave Room / Keep Waiting'],
   closeRoom: ['Close this room?', 'No match has started. No win or loss will be recorded.', 'Close Room / Keep Waiting'],
@@ -310,6 +318,7 @@ for (const [k, want] of Object.entries(dlgWant)) {
 if (Object.keys(DIALOGS).join() !== 'closeRoom,leaveRoom') fail(`使わないダイアログが残っている (${Object.keys(DIALOGS)})`);
 if ('ROOM_SWITCH_BODY' in ctx) fail('U12 の作り直しの確認の本文が残っている (U57 で無くなった)');
 console.log('ok  U31 / U33〜U36 / U4 / U9 / U11 / U57: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト、‹ の確認 (Close this room? / Leave this room?) (両端末)');
+console.log('ok  U58: 部屋の画面に Match Code の期限を出さず、ホストにだけ "Share this code with your friend!" (クライアント・期限切れ・Could not reconnect. には無い)');
 
 // 決定 (U4): Ready を押せるのは参加の確認・両者が部屋の画面・同期の 3 つがそろってから。決まった待ち時間は置かない
 {

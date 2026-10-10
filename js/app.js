@@ -252,7 +252,7 @@
         '<div class="body">' +
         '<div class="code-head"><span>Match Code</span><span class="copy">Copy</span></div>' +
         '<div class="code">' + MATCH_CODE + '</div>' +
-        (s.expiry ? '<div class="code-expiry">' + esc(CODE_EXPIRY.text) + '</div>' : '') +
+        (s.codeHint ? '<div class="code-hint">' + esc(CODE_HINT) + '</div>' : '') +
         (s.cards ? readyHtml(dev, s) : '<div class="status-block">' +
           (s.name ? '<div class="peer">' + esc(s.name) + '</div>' : '') +
           '<div class="status' + (s.name ? '' : ' solo') + '">' + esc(s.status).replace(/\n/g, '<br>') + '</div></div>') +

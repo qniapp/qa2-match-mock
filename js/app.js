@@ -10,12 +10,6 @@
   // Ready 画面のカードの名前 (ロビーの "Client User" / "Host User" と同じ架空の名前)
   var LOBBY_NAMES = { host: 'Host User', client: 'Client User' };
   var RESULT_HEADLINES = { Win: ['WIN!', 'win'], Lose: ['LOSE', 'lose'], Draw: ['DRAW', 'draw'], NoContest: ['NO CONTEST', 'nocontest'] };
-  var STAGE_TILES = [
-    { label: 'H²', color: 'var(--h)' }, { label: 'X²', color: 'var(--x)' },
-    { label: 'Y²', color: 'var(--y)' }, { label: 'Z²', color: 'var(--z)' },
-    { label: 'H²→Z', color: 'var(--h)' }, { label: 'T²→S', color: 'var(--swap)' },
-    { label: '', color: 'var(--cnot)' }, { label: '', color: 'var(--y)' },
-  ];
   // ゲーム画面のプレースホルダー: 列ごとに下から積んだブロック ('+' は丸いブロック)
   var FIELD = [['S', 'H', 'Z', 'S'], ['Z', 'S', 'Y'], ['T', 'S', '+'], ['Z', 'T', 'S'], ['S', 'T', 'H', '+'], ['H', 'Z', '+', 'Z']];
   var OPP_FIELD = [['H', 'S', 'Z'], ['Z', 'T'], ['S', 'Y', 'T', 'Z'], ['T', 'Z'], ['+', 'H', 'S'], ['Z', 'H']];
@@ -197,9 +191,8 @@
     return html ? '<div class="actions">' + html + '</div>' : '';
   }
 
-  // 画面の下の帯。部屋を残したまま作り直そうとして失敗したとき (付属状態 Failed、決定 U6 / U12) は、部屋の帯の代わりに "Connection failed" を出す
+  // 画面の下の帯 ("Connection failed"、決定 U6)
   function toastHtml(dev, key) {
-    if (app.state[dev + 'Failed'] === 'create') key = 'failedCreate';
     if (!key) return '';
     var t = TOASTS[key];
     var tappable = t.tap && Engine.canFire(app.state, dev + '.' + t.tap);
@@ -264,12 +257,6 @@
           (s.name ? '<div class="peer">' + esc(s.name) + '</div>' : '') +
           '<div class="status' + (s.name ? '' : ' solo') + '">' + esc(s.status).replace(/\n/g, '<br>') + '</div></div>') +
         '</div>' + buttonsHtml(dev, s.buttons);
-    },
-    stage: function (dev, s) {
-      return header(dev, s, '') + '<div class="stage-label">Stage Select</div><div class="stage-grid">' +
-        STAGE_TILES.map(function (t) {
-          return '<div class="tile" style="--c:' + t.color + '"><div class="glyph"><i></i><i></i></div><span>' + esc(t.label) + '</span></div>';
-        }).join('') + '</div>';
     },
     random: function (dev, s) {
       return header(dev, s, s.title) + '<div class="body center">' +
@@ -347,16 +334,12 @@
 
   // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に "✓ Ready" / "Not ready"。
   // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、カウントダウン (秒)
-  // ホストが ‹ で部屋の画面を離れている間 (決定 U14) は、クライアントのカードのホストを "Away" にする (図02 の "Host User / Away")。
-  // 状態名ではなく、ホストの端末の状態 (Host.Away.*) で決まる表示
   function readyHtml(dev, s) {
     var other = dev === 'host' ? 'client' : 'host';
-    var peerAway = dev === 'client' && /^Host\.Away\./.test(app.state.host);
     var card = function (who, ready, isMe) {
-      var away = !isMe && peerAway;
-      return '<div class="rd-card' + (ready ? ' ready' : '') + (isMe ? ' me' : '') + (away ? ' away' : '') + '">' + (isMe ? '<span class="you">YOU</span>' : '') +
+      return '<div class="rd-card' + (ready ? ' ready' : '') + (isMe ? ' me' : '') + '">' + (isMe ? '<span class="you">YOU</span>' : '') +
         '<div class="rd-name">' + esc(LOBBY_NAMES[who]) + '</div>' +
-        '<div class="rd-state">' + (away ? 'Away' : ready ? '\u2713 Ready' : 'Not ready') + '</div></div>';
+        '<div class="rd-state">' + (ready ? '\u2713 Ready' : 'Not ready') + '</div></div>';
     };
     return '<div class="ready-block"><div class="rd-cards">' + card(dev, s.cards.me, true) + card(other, s.cards.them, false) + '</div>' +
       '<div class="rd-info">' +

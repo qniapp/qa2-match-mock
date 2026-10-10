@@ -21,23 +21,8 @@
 // ---- 状態のグループ -------------------------------------------------------
 
 // 状態名は案 C (2026-10-03): 「Host. / Client.」+ qa2 本体の画面名・状態名。旧名との対応表は README の「状態名」
-// ホストが ‹ で部屋の画面を離れても部屋は残り、行った先の画面の下の帯で部屋の様子を示す (決定 U14、2026-10-07)。
-//   Waiting       友だちがいない ("Waiting for your friend…"、青)
-//   FriendJoined  友だちが入った ("Friend joined!"、緑。本当に入った・入り直したときだけ、U17)
-//   FriendInRoom  友だちはいるが Ready していない (青の "Friend is in the room"、U55)
-//   FriendReady   友だちが Ready を押した ("Friend is ready!"、赤、U1)
-//   Reconnecting  友だちの再接続を待っている ("Reconnecting…"、青。20 秒たつと Waiting、U19)
-//   FriendLeft    友だちが抜けた ("Your friend left." を一度だけ 5 秒 (仮) 出して Waiting に戻る、U17 / U55)
-// どの帯もタップすると部屋の画面に戻るだけで、Ready は押さない (U1 / U16)。期限切れ (Expired) は濃い赤の "Match code expired."
-var AWAY_PLACES = ['FriendMatchRoom', 'StageSelection']; // ホストが Friend Match トップ / ステージ選択にいる
-var AWAY_STATUSES = ['Waiting', 'FriendJoined', 'FriendInRoom', 'FriendReady', 'Reconnecting', 'FriendLeft'];
-function away(place, status) { return 'Host.Away.' + place + '.' + status; }
-function awayStates(place, statuses) { return statuses.map(function (s) { return away(place, s); }); }
-
-var hostAwayPending = []; // 部屋がまだ有効なホスト離席状態
-AWAY_PLACES.forEach(function (p) { hostAwayPending = hostAwayPending.concat(awayStates(p, AWAY_STATUSES)); });
-var hostAwayWithFriend = []; // 離席中のホストの部屋に友だちがいる
-AWAY_PLACES.forEach(function (p) { hostAwayWithFriend = hostAwayWithFriend.concat(awayStates(p, ['FriendJoined', 'FriendInRoom', 'FriendReady', 'Reconnecting'])); });
+// 部屋の画面の出口は左上の ‹ だけ (決定 U57、#1891 の FB 1・2)。ホストの ‹ は確認のあと部屋を閉じ、クライアントの ‹ は確認のあと部屋を抜ける。
+// 部屋を残したまま別の画面へ移ること (以前の U14 の離席と帯) はできない
 
 // Ready 画面 (決定 U31〜U36): 両者が部屋にそろい、同期が終わってから試合が始まるまで。カード 1 枚ずつに "✓ Ready" / "Not ready"
 //   .Ready                     どちらも Ready していない
@@ -65,13 +50,13 @@ var clientReadyScreen = readyScreen('Client');
 
 // 同じ Match Code で次の友だちを待っている (決定 U32 / U34): 最初の待機、友だちが抜けた、友だちが戻らなかった
 var hostWaitingForFriend = ['Host.FriendMatch.Lobby.Waiting', 'Host.FriendMatch.Lobby.ClientLeft', 'Host.FriendMatch.Lobby.MatchCancelled'];
-// Close Room (決定 U14) と ‹ (部屋を残して離れる、U14) を押せるホストの部屋の画面
-var hostClosable = hostWaitingForFriend.concat(['Host.FriendMatch.Lobby.FriendJoined'], readyIdle('Host'), friendGone('Host'));
+// ‹ で "Close this room?" を出せるホストの部屋の画面 (決定 U57)。送っている間・読み込み・自分の再接続中は ‹ を押せない (U53)
+var hostClosable = hostWaitingForFriend.concat(['Host.FriendMatch.Lobby.FriendJoined'], readyIdle('Host'), friendGone('Host'), ['Host.FriendMatch.Lobby.CouldNotReconnect']);
 // 部屋にクライアントがいる (クライアントが抜けるとホストは "Your friend left…"、U34)。再接続中のホストも含む (戻ったときに見る)
 var hostWithClient = ['Host.FriendMatch.Lobby.FriendJoined'].concat(preStart('Host'), friendGone('Host'), selfGone('Host'));
 // 部屋にいるクライアント (ホストが閉じると "Room closed. The host left."、U34)。再接続中のクライアントも含む
 var clientInRoom = ['Client.FriendMatch.Lobby.Connecting'].concat(preStart('Client'), friendGone('Client'), selfGone('Client'));
-// Leave Room と ‹ で確認を出せるクライアントの部屋の画面 (決定 U9)
+// ‹ で "Leave this room?" を出せるクライアントの部屋の画面 (決定 U9 / U57)
 var clientLeavable = ['Client.FriendMatch.Lobby.Connecting'].concat(readyIdle('Client'), friendGone('Client'), ['Client.FriendMatch.Lobby.CouldNotReconnect']);
 // Match Code の期限が切れうる部屋の画面 (決定 U7)。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は期限の時計が止まる
 var hostExpirable = ['Host.FriendMatch.Lobby.FriendJoined'].concat(hostReadyScreen);
@@ -92,7 +77,6 @@ var clientRoomFilled = ['Client.FriendMatch.Room.CodeEntered'].concat(clientNoti
 var clientRoomAny = clientRoomEmpty.concat(clientRoomFilled);
 // ホストの Friend Match トップ (Create Match と ‹ を押せる)
 var hostTop = ['Host.FriendMatch.Room', 'Host.FriendMatch.Room.ConnectionFailed'].concat(hostNoticeTop);
-var hostExpiredAny = ['Host.FriendMatch.Lobby.CodeExpired', 'Host.Away.FriendMatchRoom.Expired', 'Host.Away.StageSelection.Expired'];
 
 // 対戦後の結果画面 (決定 U20〜U30、高宮さん 2026-10-07): 勝敗 (Win / Lose / Draw) × 再戦の段階。
 // Friend Match かランダム対戦か、レートが変わる対戦かは状態名ではなくセッション (SESSION_FIELDS の match / rated) で持つ
@@ -160,8 +144,6 @@ function always() { return true; }
 //   Dialog: 確認ダイアログ (画面が変わると閉じる)
 //   Stamp:  自分が送ったスタンプ (U27)。'gg' などは表示中 (3 秒、仮)、'sent' は消えたが次を送れるまでの待ち (送ってから 5 秒、仮)
 //   Mute:   相手のスタンプを出さない (U27)。同じ相手と続けて対戦している間 (再戦を含む) だけ続く (決定 U49)
-//   Failed: 部屋を残したまま作り直そうとして、サーバーに届かなかった (U6 / U12)。'create' のとき "Connection failed" のトーストを帯の代わりに出す。
-//           タップか、画面が変わると消える
 //   Emoji / Greeting:           保存した絵文字とあいさつ (U56)。ブラウザの localStorage に残る (読み書きは app.js、自由操作のときだけ)
 //   DraftEmoji / DraftGreeting: Profile 画面で選んでいるもの。開いたときに保存した値を写し、Save で保存した値へ写す。Cancel / ‹ で捨てる
 //   ShownEmoji / ShownGreeting: 相手に見せる値。部屋を作る・部屋に入る・相手を探し始めるときに保存した値を写す (行の copy、遷移表の末尾で付ける)
@@ -169,7 +151,6 @@ var DEVICE_FIELDS = {
   Dialog: { initial: null, keeps: function () { return false; } },
   Stamp: { initial: null, keeps: isResultState },
   Mute: { initial: false, keeps: isWithOpponent },
-  Failed: { initial: null, keeps: function () { return false; } },
   Emoji: { initial: function (d) { return PROFILE_INITIAL[d].emoji; }, keeps: always },
   Greeting: { initial: function (d) { return PROFILE_INITIAL[d].greeting; }, keeps: always },
   DraftEmoji: { initial: null, keeps: isProfileScreen },
@@ -183,12 +164,9 @@ var SESSION_FIELDS = { match: null, rated: false, rematch: false };
 
 // 遷移表の表示で、配列の代わりにグループ名を出すための一覧
 var STATE_GROUPS = {
-  'Host.Away.Pending': hostAwayPending,
-  'Host.Away.WithFriend': hostAwayWithFriend,
   'Host.FriendMatch.Lobby.Closable': hostClosable,
   'Host.FriendMatch.Lobby.WithClient': hostWithClient,
   'Host.FriendMatch.Lobby.Expirable': hostExpirable,
-  'Host.Expired.Any': hostExpiredAny,
   'Host.FriendMatch.Lobby.WaitingForFriend': hostWaitingForFriend,
   'Client.FriendMatch.Lobby.InRoom': clientInRoom,
   'Client.FriendMatch.Lobby.Expirable': clientExpirable,
@@ -222,10 +200,6 @@ var STATE_GROUPS = {
 STATE_GROUPS['Host.FriendMatch.Room.Top'] = hostTop;
 STATE_GROUPS['Client.FriendMatch.Room.Notice'] = clientNoticeTop;
 STATE_GROUPS['Client.FriendMatch.Room.Notice.CodeEntered'] = clientNoticeTopFilled;
-AWAY_PLACES.forEach(function (p) {
-  STATE_GROUPS['Host.Away.' + p + '.Pending'] = awayStates(p, AWAY_STATUSES);
-  STATE_GROUPS['Host.Away.' + p + '.Vacant'] = awayStates(p, ['Waiting', 'FriendLeft']);
-});
 OUTCOMES.forEach(function (o) {
   ['Host', 'Client'].forEach(function (R) {
     STATE_GROUPS[R + '.' + o + 'Result.Rematchable'] = resultStates(R, o, REMATCH_PHASES);
@@ -279,8 +253,8 @@ STATE_GROUPS['Host.MultiModeSelection.Any'] = profileOpenable('Host');
 STATE_GROUPS['Client.MultiModeSelection.Any'] = profileOpenable('Client');
 // 部屋を作る・部屋に入る・相手を探し始める行で、保存した絵文字とあいさつを相手に見せる値として写す (U56)。
 // イベントがこれらで、その端末の行き先が部屋の画面か相手を探す画面の行 (接続失敗や Match Code の誤りの行は写さない)
-// 同じ相手との再戦では写し直さない。ホストの "Join another match" はモックが入室を省いているので写さない (どちらも 2026-10-08 に確認)
-var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'dialog.createMatch', 'joinMatch', 'randomMatch', 'searchAgain', 'findNextOpponent'];
+// 同じ相手との再戦では写し直さない (2026-10-08 に確認)
+var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'joinMatch', 'randomMatch', 'searchAgain', 'findNextOpponent'];
 var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/;
 
 // ---- 遷移表 ---------------------------------------------------------------
@@ -288,7 +262,6 @@ var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake$|
 var TRANSITIONS = (function () {
   var rows = [];
   function T(r) { rows.push(r); }
-  function eachPlace(fn) { AWAY_PLACES.forEach(fn); }
 
   // === Online Battle / Friend Match トップ ===
   T({ from: { host: 'Host.MultiModeSelection', client: '*' }, event: 'host.friendMatch', to: { host: 'Host.FriendMatch.Room', client: '*' } });
@@ -339,12 +312,7 @@ var TRANSITIONS = (function () {
     to: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: 'Client.FriendMatch.Lobby.Connecting' },
     note: '決定 (U4): サーバーが参加を確認すると、ホストは "Friend joined!"、クライアントは "Connecting…" (どちらも Ready はまだ押せない)。' +
       '友だちが抜けた / 戻らなかったあとも同じ Match Code で入れ、入り直したときも "Friend joined!" (U17 / U32 / U34)', decided: ['U4', 'U17', 'U32', 'U34'] });
-  eachPlace(function (p) {
-    T({ from: { host: awayStates(p, ['Waiting', 'FriendLeft']), client: clientRoomFilled }, event: 'client.joinMatch',
-      to: { host: away(p, 'FriendJoined'), client: 'Client.FriendMatch.Lobby.Connecting' },
-      note: '図02: ホストは別画面のまま緑の "Friend joined!"。決定 (U4): ホストが部屋の画面にいないので同期は終わらず、クライアントは "Connecting…" のまま', decided: ['U4', 'U17'] });
-  });
-  T({ from: { host: hostExpiredAny, client: clientRoomFilled }, event: 'client.joinMatch',
+  T({ from: { host: 'Host.FriendMatch.Lobby.CodeExpired', client: clientRoomFilled }, event: 'client.joinMatch',
     to: { host: '*', client: 'Client.FriendMatch.Room.Error.Expired' }, note: 'ホストの Match Code が期限切れ' });
   T({ from: { host: '*', client: clientRoomFilled }, event: 'client.joinMatch',
     to: { host: '*', client: 'Client.FriendMatch.Room.Error.NotFound' }, note: 'ホストが待機中の部屋を持っていないので見つからない' });
@@ -456,31 +424,10 @@ var TRANSITIONS = (function () {
     T({ from: pair(lobbyState(R, 'CouldNotReconnect'), '*'), event: d + '.retry', to: pair(lobbyState(R, 'ConnectionLost'), '*'),
       note: '決定 (U5): Retry でもう一度つなぎ直す ("Connection lost. Reconnecting…")', decided: ['U5'] });
   });
-  // 離席中のホストの部屋で友だちが切断する (決定 U19): ホストの帯は "Reconnecting…"、20 秒たつと "Waiting for your friend…"
-  eachPlace(function (p) {
-    T({ from: { host: awayStates(p, ['FriendInRoom', 'FriendReady']), client: preStart('Client') }, event: 'client.disconnect',
-      to: { host: away(p, 'Reconnecting'), client: 'Client.FriendMatch.Lobby.ConnectionLost' },
-      note: 'モック操作。決定 (U5 / U19): クライアントの Ready は消える。離席中のホストの帯は青い "Waiting for your friend…" の代わりに "Reconnecting…"', decided: ['U5', 'U19'] });
-    T({ from: { host: away(p, 'Reconnecting'), client: ['Client.FriendMatch.Lobby.ConnectionLost', 'Client.FriendMatch.Lobby.Reconnecting'] }, event: 'net.recovered',
-      to: { host: away(p, 'FriendInRoom'), client: 'Client.FriendMatch.Lobby.Ready' },
-      note: '決定 (U5 / U19): 20 秒のうちに戻れば、クライアントは Ready 画面へ。ホストの帯は "Friend is in the room" に戻る (U55)', decided: ['U5', 'U19', 'U55'] });
-    T({ from: { host: away(p, 'Reconnecting'), client: 'Client.FriendMatch.Lobby.ConnectionLost' }, event: 'timer.disconnectTimeout',
-      to: { host: away(p, 'Waiting'), client: 'Client.FriendMatch.Lobby.CouldNotReconnect' },
-      note: '決定 (U19 / U5): 20 秒 (仮) たつと、ホストの帯は "Waiting for your friend…" に戻る (空の部屋を残す)。クライアントは "Could not reconnect."', decided: ['U19', 'U5'] });
-    T({ from: { host: away(p, 'Reconnecting'), client: 'Client.FriendMatch.Lobby.Reconnecting' }, event: 'timer.disconnectTimeout',
-      to: { host: away(p, 'Waiting'), client: 'Client.FriendMatch.Room.ReconnectFailed' },
-      note: '決定 (U19 / U32): 20 秒 (仮) たつと、ホストの帯は "Waiting for your friend…" に戻る。決定 (U52): 戻れなかったクライアントは Friend Match トップに "Could not reconnect. The match did not start."',
-      decided: ['U19', 'U32', 'U52'] });
-  });
   // Retry のあと (切れていないほうはもう次へ進んでいる)。クライアントは部屋がまだあれば入り直し ("Friend joined!")、ホストは空の部屋に戻る
   T({ from: { host: hostWaitingForFriend, client: 'Client.FriendMatch.Lobby.ConnectionLost' }, event: 'net.recovered',
     to: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: 'Client.FriendMatch.Lobby.Connecting' },
     note: '決定 (U5 / U17): Retry でつながると、空のまま残っていた部屋に入り直す。入り直しなので、ホストには "Friend joined!"', decided: ['U5', 'U17', 'U4'] });
-  eachPlace(function (p) {
-    T({ from: { host: awayStates(p, ['Waiting', 'FriendLeft']), client: 'Client.FriendMatch.Lobby.ConnectionLost' }, event: 'net.recovered',
-      to: { host: away(p, 'FriendJoined'), client: 'Client.FriendMatch.Lobby.Connecting' },
-      note: '決定 (U5 / U17): Retry でつながると部屋に入り直す。離席中のホストの帯は緑の "Friend joined!"', decided: ['U5', 'U17', 'U4'] });
-  });
   // 待っている間に Match Code の期限が切れた (U7: 部屋での切断の間は時計が止まらない)。戻った側も今の画面のまま "Match code expired." (U18)
   T({ from: { host: 'Host.FriendMatch.Lobby.CodeExpired', client: 'Client.FriendMatch.Lobby.ConnectionLost' }, event: 'net.recovered',
     to: { host: '*', client: 'Client.FriendMatch.Lobby.CodeExpired' },
@@ -561,137 +508,44 @@ var TRANSITIONS = (function () {
         'お知らせは部屋の帯 (U52、Close で閉じる)。この行き先は 2026-10-08 に確認', decided: ['U54', 'U52', 'U24'] });
   });
 
-  // === 部屋を閉じる・抜ける (決定 U9 / U11 / U14 / U34) ===
-  // ホストは Close Room で部屋を閉じる (U14)。クライアントは Leave Room と ‹ で同じ確認 "Leave this room?" を出す (U9)。
-  // 本文は "No match has started. No win or loss will be recorded." (U34)、残るボタンは Keep Waiting (U11)
-  T({ from: { host: hostClosable, client: '*' }, event: 'host.closeRoom', to: { host: '=', client: '*' }, dialog: { host: 'closeRoom' },
-    note: '決定 (U14 / U34): 部屋を閉じるのは Close Room (‹ では閉じない)。確認の本文は "No match has started. No win or loss will be recorded."。題名は "Close this room?" (U51)', decided: ['U14', 'U34', 'U11', 'U51'] });
-  T({ from: { host: 'Host.FriendMatch.Lobby.CouldNotReconnect', client: '*' }, event: 'host.leaveRoom', to: { host: '=', client: '*' }, dialog: { host: 'leaveRoom' },
-    note: '決定 (U5): "Could not reconnect." の Leave Room。確認は Leave Room と同じ (U9 / U34)', decided: ['U5', 'U9', 'U34'] });
-  ['leaveRoom', 'back'].forEach(function (ev) {
-    T({ from: { host: '*', client: clientLeavable }, event: 'client.' + ev, to: { host: '*', client: '=' }, dialog: { client: 'leaveRoom' },
-      note: ev === 'back' ? '決定 (U9 / U35): ‹ (別の画面へ移る) も Leave Room と同じ確認 "Leave this room?"'
-        : '決定 (U9 / U34): クライアントにはどの部屋の画面にも Leave Room。確認 "Leave this room?" / "No match has started. No win or loss will be recorded."',
-      decided: ev === 'back' ? ['U9', 'U35', 'U34', 'U11'] : ['U9', 'U34', 'U11'] });
-  });
+  // === 部屋を閉じる・抜ける (決定 U57 / U9 / U11 / U34) ===
+  // 部屋の画面の出口は左上の ‹ だけ (U57、#1891 の FB 1・2)。Close Room / Leave Room のボタンは置かない。
+  // ホストの ‹ は "Close this room?"、クライアントの ‹ は "Leave this room?" の確認を出す (どちらも、押すと部屋がどうなるかを題名に書く)。
+  // 本文は "No match has started. No win or loss will be recorded." (U34)、残るボタンは Keep Waiting (U11)。部屋を残したまま別の画面へは移れない
+  T({ from: { host: hostClosable, client: '*' }, event: 'host.back', to: { host: '=', client: '*' }, dialog: { host: 'closeRoom' },
+    note: '決定 (U57): ホストの ‹ は "Close this room?" を出す (Close Room のボタンは無い)。部屋を残したまま離れることはできない。' +
+      '本文は "No match has started. No win or loss will be recorded." (U34)、ボタンは Close Room / Keep Waiting (U11 / U51)', decided: ['U57', 'U34', 'U11', 'U51'] });
+  T({ from: { host: '*', client: clientLeavable }, event: 'client.back', to: { host: '*', client: '=' }, dialog: { client: 'leaveRoom' },
+    note: '決定 (U57 / U9): クライアントの ‹ は "Leave this room?" を出す (Leave Room のボタンは無い)。本文は U34、ボタンは Leave Room / Keep Waiting (U11)',
+    decided: ['U57', 'U9', 'U34', 'U11'] });
   ['host', 'client'].forEach(function (d) {
-    T({ from: Object.assign({ host: '*', client: '*' }, d === 'host' ? { hostDialog: ['closeRoom', 'leaveRoom'] } : { clientDialog: 'leaveRoom' }), event: d + '.dialog.keepWaiting',
+    T({ from: Object.assign({ host: '*', client: '*' }, d === 'host' ? { hostDialog: 'closeRoom' } : { clientDialog: 'leaveRoom' }), event: d + '.dialog.keepWaiting',
       to: { host: d === 'host' ? '=' : '*', client: d === 'client' ? '=' : '*' }, dialog: d === 'host' ? { host: null } : { client: null },
-      note: '決定 (U11): 確認の "Go Back" は "Keep Waiting" に。確認を閉じて部屋に残る (Ready はそのまま)', decided: ['U11'] });
+      note: '決定 (U11 / U57): Keep Waiting で確認を閉じて部屋に残る (Ready はそのまま)', decided: ['U11', 'U57'] });
   });
-  // クライアントが抜けたあと (U34 / U17): ホストは同じ Match Code で次の友だちを待つ。離席中なら帯に "Your friend left." を一度だけ
+  // クライアントが抜けたあと (U34 / U17): ホストは同じ Match Code で次の友だちを待つ
   T({ from: { host: hostWithClient, client: '*', clientDialog: 'leaveRoom' }, event: 'client.dialog.leaveRoom',
     to: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null },
-    note: '決定 (U34): クライアントは Match Code が残った Friend Match トップへ。ホストには "Your friend left. Waiting for another friend…" (Match Code は同じ。再接続中のホストは戻ったときに見る)', decided: ['U34', 'U9'] });
-  eachPlace(function (p) {
-    T({ from: { host: awayStates(p, ['FriendJoined', 'FriendInRoom', 'FriendReady', 'Reconnecting']), client: '*', clientDialog: 'leaveRoom' }, event: 'client.dialog.leaveRoom',
-      to: { host: away(p, 'FriendLeft'), client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null },
-      note: '決定 (U17): ホストの離席中にクライアントが抜けたら、ホストの帯に "Your friend left." を一度だけ出す', decided: ['U17', 'U34', 'U9'] });
-  });
+    note: '決定 (U34 / U57): クライアントは Match Code が残った Friend Match トップへ。ホストには "Your friend left. Waiting for another friend…" (Match Code は同じ。再接続中のホストは戻ったときに見る)', decided: ['U34', 'U57'] });
   T({ from: { host: '*', client: '*', clientDialog: 'leaveRoom' }, event: 'client.dialog.leaveRoom',
     to: { host: '*', client: 'Client.FriendMatch.Room.CodeEntered' }, dialog: { client: null },
-    note: '決定 (U5): "Could not reconnect." から抜ける。クライアントは Friend Match トップへ (ホストはもう空の部屋で待っている)', decided: ['U5', 'U9'] });
-  eachPlace(function (p) {
-    T({ from: { host: away(p, 'FriendLeft'), client: '*' }, event: 'sys.friendLeftShown', auto: 5000, to: { host: away(p, 'Waiting'), client: '*' },
-      note: '決定 (U17 / U55): "Your friend left." は一度だけ 5 秒 (仮) 出す。そのあとは青い "Waiting for your friend…"', decided: ['U17', 'U55'] });
-  });
+    note: '決定 (U5 / U57): "Could not reconnect." から抜ける。クライアントは Friend Match トップへ (ホストはもう空の部屋で待っている)', decided: ['U5', 'U57'] });
   // ホストが部屋を閉じたあと (U34): クライアントは "Room closed. The host left." の Friend Match トップへ
   T({ from: { host: '*', client: clientInRoom, hostDialog: 'closeRoom' }, event: 'host.dialog.closeRoom',
     to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Room.HostLeft' }, dialog: { host: null },
-    note: '決定 (U14 / U34): 部屋を閉じる。クライアントは "Room closed. The host left." で Friend Match トップへ (再接続中のクライアントは戻ったときに見る)', decided: ['U14', 'U34'] });
+    note: '決定 (U57 / U34): 部屋を閉じて Friend Match トップへ。クライアントは "Room closed. The host left." で Friend Match トップへ (再接続中のクライアントは戻ったときに見る)', decided: ['U57', 'U34'] });
   T({ from: { host: '*', client: '*', hostDialog: 'closeRoom' }, event: 'host.dialog.closeRoom',
-    to: { host: 'Host.FriendMatch.Room', client: '*' }, dialog: { host: null }, note: '決定 (U14): 部屋を閉じて Friend Match トップへ (部屋に友だちはいない)', decided: ['U14'] });
-  T({ from: { host: '*', client: '*', hostDialog: 'leaveRoom' }, event: 'host.dialog.leaveRoom',
-    to: { host: 'Host.FriendMatch.Room', client: '*' }, dialog: { host: null }, note: '決定 (U5): "Could not reconnect." から抜けて部屋を閉じる (クライアントはもう Friend Match トップにいる)', decided: ['U5'] });
-
-  // === ホストが ‹ で部屋の画面を離れる (決定 U14、高宮さん 2026-10-07) ===
-  // 部屋は残し、行った先の画面の下の帯で示す (図02)。自分の Ready は消える。送っている間・読み込み中・再接続中は ‹ を押せない
-  T({ from: { host: hostWaitingForFriend, client: '*' }, event: 'host.back',
-    to: { host: away('FriendMatchRoom', 'Waiting'), client: '*' }, note: '決定 (U14): ‹ でも部屋は残す。図02: 青い "Waiting for your friend…" の帯', decided: ['U14'] });
-  T({ from: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: '*' }, event: 'host.back',
-    to: { host: away('FriendMatchRoom', 'FriendJoined'), client: '*' },
-    note: '決定 (U14 / U4): 同期の前に離れたので、クライアントは "Connecting…" のまま (ホストが戻るまで Ready を押せない)', decided: ['U14', 'U4'] });
-  T({ from: { host: 'Host.FriendMatch.Lobby.Ready.WaitingForOpponent', client: 'Client.FriendMatch.Lobby.Ready.OpponentReady' }, event: 'host.back',
-    to: { host: away('FriendMatchRoom', 'FriendInRoom'), client: 'Client.FriendMatch.Lobby.Ready.OpponentNotReady' },
-    note: '決定 (U14 / U34): 別の画面へ移ると自分の Ready は消える。クライアントには "Opponent is no longer ready."。帯は "Friend is in the room" (U55)', decided: ['U14', 'U34', 'U55'] });
-  T({ from: { host: 'Host.FriendMatch.Lobby.Ready.WaitingForOpponent', client: 'Client.FriendMatch.Lobby.Ready.OpponentReady.Confirming' }, event: 'host.back',
-    to: { host: away('FriendMatchRoom', 'FriendInRoom'), client: 'Client.FriendMatch.Lobby.Ready.Confirming' },
-    note: '決定 (U14): 別の画面へ移ると自分の Ready は消える。クライアントの Ready は送っている途中なので、クライアントが先に待つ側になる (決定 U53)。帯は "Friend is in the room" (U55)', decided: ['U14', 'U53', 'U55'] });
-  T({ from: { host: 'Host.FriendMatch.Lobby.Ready.OpponentReady', client: '*' }, event: 'host.back',
-    to: { host: away('FriendMatchRoom', 'FriendReady'), client: '*' },
-    note: '決定 (U14 / U1): ‹ でも部屋は残す。友だちは Ready なので帯は赤い "Friend is ready!"', decided: ['U14', 'U1'] });
-  T({ from: { host: noneReady('Host'), client: '*' }, event: 'host.back',
-    to: { host: away('FriendMatchRoom', 'FriendInRoom'), client: '*' },
-    note: '決定 (U14): ‹ でも部屋は残す。友だちはいるが Ready していないときの帯は "Friend is in the room" (U55)', decided: ['U14', 'U55'] });
-  T({ from: { host: friendGone('Host'), client: '*' }, event: 'host.back',
-    to: { host: away('FriendMatchRoom', 'Reconnecting'), client: '*' },
-    note: '決定 (U14 / U19): 友だちの再接続を待っている間に離れると、帯は青い "Waiting for your friend…" ではなく "Reconnecting…"', decided: ['U14', 'U19'] });
+    to: { host: 'Host.FriendMatch.Room', client: '*' }, dialog: { host: null },
+    note: '決定 (U57): 部屋を閉じて Friend Match トップへ (部屋に友だちはいない。"Could not reconnect." から閉じたときも、クライアントはもう Friend Match トップにいる)', decided: ['U57', 'U5'] });
   T({ from: { host: 'Host.FriendMatch.Lobby.CodeExpired', client: '*' }, event: 'host.back', to: { host: 'Host.FriendMatch.Room', client: '*' },
-    note: '期限が切れた部屋はもう無いので、‹ はふつうに Friend Match トップへ' });
-
-  eachPlace(function (p) {
-    var other = p === 'FriendMatchRoom' ? 'StageSelection' : 'FriendMatchRoom';
-    AWAY_STATUSES.concat(['Expired']).forEach(function (s) {
-      T({ from: { host: away(p, s), client: '*' }, event: 'host.back',
-        to: { host: away(other, s === 'FriendLeft' ? 'Waiting' : s), client: '*' },
-        note: (p === 'FriendMatchRoom' ? '他の画面 (ステージ選択) へ。途中の画面は省略' : 'Friend Match トップへ戻る。途中の画面は省略') +
-          (s === 'FriendLeft' ? '。"Your friend left." は一度だけなので、移った先では青い "Waiting for your friend…" (U17)' : ''),
-        decided: s === 'FriendLeft' ? ['U17'] : [] });
-    });
-  });
-  // 帯をタップすると部屋の画面に戻る (決定 U1 / U16)。タップで Ready を押したことにはしない
-  T({ from: { host: '*', client: '*', hostFailed: 'create' }, event: 'host.tapToast', to: { host: '=', client: '*' }, set: { hostFailed: null },
-    note: '決定 (U6 / U12): "Connection failed" のトーストを閉じる。部屋の帯がまた見える', decided: ['U6', 'U12'] });
-  eachPlace(function (p) {
-    T({ from: { host: away(p, 'Waiting'), client: '*' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' },
-      note: '決定 (U16): 青い帯をタップすると部屋の画面に戻る', decided: ['U16'] });
-    T({ from: { host: away(p, 'FriendLeft'), client: '*' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Lobby.ClientLeft', client: '*' },
-      note: '決定 (U16 / U34): 帯をタップすると部屋の画面 ("Your friend left. Waiting for another friend…") に戻る', decided: ['U16', 'U17', 'U34'] });
-    T({ from: { host: away(p, 'FriendJoined'), client: '*' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Lobby.FriendJoined', client: '*' },
-      note: '決定 (U16 / U4): 緑の帯をタップすると部屋の画面に戻る。両者が部屋の画面にそろうので同期が始まる', decided: ['U16', 'U4'] });
-    T({ from: { host: away(p, 'FriendInRoom'), client: '*' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Lobby.Ready', client: '*' },
-      note: '決定 (U16 / U17 / U55): "Friend is in the room" の帯をタップすると Ready 画面に戻る。クライアントには "Friend joined!" を出し直さない', decided: ['U16', 'U17', 'U55'] });
-    T({ from: { host: away(p, 'FriendReady'), client: '*' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Lobby.Ready.OpponentReady', client: '*' },
-      note: '決定 (U1): "Friend is ready!" をタップしても部屋の画面に戻るだけで、Ready は押さない (戻ってから Ready / Cancel Ready)', decided: ['U1', 'U16'] });
-    T({ from: { host: away(p, 'Reconnecting'), client: 'Client.FriendMatch.Lobby.ConnectionLost' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Lobby.FriendDisconnected', client: '*' },
-      note: '決定 (U16 / U19 / U5): 帯をタップすると部屋の画面 ("Your friend disconnected. Waiting for them to reconnect…") に戻る', decided: ['U16', 'U19', 'U5'] });
-    T({ from: { host: away(p, 'Reconnecting'), client: 'Client.FriendMatch.Lobby.Reconnecting' }, event: 'host.tapToast', to: { host: 'Host.FriendMatch.Lobby.OpponentDisconnected', client: '*' },
-      note: '決定 (U16 / U19 / U32): 帯をタップすると部屋の画面 ("Opponent disconnected…") に戻る', decided: ['U16', 'U19', 'U32'] });
-  });
-  // 離席中のホストの部屋で、クライアントが Ready を押す・取り消す・時間切れになる (U1 / U33 / U34 / U35)
-  eachPlace(function (p) {
-    T({ from: { host: away(p, 'FriendInRoom'), client: noneReady('Client') }, event: 'client.ready', to: { host: '*', client: 'Client.FriendMatch.Lobby.Ready.Confirming' },
-      note: '決定 (U4 / U31): 同期が終わったあとなら、ホストが離れていても Ready を押せる。送っている間は "Confirming…"', decided: ['U4', 'U31', 'U36'] });
-    T({ from: { host: away(p, 'FriendInRoom'), client: 'Client.FriendMatch.Lobby.Ready.Confirming' }, event: 'sys.readyConfirmed', auto: 800,
-      to: { host: away(p, 'FriendReady'), client: 'Client.FriendMatch.Lobby.Ready.WaitingForOpponent' },
-      note: '決定 (U1): クライアントの Ready が届くと、離席中のホストの帯は赤い "Friend is ready!"。クライアントは "Waiting for opponent…" と 60 秒 (仮)', decided: ['U1', 'U36', 'U33'] });
-    ['cancelReady', 'leaveApp'].forEach(function (ev) {
-      T({ from: { host: away(p, 'FriendReady'), client: 'Client.FriendMatch.Lobby.Ready.WaitingForOpponent' }, event: 'client.' + ev,
-        to: { host: away(p, 'FriendInRoom'), client: 'Client.FriendMatch.Lobby.Ready' },
-        note: (ev === 'leaveApp' ? 'モック操作。決定 (U35): アプリを離れると Ready が消える' : '決定 (U34): Cancel Ready') + '。ホストの帯は "Friend is in the room" に戻る (U55)',
-        decided: ev === 'leaveApp' ? ['U35', 'U55'] : ['U34', 'U55'] });
-    });
-    T({ from: { host: away(p, 'FriendReady'), client: 'Client.FriendMatch.Lobby.Ready.WaitingForOpponent' }, event: 'timer.readyTimeout',
-      to: { host: away(p, 'FriendInRoom'), client: 'Client.FriendMatch.Lobby.Ready.TimedOut' },
-      note: '決定 (U33): ホストが戻らないまま 60 秒 (仮) たつと、クライアントの Ready を消して "Ready check timed out…"。ホストの帯は "Friend is in the room" に戻る (U55)', decided: ['U33', 'U55'] });
-  });
+    note: '期限が切れた部屋はもう無いので、‹ は確認なしで Friend Match トップへ', decided: ['U10'] });
+  // 送っている間 (.Confirming)・読み込み・自分の再接続中は ‹ を押せない (U53)
+  // 画面の下のトースト ("Connection failed"、U6) はタップで閉じる (Friend Match トップの行)
 
   // === Match Code の期限 (決定 U7 / U10 / U18、高宮さん 2026-10-07) ===
   // 期限は 30 分 (仮) で、サーバーが数える。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は時計が止まる (その分は減らない)。
   // 部屋での切断 (U5) の再接続待ちの間は止まらない (読み込み中に切れても、読み込みの間の分は止まったまま。2026-10-08 に確認)。
   // 切れたら両者に "Match code expired."。ホストは Create Match、クライアントは Join Match (Ready は出さない、U10)。クライアントは今の画面のまま (U18)
-  eachPlace(function (p) {
-    var pending = awayStates(p, ['Waiting', 'FriendJoined', 'FriendInRoom', 'FriendReady', 'FriendLeft']);
-    T({ from: { host: pending, client: clientExpirable }, event: 'timer.codeExpired',
-      to: { host: away(p, 'Expired'), client: 'Client.FriendMatch.Lobby.CodeExpired' },
-      note: '図02: 放置したので期限が切れた。決定 (U7 / U18): クライアントは今の画面のまま "Match code expired." と Join Match', decided: ['U7', 'U10', 'U18'] });
-    T({ from: { host: pending, client: '*' }, event: 'timer.codeExpired', to: { host: away(p, 'Expired'), client: '*' },
-      note: '図02: 放置したので期限が切れた (部屋に友だちはいない)。決定 (U7): 濃い赤の "Match code expired."', decided: ['U7'] });
-    T({ from: { host: away(p, 'Reconnecting'), client: 'Client.FriendMatch.Lobby.ConnectionLost' }, event: 'timer.codeExpired', to: { host: away(p, 'Expired'), client: '*' },
-      note: '決定 (U7): 部屋での切断 (U5) の間は時計が止まらない。期限が切れるとクライアントが戻っても部屋は無い', decided: ['U7', 'U5'] });
-    T({ from: { host: away(p, 'Expired'), client: '*' }, event: 'host.tapToast',
-      to: { host: 'Host.FriendMatch.Lobby.CodeExpired', client: '*' }, note: '図02: 期限切れの帯をタップすると部屋の画面 ("Match code expired." と Create Match)', decided: ['U7', 'U10'] });
-  });
   T({ from: { host: hostExpirable, client: clientExpirable }, event: 'timer.codeExpired',
     to: { host: 'Host.FriendMatch.Lobby.CodeExpired', client: 'Client.FriendMatch.Lobby.CodeExpired' },
     note: '決定 (U7 / U10 / U18): 両者に "Match code expired."。Ready は消え、ホストは Create Match、クライアントは今の画面のまま Join Match', decided: ['U7', 'U10', 'U18'] });
@@ -712,35 +566,6 @@ var TRANSITIONS = (function () {
     note: '決定 (U10 / U18): 期限切れの画面の Join Match で、新しい Match Code を入れる Friend Match トップへ', decided: ['U10', 'U18'] });
   T({ from: { host: '*', client: 'Client.FriendMatch.Lobby.CodeExpired' }, event: 'client.back', to: { host: '*', client: 'Client.FriendMatch.Room' },
     note: '期限が切れた部屋はもう無いので、‹ は確認なしで Friend Match トップへ', decided: ['U18'] });
-
-  // === 離席中のホストが Friend Match トップで Create / Join を押す (10-01 合意、決定 U12) ===
-  // 本文は役割で変える (ホスト: "This will close your current room. Your friend will return to Friend Match.")。
-  // 古い部屋を閉じるのは、新しい部屋を作れた・入れたときだけ
-  var awayTopPending = awayStates('FriendMatchRoom', AWAY_STATUSES);
-  T({ from: { host: awayTopPending, client: '*' }, event: 'host.createMatch',
-    to: { host: '=', client: '*' }, dialog: { host: 'newMatch' }, note: '合意 (10-01): 確認ダイアログ。決定 (U12): ホスト向けの本文', decided: ['U12'] });
-  T({ from: { host: awayTopPending, client: '*' }, event: 'host.joinMatch',
-    to: { host: '=', client: '*' }, dialog: { host: 'joinAnother' }, note: '合意 (10-01): 確認ダイアログ。決定 (U12): ホスト向けの本文', decided: ['U12'] });
-  T({ from: { host: '*', client: '*', hostDialog: ['newMatch', 'joinAnother'] }, event: 'host.dialog.keepCurrent',
-    to: { host: '=', client: '*' }, dialog: { host: null }, note: '合意 (10-01): Keep Current Match で今の部屋のまま' });
-  T({ from: { host: '*', client: '*', hostDialog: 'newMatch' }, event: 'host.dialog.createMatch', when: { createResult: 'connFailed' },
-    to: { host: '=', client: '*' }, dialog: { host: null }, set: { hostFailed: 'create' },
-    note: 'モック設定「Create Match の結果 = 接続失敗」のとき。決定 (U12 / U6): 新しい部屋を作れなかったので古い部屋は閉じない (帯もそのまま)。"Connection failed" と "Couldn\u2019t create a room. Try again."',
-    decided: ['U12', 'U6'] });
-  T({ from: { host: '*', client: clientInRoom, hostDialog: 'newMatch' }, event: 'host.dialog.createMatch',
-    to: { host: 'Host.FriendMatch.Lobby.Waiting', client: 'Client.FriendMatch.Room.HostLeft' }, dialog: { host: null },
-    note: '決定 (U12): 新しい部屋を作れたら古い部屋を閉じる。友だちは Friend Match トップへ ("Room closed. The host left."、U34)', decided: ['U12', 'U34'] });
-  T({ from: { host: '*', client: '*', hostDialog: 'newMatch' }, event: 'host.dialog.createMatch',
-    to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, dialog: { host: null }, note: '決定 (U12): 新しい部屋を作れたら古い部屋を閉じる。モックでは同じ Match Code を表示', decided: ['U12'] });
-  T({ from: { host: '*', client: clientInRoom, hostDialog: 'joinAnother' }, event: 'host.dialog.joinMatch',
-    to: { host: 'Host.FriendMatch.Room', client: 'Client.FriendMatch.Room.HostLeft' }, dialog: { host: null },
-    note: '決定 (U12): 別の部屋に入れたら古い部屋を閉じる (友だちは "Room closed. The host left.")。別の部屋に入る流れはモックでは省略 (入れたものとして Friend Match トップに置く)', decided: ['U12', 'U34'] });
-  T({ from: { host: '*', client: '*', hostDialog: 'joinAnother' }, event: 'host.dialog.joinMatch',
-    to: { host: 'Host.FriendMatch.Room', client: '*' }, dialog: { host: null }, note: '決定 (U12): 別の部屋に入れたら古い部屋を閉じる。別の部屋に入る流れはモックでは省略', decided: ['U12'] });
-  T({ from: { host: ['Host.Away.FriendMatchRoom.Expired'], client: '*' }, event: 'host.createMatch', when: { createResult: 'connFailed' },
-    to: { host: 'Host.FriendMatch.Room.ConnectionFailed', client: '*' }, note: 'モック設定「Create Match の結果 = 接続失敗」のとき (U6)。期限切れの部屋はもう無い', decided: ['U6'] });
-  T({ from: { host: ['Host.Away.FriendMatchRoom.Expired'], client: '*' }, event: 'host.createMatch',
-    to: { host: 'Host.FriendMatch.Lobby.Waiting', client: '*' }, note: '期限切れの部屋はもう無いので、確認なしで作り直す (モックの仮定)', decided: ['U10'] });
 
   // === 対戦中の MATCH MENU (決定 U37〜U42、高宮さん 2026-10-07、案A) ===
   // 試合は止まらない (Time.timeScale = 0 にしない)。メニューや確認を開いただけでは相手の端末は変わらない (U38)。対戦中の REMATCH / RETRY は無い (U39)
@@ -1053,18 +878,15 @@ var EVENT_LABELS = {
   'host.friendMatch': 'ホスト: Friend Match を選ぶ',
   'host.randomMatch': 'ホスト: Random Match を選ぶ',
   'host.createMatch': 'ホスト: Create Match を押す',
-  'host.joinMatch': 'ホスト: Join Match を押す',
   'host.ready': 'ホスト: Ready を押す',
   'host.cancelReady': 'ホスト: Cancel Ready を押す',
-  'host.closeRoom': 'ホスト: Close Room を押す',
-  'host.leaveRoom': 'ホスト: "Could not reconnect." の Leave Room を押す',
   'host.retry': 'ホスト: "Could not reconnect." の Retry を押す',
   'host.cancelSearch': 'ホスト: 相手を探している間に Cancel を押す',
   'host.leaveApp': 'ホスト: アプリを離れて戻る (モック操作: バックグラウンド・画面ロック)',
   'host.searchTimeout': 'ホスト: 60 秒 (仮) たっても相手が見つからない (モック操作)',
   'host.searchAgain': 'ホスト: Search again を押す',
   'host.closeNotice': 'ホスト: 通知・お知らせの Close を押す',
-  'host.back': 'ホスト: ‹ (戻る / 別画面へ)',
+  'host.back': 'ホスト: ‹ (戻る。部屋の画面では部屋を閉じる確認)',
   'host.tapToast': 'ホスト: 画面の下の帯 (トースト) をタップ',
   'host.matchMenu': 'ホスト: メニューボタン (☰) を押す',
   'host.matchMenu.continue': 'ホスト: MATCH MENU の CONTINUE を押す',
@@ -1090,24 +912,19 @@ var EVENT_LABELS = {
   'host.unmuteStamps': 'ホスト: Unmute opponent emotes を押す (ミュートを解く)',
   'host.dialog.closeRoom': 'ホスト: ダイアログで Close Room',
   'host.dialog.keepWaiting': 'ホスト: ダイアログで Keep Waiting',
-  'host.dialog.createMatch': 'ホスト: ダイアログで Create Match',
-  'host.dialog.joinMatch': 'ホスト: ダイアログで Join Match',
-  'host.dialog.keepCurrent': 'ホスト: ダイアログで Keep Current Match',
-  'host.dialog.leaveRoom': 'ホスト: ダイアログで Leave Room',
   'client.friendMatch': 'クライアント: Friend Match を選ぶ',
   'client.randomMatch': 'クライアント: Random Match を選ぶ',
   'client.enterCode': 'クライアント: QWERTY123 を入力',
   'client.joinMatch': 'クライアント: Join Match を押す',
   'client.ready': 'クライアント: Ready を押す',
   'client.cancelReady': 'クライアント: Cancel Ready を押す',
-  'client.leaveRoom': 'クライアント: Leave Room を押す',
   'client.retry': 'クライアント: "Could not reconnect." の Retry を押す',
   'client.cancelSearch': 'クライアント: 相手を探している間に Cancel を押す',
   'client.leaveApp': 'クライアント: アプリを離れて戻る (モック操作: バックグラウンド・画面ロック)',
   'client.searchTimeout': 'クライアント: 60 秒 (仮) たっても相手が見つからない (モック操作)',
   'client.searchAgain': 'クライアント: Search again を押す',
   'client.closeNotice': 'クライアント: 通知・お知らせの Close を押す',
-  'client.back': 'クライアント: ‹ (戻る / 別画面へ)',
+  'client.back': 'クライアント: ‹ (戻る。部屋の画面では部屋を抜ける確認)',
   'client.tapToast': 'クライアント: 画面の下の帯 (トースト) をタップ',
   'client.matchMenu': 'クライアント: メニューボタン (☰) を押す',
   'client.matchMenu.continue': 'クライアント: MATCH MENU の CONTINUE を押す',
@@ -1134,7 +951,6 @@ var EVENT_LABELS = {
   'client.dialog.leaveRoom': 'クライアント: ダイアログで Leave Room',
   'client.dialog.keepWaiting': 'クライアント: ダイアログで Keep Waiting',
   'sys.roomSynced': '自動: サーバーが参加を確認し、両者が部屋の画面にそろって同期が終わる',
-  'sys.friendLeftShown': '自動: "Your friend left." を一度 5 秒 (仮) 出し終わる',
   'sys.readyConfirmed': '自動: 押した Ready が届く ("Confirming…" が終わる)',
   'sys.bothStarted': '自動: 開始の同期が終わる',
   'sys.opponentFound': '自動: 対戦相手が見つかる',
@@ -1162,20 +978,13 @@ var EVENT_LABELS = {
 });
 
 // ---- 画面の描画仕様 ---------------------------------------------------------
-// view: online | profile | friendTop | lobby | stage | random | vs | game | result
+// view: online | profile | friendTop | lobby | random | vs | game | result
 // ボタンの event はデバイス名を除いたもの (例: 'ready' → 'host.ready')
 
-// 画面の下の帯 (トースト)。tap があるものはタップで操作できる。sub は 2 行目 (決定 U6 の "Connection failed" の説明)
-// 離席中のホストの帯はどれもタップで部屋の画面に戻る (決定 U1 / U16)。文言は決定 U1 / U7 / U17 / U19 / U55
+// 画面の下の帯 (トースト)。tap があるものはタップで操作できる。sub は 2 行目 (決定 U6 の "Connection failed" の説明)。
+// 離席中のホストの帯 (以前の U1 / U16 / U19 / U55) は、部屋を残して離れられなくなったので無い (決定 U57)
 var CONNECTION_FAILED = { create: 'Couldn\u2019t create a room. Try again.', join: 'Couldn\u2019t join the room. Try again.' };
 var TOASTS = {
-  waiting: { kind: 'blue', text: 'Waiting for your friend\u2026', tap: 'tapToast' },
-  joined: { kind: 'green', text: 'Friend joined!', tap: 'tapToast' },
-  friendInRoom: { kind: 'blue', text: 'Friend is in the room', tap: 'tapToast' },
-  friendReady: { kind: 'red', text: 'Friend is ready!', tap: 'tapToast' },
-  reconnecting: { kind: 'blue', text: 'Reconnecting\u2026', tap: 'tapToast' },
-  friendLeft: { kind: 'blue', text: 'Your friend left.', tap: 'tapToast' },
-  expired: { kind: 'darkred', text: 'Match code expired.', tap: 'tapToast' },
   failedCreate: { kind: 'grey', text: 'Connection failed', sub: CONNECTION_FAILED.create, tap: 'tapToast' },
   failedJoin: { kind: 'grey', text: 'Connection failed', sub: CONNECTION_FAILED.join, tap: 'tapToast' },
 };
@@ -1363,35 +1172,36 @@ var READY_NOTICE_TEXT = {
 };
 var READY_TIMERS = { ready: 60, reconnect: 20 }; // 秒。どちらも QA² 側の仮の値 (U33 / U5 / U32 / U46 / U54)
 var ROOM_RULES_CONTEXT = 'Match Code の期限は 30 分 (QA² 側の仮の値) で、サーバーが数える。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は時計が止まり、部屋での切断 (U5) の再接続待ちの間は止まらない (決定 U7)。' +
-  'ホストは Close Room で部屋を閉じ (確認 "Close this room?"、U51)、\u2039 では確認なしで部屋を残したまま離れる (自分の Ready は消える、U14)。クライアントは Leave Room と \u2039 で確認 "Leave this room?" を出す (U9)。';
+  '部屋の画面の出口は左上の \u2039 だけで、Close Room / Leave Room のボタンは無い (決定 U57、#1891 の FB 1・2)。ホストの \u2039 は確認 "Close this room?" のあと部屋を閉じ (U51)、' +
+  'クライアントの \u2039 は確認 "Leave this room?" のあと部屋を抜ける (U9)。どちらも Keep Waiting で部屋に残る (U11)。部屋を残したまま別の画面へは移れない。';
 var READY_CONTEXT = 'Ready 画面 (決定 U31 変更 / U36)。プレイヤーごとのカードに "\u2713 Ready" / "Not ready"。両者が Ready を押したら "Starting match\u2026" → VS 画面 → ゲーム本体のカウントダウン。' +
   'Ready を取り消せるのは届いたあとの Ready 画面だけで、送っている間と読み込み・VS 画面から先は取り消せない (U53)。3-2-1 のあとサーバーが確認するまでは試合開始ではなく、勝敗は記録しない (U32)。' + ROOM_RULES_CONTEXT +
-  '端末の下のモック操作「アプリを離れる」でその人の Ready が消え (U35)、「切断する」で部屋での切断になる (U5)。ホストが離れている間、クライアントのカードのホストは "Away"。';
+  '端末の下のモック操作「アプリを離れる」でその人の Ready が消え (U35)、「切断する」で部屋での切断になる (U5)。';
 var RECONNECT_TIMER_CONTEXT = '20 秒は QA² 側の仮の値で、モックは "20s" のまま描く。';
 var READY_PHASE_CONTEXT = {
-  Confirming: 'Ready を送っている間 (決定 U36)。ボタンが "Confirming\u2026" になり、届くと自動で次へ進む (モックは 0.8 秒)。送っている間は Ready を取り消せず、Close Room / Leave Room / \u2039 も押せない (U53)。',
+  Confirming: 'Ready を送っている間 (決定 U36)。ボタンが "Confirming\u2026" になり、届くと自動で次へ進む (モックは 0.8 秒)。送っている間は Ready を取り消せず、\u2039 も押せない (U53)。',
   WaitingForOpponent: '自分だけ Ready (決定 U36)。"Waiting for opponent\u2026" と 60 秒のカウントダウン、Cancel Ready。60 秒は QA² 側の仮の値で、モックは押した直後の "60s" のまま描く。' +
     '相手が押さないまま 60 秒たつと (右パネルの環境イベント) 両者の Ready が消えて "Ready check timed out…" (U33)。Cancel Ready で取り消しても、部屋には残る (U34)。',
-  OpponentReady: '相手だけ Ready (決定 U36)。"Opponent is ready. Are you?"。Ready を押せば開始する。離席中に "Friend is ready!" の帯をタップして戻ったときもこの画面 (Ready は押していない、U1)。',
+  OpponentReady: '相手だけ Ready (決定 U36)。"Opponent is ready. Are you?"。Ready を押せば開始する。',
   TimedOut: '片方が Ready のまま 60 秒 (仮) たったので、両者の Ready を消した (決定 U33)。罰はなく、どちらも部屋に残る。',
-  OpponentNotReady: '相手が Ready を取り消した (Cancel Ready、決定 U34)、アプリを離れて Ready が消えた (決定 U35)、またはホストが別の画面へ移って Ready が消えた (決定 U14)。相手への表示はどれも同じ (U53)。',
+  OpponentNotReady: '相手が Ready を取り消した (Cancel Ready、決定 U34)、またはアプリを離れて Ready が消えた (決定 U35)。相手への表示はどちらも同じ (U53)。',
   StartFailed: '読み込み ("Starting match\u2026") が 20 秒 (仮) で終わらなかった (決定 U32)。両者とも Ready 画面に戻り、Ready は消えている。もう一度両者が Ready を押せば開始する。',
   SyncFailed: '開始の同期に失敗した (決定 U15)。両者の Ready を消し、ふつうの Ready の流れ (60 秒 (仮) の期限つき) からやり直す。Match Code が有効な間は何度でもやり直せる。',
   Starting: '両者の Ready がそろい、読み込み中 (決定 U31 / U32)。20 秒 (仮) で終わらなければ "Match could not start. Please try again."、同期に失敗すれば "Couldn\u2019t start the match. Please ready up again." で両者とも Ready 画面に戻る (U15、どちらも右パネルの環境イベント)。' +
-    '読み込み中は Ready を取り消せず、Cancel Ready / Close Room / Leave Room / \u2039 を出さない (U53)。ここでの切断は部屋での切断 (U5)。',
+    '読み込み中は Ready を取り消せず、Cancel Ready / \u2039 を出さない (U53)。ここでの切断は部屋での切断 (U5)。',
   OpponentDisconnected: 'VS 画面・カウントダウン中に相手の接続が切れた (決定 U32)。両者の Ready を消し、"Opponent disconnected. Waiting for them to reconnect\u2026" と 20 秒のカウントダウン。' + RECONNECT_TIMER_CONTEXT +
     '戻れば (右パネルの環境イベント「通信が回復する」) 両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。' +
     '戻らなければ (「切断から 20 秒たつ」)、相手がクライアントならホストは "Match cancelled. Opponent did not reconnect." で同じ Match Code のまま部屋に残り、相手がホストならクライアントは "Room closed. The host disconnected." で Friend Match トップへ。勝敗は記録しない。',
   Reconnecting: 'VS 画面・カウントダウン中にこの端末の接続が切れた (決定 U32)。"Connection lost. Reconnecting\u2026" と 20 秒のカウントダウン (U52)。' + RECONNECT_TIMER_CONTEXT +
     '戻れなければ Friend Match トップに "Could not reconnect. The match did not start." (U52)。',
   FriendJoined: '友だちが入った (決定 U4)。サーバーが参加を確認し、両者が部屋の画面にいて同期が終わると Ready を押せる (決まった待ち時間ではない。モックは 0.8 秒で自動で進む)。',
-  Connecting: '部屋に入った (決定 U4)。同期が終わるまでは "Connecting\u2026" で Ready を押せない。ホストが別の画面にいる間は同期が終わらない (ホストが戻ると進む)。Leave Room と \u2039 で確認を出す (U9)。',
+  Connecting: '部屋に入った (決定 U4)。同期が終わるまでは "Connecting\u2026" で Ready を押せない。\u2039 で確認 "Leave this room?" を出す (U9 / U57)。',
   ConnectionLost: '部屋でこの端末の接続が切れた (決定 U5)。両者の Ready は消え、20 秒まで自動で再接続する ("Connection lost. Reconnecting\u2026" と残りの秒数、U52)。' + RECONNECT_TIMER_CONTEXT +
     '戻れれば (右パネルの環境イベント「通信が回復する」) Ready 画面へ、戻れなければ (「切断から 20 秒たつ」) "Could not reconnect."。この間も Match Code の期限の時計は止まらない (U7)。',
   FriendDisconnected: '部屋で相手の接続が切れた (決定 U5)。両者の Ready は消え、"Your friend disconnected. Waiting for them to reconnect\u2026" で 20 秒待つ。' +
     '残りの秒数も出す (切れた側 (U52) と VS 画面中の切断 (U32) にそろえた。2026-10-08 に確認)。' + RECONNECT_TIMER_CONTEXT +
     '戻らなければ、相手がクライアントならホストは空の部屋を残して "Waiting for your friend…"、相手がホストならクライアントは Friend Match トップに "The room was closed." (U52)。',
-  CouldNotReconnect: '20 秒 (仮) で再接続できなかった (決定 U5)。Retry でもう一度つなぎ直し、Leave Room で抜ける。' +
+  CouldNotReconnect: '20 秒 (仮) で再接続できなかった (決定 U5)。Retry でもう一度つなぎ直し、\u2039 で抜ける (U57。ホストは "Close this room?"、クライアントは "Leave this room?" の確認のあと)。' +
     'クライアントは Friend Match トップへ戻り ("The room was closed.")、ホストは空の部屋を残している (Retry でつながると、ホストはその部屋に、クライアントはまだ部屋があれば入り直す)。',
 };
 var ROOM_NOTICE_CONTEXT = '部屋のお知らせは画面の上の帯で、モーダルではない (決定 U52)。Close で閉じるまで残り、Match Code を入れても消えない。ほかの画面へ移る (‹・Create Match・Join Match の結果) と消える。';
@@ -1410,9 +1220,6 @@ var ROOM_CONTEXT = {
   CodeExpired: 'Match Code の期限 (30 分、QA² 側の仮の値) が切れた (決定 U7)。両者に "Match code expired."。Ready は出さず、ホストは Create Match で新しい部屋を作り、クライアントは Join Match で新しい Match Code を入れる (決定 U10)。' +
     'クライアントは別の画面へ移されず、今の画面のまま (決定 U18)。部屋での切断を待っている間に切れたときは、戻った側もこの画面。',
   ConnectionFailed: 'Create Match / Join Match がサーバーに届かなかった (決定 U6)。"Connection failed" はこのときだけで、Match Code の誤り・期限切れ・満員・閉じた部屋の赤字とは別。タップで閉じる。',
-  Away: 'ホストが \u2039 で部屋の画面を離れた (決定 U14、確認は出さない)。部屋は残り、画面の下の帯で部屋の様子を示す。帯をタップすると部屋の画面に戻るだけで、Ready は押さない (U1 / U16)。' +
-    '青 "Waiting for your friend\u2026" (友だちがいない)、青 "Friend is in the room" (友だちはいるが Ready していない、U55)、緑 "Friend joined!" (本当に入った・入り直したときだけ、U17)、' +
-    '赤 "Friend is ready!" (U1)、"Reconnecting\u2026" (友だちの再接続待ち。20 秒 (仮) たつと "Waiting for your friend\u2026"、U19)、"Your friend left." (一度だけ 5 秒 (仮)、U17 / U55)、濃い赤 "Match code expired." (U7)。',
 };
 
 var PROFILE_CONTEXT = 'Profile (決定 U56)。上の見本は、相手の VS 画面に出る自分のカード。絵文字とあいさつを 1 つずつ選ぶと見本がすぐ変わる。名前は変えられない。' +
@@ -1430,11 +1237,7 @@ var SCREENS = (function () {
     confirming: { label: 'Confirming\u2026', primary: true, disabled: true },
     cancelReady: { label: 'Cancel Ready', event: 'cancelReady' },
     readyOff: { label: 'Ready', primary: true, disabled: true },
-    // 部屋を出るボタン: クライアントは Leave Room (決定 U9)、ホストは Close Room (決定 U14)
-    leaveRoom: { label: 'Leave Room', event: 'leaveRoom' },
-    leaveRoomOff: { label: 'Leave Room', disabled: true },
-    closeRoom: { label: 'Close Room', event: 'closeRoom' },
-    closeRoomOff: { label: 'Close Room', disabled: true },
+    // 部屋を出るボタンは置かない。出口は左上の ‹ だけ (決定 U57)
     retry: { label: 'Retry', event: 'retry', primary: true },
     createMatch: { label: 'Create Match', event: 'createMatch', primary: true },
     joinMatch: { label: 'Join Match', event: 'joinMatch', primary: true },
@@ -1503,47 +1306,44 @@ var SCREENS = (function () {
     return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [], expiry: true }, extra);
   }
   // Ready 画面: プレイヤーごとのカード (自分・相手の Ready)、状況の一行、カウントダウン (秒)、お知らせ、ボタン。
-  // 部屋を出るボタンはホストが Close Room (U14)、クライアントが Leave Room (U9)
+  // 部屋を出るボタンは無く、‹ で確認を出す (決定 U57。ホストは "Close this room?"、クライアントは "Leave this room?")
   function readyLobby(R, mine, theirs, phase, extra) {
-    var exit = R === 'Host' ? B.closeRoom : B.leaveRoom;
-    var spec = lobby({ cards: { me: mine, them: theirs }, buttons: [B.ready, exit], decided: ['U31', 'U36', 'U7', R === 'Host' ? 'U14' : 'U9'],
+    var spec = lobby({ cards: { me: mine, them: theirs }, buttons: [B.ready], decided: ['U31', 'U36', 'U7', 'U57'],
       context: [READY_CONTEXT].concat(READY_PHASE_CONTEXT[phase] || []) });
     return Object.assign(spec, extra, { decided: spec.decided.concat((extra && extra.decided) || []) });
   }
   function readyScreens(R) {
     var L = function (s) { return lobbyState(R, s); };
-    var exit = R === 'Host' ? B.closeRoom : B.leaveRoom;
-    var exitOff = R === 'Host' ? B.closeRoomOff : B.leaveRoomOff;
     var notice = function (k, decided, undecided) {
       S[L('Ready.' + k)] = readyLobby(R, false, false, k, { readyNotice: READY_NOTICE_TEXT[k], decided: decided, undecided: undecided || [] });
     };
     S[L('Ready')] = readyLobby(R, false, false, null, { decided: ['U4'] });
     notice('TimedOut', ['U33']);
-    notice('OpponentNotReady', ['U34', 'U35', 'U14', 'U53']);
+    notice('OpponentNotReady', ['U34', 'U35', 'U53']);
     notice('StartFailed', ['U32']);
     notice('SyncFailed', ['U15', 'U33']);
-    S[L('Ready.Confirming')] = readyLobby(R, false, false, 'Confirming', { back: 'disabled', buttons: [B.confirming, exitOff], decided: ['U53'] });
+    S[L('Ready.Confirming')] = readyLobby(R, false, false, 'Confirming', { back: 'disabled', buttons: [B.confirming], decided: ['U53'] });
     S[L('Ready.WaitingForOpponent')] = readyLobby(R, true, false, 'WaitingForOpponent', { status: READY_TEXT.waiting, timer: READY_TIMERS.ready,
-      buttons: [B.cancelReady, exit], decided: ['U33', 'U34'] });
-    S[L('Ready.OpponentReady')] = readyLobby(R, false, true, 'OpponentReady', { status: READY_TEXT.opponentReady, decided: R === 'Host' ? ['U1'] : [] });
+      buttons: [B.cancelReady], decided: ['U33', 'U34'] });
+    S[L('Ready.OpponentReady')] = readyLobby(R, false, true, 'OpponentReady', { status: READY_TEXT.opponentReady });
     S[L('Ready.OpponentReady.Confirming')] = readyLobby(R, false, true, 'Confirming', { status: READY_TEXT.opponentReady, back: 'disabled',
-      buttons: [B.confirming, exitOff], decided: ['U53'] });
+      buttons: [B.confirming], decided: ['U53'] });
     S[L('Starting')] = readyLobby(R, true, true, 'Starting', { status: READY_TEXT.starting, back: 'disabled', buttons: [], decided: ['U32', 'U15', 'U53'] });
     // 同期の前 (決定 U4): ホストは "Friend joined!"、クライアントは "Connecting…"。どちらも Ready はまだ押せない
     S[R === 'Host' ? L('FriendJoined') : L('Connecting')] = readyLobby(R, false, false, R === 'Host' ? 'FriendJoined' : 'Connecting', {
-      status: R === 'Host' ? ROOM_TEXT.friendJoined : ROOM_TEXT.connecting, buttons: [B.readyOff, exit], decided: ['U4', 'U17'] });
+      status: R === 'Host' ? ROOM_TEXT.friendJoined : ROOM_TEXT.connecting, buttons: [B.readyOff], decided: ['U4', 'U17'] });
     // 部屋での切断 (決定 U5): 切れた側 / 残った側 / 再接続できなかった側。どちらにも残りの秒数 (切れた側は U52、残った側は 2026-10-08 に確認)
     S[L('ConnectionLost')] = readyLobby(R, false, false, 'ConnectionLost', { status: ROOM_TEXT.connectionLost, timer: READY_TIMERS.reconnect, back: 'disabled', buttons: [],
       decided: ['U5', 'U52'] });
-    S[L('FriendDisconnected')] = readyLobby(R, false, false, 'FriendDisconnected', { status: ROOM_TEXT.friendDisconnected, timer: READY_TIMERS.reconnect, buttons: [exit],
-      decided: ['U5', 'U34'].concat(R === 'Host' ? ['U19'] : []) });
-    S[L('CouldNotReconnect')] = lobby({ status: ROOM_TEXT.couldNotReconnect, back: null, buttons: [B.retry, B.leaveRoom], expiry: false, decided: ['U5'],
+    S[L('FriendDisconnected')] = readyLobby(R, false, false, 'FriendDisconnected', { status: ROOM_TEXT.friendDisconnected, timer: READY_TIMERS.reconnect, buttons: [],
+      decided: ['U5', 'U34'] });
+    S[L('CouldNotReconnect')] = lobby({ status: ROOM_TEXT.couldNotReconnect, buttons: [B.retry], expiry: false, decided: ['U5', 'U57'],
       context: [READY_PHASE_CONTEXT.CouldNotReconnect] });
     // VS 画面・カウントダウン中の切断 (決定 U32)。切れた側は "Connection lost. Reconnecting…" と残りの秒数 (U52)
     S[L('Reconnecting')] = readyLobby(R, false, false, 'Reconnecting', { status: ROOM_TEXT.connectionLost, timer: READY_TIMERS.reconnect, back: 'disabled', buttons: [],
       decided: ['U32', 'U52'] });
     S[L('OpponentDisconnected')] = readyLobby(R, false, false, 'OpponentDisconnected', { status: READY_TEXT.opponentDisconnected, timer: READY_TIMERS.reconnect,
-      buttons: [exit], decided: ['U32', 'U34'] });
+      buttons: [], decided: ['U32', 'U34'] });
     // 期限切れ (決定 U7 / U10 / U18): Ready は出さず、ホストは Create Match、クライアントは Join Match
     S[L('CodeExpired')] = lobby({ status: ROOM_TEXT.codeExpired, expiry: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
       decided: ['U7', 'U10'].concat(R === 'Client' ? ['U18'] : []), context: ROOM_CONTEXT.CodeExpired });
@@ -1560,22 +1360,12 @@ var SCREENS = (function () {
   S['Host.FriendMatch.Room.ConnectionFailed'] = top({ toast: 'failedCreate', decided: ['U6'], context: ROOM_CONTEXT.ConnectionFailed });
   S['Host.FriendMatch.Room.ReconnectFailed'] = top(roomNotice('ReconnectFailed', ['U52', 'U32', 'U54']));
   S['Host.FriendMatch.Room.MatchCancelled'] = top(roomNotice('MatchCancelled', ['U54', 'U52']));
-  S['Host.FriendMatch.Lobby.Waiting'] = lobby({ status: ROOM_TEXT.waiting, buttons: [B.closeRoom], decided: ['U7', 'U14'], context: ROOM_CONTEXT.Waiting });
+  S['Host.FriendMatch.Lobby.Waiting'] = lobby({ status: ROOM_TEXT.waiting, decided: ['U7', 'U57'], context: ROOM_CONTEXT.Waiting });
   readyScreens('Host');
-  S['Host.FriendMatch.Lobby.ClientLeft'] = lobby({ status: 'Your friend left.\nWaiting for another friend\u2026', buttons: [B.closeRoom],
-    decided: ['U34', 'U7', 'U14'], context: ROOM_CONTEXT.ClientLeft });
-  S['Host.FriendMatch.Lobby.MatchCancelled'] = lobby({ status: 'Match cancelled.\nOpponent did not reconnect.', buttons: [B.closeRoom],
-    decided: ['U32', 'U7', 'U14'], context: ROOM_CONTEXT.MatchCancelled });
-  // ホストが ‹ で部屋の画面を離れている間 (決定 U14): Friend Match トップかステージ選択の下に、部屋の様子の帯
-  var awayToast = { Waiting: 'waiting', FriendJoined: 'joined', FriendInRoom: 'friendInRoom', FriendReady: 'friendReady', Reconnecting: 'reconnecting', FriendLeft: 'friendLeft', Expired: 'expired' };
-  var awayDecided = { Waiting: ['U16'], FriendJoined: ['U16', 'U17', 'U4'], FriendInRoom: ['U16', 'U17', 'U55'], FriendReady: ['U1', 'U16'], Reconnecting: ['U19', 'U16', 'U5'],
-    FriendLeft: ['U17', 'U16', 'U55'], Expired: ['U7', 'U10'] };
-  AWAY_PLACES.forEach(function (p) {
-    Object.keys(awayToast).forEach(function (s) {
-      var extra = { toast: awayToast[s], decided: ['U14'].concat(awayDecided[s]), context: ROOM_CONTEXT.Away };
-      S[away(p, s)] = p === 'FriendMatchRoom' ? top(extra) : Object.assign({ view: 'stage', back: 'back' }, extra);
-    });
-  });
+  S['Host.FriendMatch.Lobby.ClientLeft'] = lobby({ status: 'Your friend left.\nWaiting for another friend\u2026',
+    decided: ['U34', 'U7', 'U57'], context: ROOM_CONTEXT.ClientLeft });
+  S['Host.FriendMatch.Lobby.MatchCancelled'] = lobby({ status: 'Match cancelled.\nOpponent did not reconnect.',
+    decided: ['U32', 'U7', 'U57'], context: ROOM_CONTEXT.MatchCancelled });
   S['Host.Matchmake'] = matchmake();
   S['Host.Matchmake.Stopped'] = inlineSearchNotice(SEARCH_NOTICES.stopped, { context: SEARCH_STOPPED_CONTEXT });
   S['Host.Matchmake.MatchCancelled'] = inlineSearchNotice(SEARCH_NOTICES.matchCancelled, { decided: ['U54', 'U43'], context: START_CANCELLED_CONTEXT.MatchCancelled });
@@ -1675,24 +1465,15 @@ var SCREENS = (function () {
 
 // ---- ダイアログ ---------------------------------------------------------------
 
-// 部屋を出る前の確認 (決定 U9 / U11 / U34) と、離席中に別の部屋を作る・入る前の確認 (10-01 合意、決定 U12)
+// 部屋の画面で ‹ を押したときの確認 (決定 U57 / U9 / U11 / U34 / U51)。題名で、押すと部屋がどうなるか (閉じる / 抜ける) を示す
 var ROOM_LEAVE_BODY = 'No match has started. No win or loss will be recorded.';
-// U12: 本文は役割で変える。クライアント向けの本文を出す場面はモックに無いので保留 (クライアントは部屋に入ったまま別の画面へは移れない、U9 / U51)
-var ROOM_SWITCH_BODY = {
-  host: 'This will close your current room. Your friend will return to Friend Match.',
-  client: 'This will leave your current room. Your friend\u2019s room will stay open.',
-};
 var DIALOGS = {
-  // ホストの Close Room (決定 U14)。本文は U34、残るボタンは U11、題名は U51
+  // ホストの ‹ (決定 U57)。部屋を閉じる。本文は U34、残るボタンは U11、題名は U51
   closeRoom: { title: 'Close this room?', body: ROOM_LEAVE_BODY,
     buttons: [{ label: 'Close Room', event: 'dialog.closeRoom', danger: true }, { label: 'Keep Waiting', event: 'dialog.keepWaiting' }] },
-  // クライアントの Leave Room と ‹ (決定 U9 / U11 / U34)。ホストも "Could not reconnect." の Leave Room ではこの確認 (U5)
+  // クライアントの ‹ (決定 U57 / U9)。部屋を抜ける。本文は U34、残るボタンは U11
   leaveRoom: { title: 'Leave this room?', body: ROOM_LEAVE_BODY,
     buttons: [{ label: 'Leave Room', event: 'dialog.leaveRoom', danger: true }, { label: 'Keep Waiting', event: 'dialog.keepWaiting' }] },
-  newMatch: { title: 'Create a new match?', body: ROOM_SWITCH_BODY.host,
-    buttons: [{ label: 'Create Match', event: 'dialog.createMatch', danger: true }, { label: 'Keep Current Match', event: 'dialog.keepCurrent' }] },
-  joinAnother: { title: 'Join another match?', body: ROOM_SWITCH_BODY.host,
-    buttons: [{ label: 'Join Match', event: 'dialog.joinMatch', danger: true }, { label: 'Keep Current Match', event: 'dialog.keepCurrent' }] },
 };
 
 // ---- VS 画面のデモデータ (架空) ----------------------------------------------
@@ -1717,7 +1498,8 @@ var GAME_COUNTDOWN_PREMISE = '前提として、ゲーム側で VsPlayer の mod
 var UNDECIDED = [
   { id: 'U1', title: '"Friend is ready!" の帯をタップしても部屋の画面に戻るだけ (Ready は押さない)',
     desc: '離席中のホストに、友だちが Ready を押したことを赤い帯 "Friend is ready!" で知らせる (以前の "Ready to start" から変更)。帯をタップすると部屋の画面 (Ready 画面) に戻るだけで、Ready は押さない。' +
-      '戻った画面のボタンは、これまでどおり Ready (押すと Cancel Ready)。開始は両者が Ready を押してから (U31)。以前のトグル (ロビーへ戻る / タップで押した扱い) は削除した。',
+      '戻った画面のボタンは、これまでどおり Ready (押すと Cancel Ready)。開始は両者が Ready を押してから (U31)。以前のトグル (ロビーへ戻る / タップで押した扱い) は削除した。 ' +
+      '2026-10-09 の U57 で無くなった (ホストは部屋を残して離れられないので、帯は出ない)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U2', title: '開始のカウントダウン',
     desc: '元の論点は「開始は両者が開始ボタン (今の Ready、U31) を押すか、自動カウントダウンか」。このうちカウントダウンの部分が決まった: VS 画面のあと (ランダム対戦・Friend Match・再戦とも) はモック独自の 3·2·1 を出さず、ゲーム画面に移ってゲーム本体のカウントダウン (VsAI と同じ 3 → 2 → 1) を使う。' +
@@ -1730,7 +1512,8 @@ var UNDECIDED = [
   { id: 'U4', title: 'Ready を押せるのは、参加の確認・両者が部屋の画面にいる・同期の 3 つがそろってから (決まった待ち時間なし)',
     desc: 'サーバーが参加を確認し、両者が部屋の画面にいて、同期が終わったら Ready を押せる。以前のモックの「1.5 秒たったら自動で Ready」はやめた。' +
       '同期の前は、ホストに "Friend joined!"、クライアントに "Connecting…" を出し、どちらも Ready は押せない表示。ホストが別の画面にいる間は同期が終わらない (戻ると進む)。' +
-      'モックの自動遷移の 0.8 秒はサーバーの応答の代わりで、待ち時間を決めたものではない。同期が終わってからホストが離れても、クライアントは Ready を押せる (U1 の場面)。',
+      'モックの自動遷移の 0.8 秒はサーバーの応答の代わりで、待ち時間を決めたものではない。同期が終わってからホストが離れても、クライアントは Ready を押せる (U1 の場面)。 ' +
+      '2026-10-09 の U57 で、ホストが部屋の画面を離れることは無くなった (‹ は部屋を閉じる確認)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U5', title: '部屋での切断: 20 秒まで自動で再接続。戻れなければ "Could not reconnect." と Retry / Leave Room',
     desc: '部屋 (Ready 画面・読み込み) で切断したら、20 秒まで自動で再接続し、その間は両者の Ready を消す。切れた側には "Connection lost. Reconnecting…"、' +
@@ -1755,7 +1538,8 @@ var UNDECIDED = [
   { id: 'U9', title: 'クライアントには Leave Room。Leave Room と ‹ は同じ確認 "Leave this room?" を出す',
     desc: '以前ボタンの無かった待機中 ("Connecting…") も含めて、クライアントの部屋の画面にはいつも Leave Room を出す。Leave Room と ‹ (端末の戻る) はどちらも同じ確認を出す: ' +
       '題名 "Leave this room?"、本文は U34 で決まった "No match has started. No win or loss will be recorded."、ボタンは Leave Room / Keep Waiting (U11)。' +
-      '以前の Leave Match と "Leave this match?" はこの確認にまとめた。',
+      '以前の Leave Match と "Leave this match?" はこの確認にまとめた。 ' +
+      '2026-10-09 の U57 で Leave Room のボタンは無くなり、出口は ‹ だけ (確認 "Leave this room?" はそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U10', title: '期限切れの画面には Ready を出さない。ホストは Create Match、クライアントは Join Match',
     desc: '"Match code expired." の画面には Ready を出さない (図07 の "Match expired." の画面にあった開始ボタンは無くなった)。ホストには Create Match (新しい部屋を作る)、クライアントには Join Match (新しい Match Code を入れる Friend Match トップへ) を出す。',
@@ -1766,7 +1550,8 @@ var UNDECIDED = [
   { id: 'U12', title: '"Create a new match?" / "Join another match?" の本文は役割で変える。古い部屋は新しい部屋に入れてから閉じる',
     desc: '本文はホストが "This will close your current room. Your friend will return to Friend Match."、クライアントが "This will leave your current room. Your friend’s room will stay open."。' +
       '古い部屋を閉じるのは、新しい部屋を作れた・入れたときだけ (作れなければ古い部屋はそのまま。モックではモック設定「Create Match の結果 = 接続失敗」で試せる)。' +
-      'ボタンは 10-01 の合意どおり Create Match / Join Match と Keep Current Match。クライアント向けの本文を出す場面はモックに無いので保留 (U51、2026-10-08)。',
+      'ボタンは 10-01 の合意どおり Create Match / Join Match と Keep Current Match。クライアント向けの本文を出す場面はモックに無いので保留 (U51、2026-10-08)。 ' +
+      '2026-10-09 の U57 で無くなった (部屋を残したまま Friend Match トップへ戻れないので、この確認を出す場面が無い)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U13', title: 'ランダム対戦の待機中: Cancel と ‹ は確認なしで戻る。アプリを離れたら検索を止める。見つからなければ "No opponent found."',
     desc: '相手を探している間 ("Searching for an opponent…") の操作。Cancel を押すと、確認ダイアログを出さずに Online Battle へ戻る。' +
@@ -1784,7 +1569,8 @@ var UNDECIDED = [
     desc: 'ホストが ‹ で部屋の画面を離れても部屋は残し、行った先の画面の下の帯で部屋の様子を示す (図02)。部屋を閉じるのは別のボタン Close Room (以前の Cancel Match)。' +
       '別の画面へ移ると自分の Ready は消える (友だちには "Opponent is no longer ready.")。U35 の「‹ は退出と同じ確認」はクライアントにだけ残る (U9)。' +
       'Close Room の確認の本文は U34、残るボタンは Keep Waiting (U11)、題名は "Close this room?" (U51)。以前のトグル (維持 / キャンセル確認) は削除した。' +
-      'ホストの ‹ には確認を出さない (確認を出すのはクライアントだけ、2026-10-08 に確認)。',
+      'ホストの ‹ には確認を出さない (確認を出すのはクライアントだけ、2026-10-08 に確認)。 ' +
+      '2026-10-09 の U57 で置き換えた: ホストの ‹ は確認 "Close this room?" のあと部屋を閉じ、Close Room のボタンと部屋を残す離席・帯は無くなった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U15', title: '同期に失敗したら両者の Ready を消し、ふつうの Ready の流れからやり直す ("Couldn’t start the match. Please ready up again.")',
     desc: '開始の同期に失敗したら、両者の Ready を消して "Couldn’t start the match. Please ready up again." を出し、ふつうの Ready の流れ (60 秒の期限つき、U33) からやり直す。' +
@@ -1792,12 +1578,14 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U16', title: '青 / 緑の帯もタップすると部屋の画面に戻る。タップで Ready にはならない',
     desc: '離席中のホストの帯は、青 ("Waiting for your friend…" など) も緑 ("Friend joined!") も、タップすると部屋の画面に戻る (赤 "Friend is ready!" と濃い赤 "Match code expired." も同じ)。' +
-      'どの帯のタップでも Ready は押さない (U1)。以前のトグル (タップできない / ロビーへ) は削除した。',
+      'どの帯のタップでも Ready は押さない (U1)。以前のトグル (タップできない / ロビーへ) は削除した。 ' +
+      '2026-10-09 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U17', title: '"Friend joined!" は本当に入った・入り直したときだけ。ホスト離席中に友だちが抜けたら "Your friend left." を一度',
     desc: '"Friend joined!" は、友だちが本当に部屋に入った・入り直したとき (Leave Room のあとの Join Match、"Could not reconnect." のあとの Retry など) だけ出す。' +
       'ホストが戻ったとき・再接続できたときには出さない (以前の図02 の「Away → Friend joined! → Ready」の 2 回目は無くなった)。' +
-      'ホストの離席中に友だちが抜けたら、ホストの帯に "Your friend left." を一度だけ出し、そのあとは青い "Waiting for your friend…" に戻る (出す長さは 5 秒、U55 で 2026-10-08 に決定)。',
+      'ホストの離席中に友だちが抜けたら、ホストの帯に "Your friend left." を一度だけ出し、そのあとは青い "Waiting for your friend…" に戻る (出す長さは 5 秒、U55 で 2026-10-08 に決定)。 ' +
+      '2026-10-09 の U57 で離席が無くなったので、"Your friend left." の帯は無い ("Friend joined!" の決まりはそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U18', title: '期限切れでもクライアントを今の画面から動かさない。その場で "Match code expired." と Join Match',
     desc: 'Match Code の期限が切れても、クライアントを別の画面へ移さない。今の画面 (部屋の画面) のまま "Match code expired." と Join Match を出す (U10)。' +
@@ -1805,7 +1593,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U19', title: '友だちの再接続を待っている間の帯は "Reconnecting…"。20 秒たつと "Waiting for your friend…"',
     desc: '友だちの再接続を待っている間 (U5 / U32) にホストが部屋の画面を離れると、帯は青い "Waiting for your friend…" ではなく "Reconnecting…" を出す。' +
-      '20 秒たっても戻らなければ "Waiting for your friend…" に戻す (空の部屋を残している)。図03 の「Connection lost から ‹ で青い待機の帯」は、この決定で置き換えた。20 秒は QA² 側の仮の値。',
+      '20 秒たっても戻らなければ "Waiting for your friend…" に戻す (空の部屋を残している)。図03 の「Connection lost から ‹ で青い待機の帯」は、この決定で置き換えた。20 秒は QA² 側の仮の値。 ' +
+      '2026-10-09 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U20', title: '結果画面: 勝敗・両者の名前・スコア・終わった理由を出す',
     desc: '結果画面には、勝敗 (Win / Lose / Draw / No contest。画面は "WIN!" / "LOSE" / "DRAW" / "NO CONTEST")、両者の名前、スコア、終わった理由を出す。' +
@@ -1878,17 +1667,20 @@ var UNDECIDED = [
   { id: 'U34', title: '取り消しと退出: Cancel Ready はルームに残る。クライアントが抜けるとホストは同じ Match Code で待つ。ホストが閉じるとクライアントは Friend Match トップへ',
     desc: 'Cancel Ready で Ready を取り消してもルームに残り、相手には "Opponent is no longer ready." を出す。クライアントが抜けると、ホストには "Your friend left. Waiting for another friend…" を出し、Match Code は変えない。' +
       'ホストがルームを閉じると、クライアントには "Room closed. The host left." を出して Friend Match トップへ移す。抜ける前に確認 "No match has started. No win or loss will be recorded." を出す。' +
-      'ボタンはクライアントが Leave Room (U9)、ホストが Close Room (U14)。確認の題名はクライアントが "Leave this room?" (U9)、残るボタンは Keep Waiting (U11)。ホストの確認の題名は "Close this room?" (U51)。確認の本文は "No match has started. No win or loss will be recorded." (2026-10-08 に確認)。',
+      'ボタンはクライアントが Leave Room (U9)、ホストが Close Room (U14)。確認の題名はクライアントが "Leave this room?" (U9)、残るボタンは Keep Waiting (U11)。ホストの確認の題名は "Close this room?" (U51)。確認の本文は "No match has started. No win or loss will be recorded." (2026-10-08 に確認)。 ' +
+      '2026-10-09 の U57 で Close Room / Leave Room のボタンは無くなり、どちらも ‹ の確認になった (題名・本文・Keep Waiting はそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U35', title: 'クライアントが別画面へ移る / ‹ は退出と同じ確認。アプリを離れるとその人の Ready が消える',
     desc: 'Ready 画面からほかの画面へ移るとき・‹ を押したときは、Leave Room と同じ確認 ("No match has started. No win or loss will be recorded.") を出す。' +
       'アプリを離れる (バックグラウンドへ移る・画面ロック) と、その人の Ready は消える (ルームには残る)。' +
-      'そのため、図07 の「クライアントが別画面へ移ってもマッチを残し、赤い "Ready to start" トーストで戻る」流れは無くなった (U10 / U18 も解消)。アプリを離れたときに相手に出す表示は U53 ("Opponent is no longer ready.")。ホストの ‹ は U14 (2026-10-07) で変わった: 部屋を残して帯で示し、ホストの Ready は消える。確認を出すのはクライアントだけ (U9)。',
+      'そのため、図07 の「クライアントが別画面へ移ってもマッチを残し、赤い "Ready to start" トーストで戻る」流れは無くなった (U10 / U18 も解消)。アプリを離れたときに相手に出す表示は U53 ("Opponent is no longer ready.")。ホストの ‹ は U14 (2026-10-07) で変わった: 部屋を残して帯で示し、ホストの Ready は消える。確認を出すのはクライアントだけ (U9)。 ' +
+      '2026-10-09 の U57 で、ホストの ‹ も確認 ("Close this room?") を出すようになった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U36', title: 'Ready 画面: プレイヤーごとのカード ("✓ Ready" / "Not ready")。押した側に "Waiting for opponent…"・60 秒のカウントダウン・Cancel Ready',
     desc: 'Ready 画面にはプレイヤーごとにカードを出し (ホストが離れている間、クライアントのカードのホストは "Away")、"✓ Ready" か "Not ready" を表示する。Ready を押した側には "Waiting for opponent…"、60 秒のカウントダウン、Cancel Ready を出す。' +
       '押していない側には "Opponent is ready. Are you?" を出す。押して送っている間は "Confirming…" を出す。' +
-      'モックではカードの順は自分が左 (YOU 付き)、"Confirming…" は Ready ボタンの場所に無効表示で出す。カウントダウンは押した直後の "60s" のまま描く (実時間では減らさない)。',
+      'モックではカードの順は自分が左 (YOU 付き)、"Confirming…" は Ready ボタンの場所に無効表示で出す。カウントダウンは押した直後の "60s" のまま描く (実時間では減らさない)。 ' +
+      '2026-10-09 の U57 でホストは部屋を離れられなくなったので、カードの "Away" は無い。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U37', title: 'オンライン対戦は ☰ MATCH MENU。開いても試合は止まらない',
     desc: '案A。オンライン対戦では VsAI のポーズポップアップの代わりに MATCH MENU (☰) を出す。VsAI やソロのポーズのように Time.timeScale = 0 でゲームを止めることはせず、メニューを開いている間も試合は続く。' +
@@ -1952,7 +1744,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U51', title: 'ホストの Close Room の確認の題名は "Close this room?"。U12 のクライアント向けの本文は保留',
     desc: 'ホストの Close Room の確認の題名は "Close this room?" のまま (本文は U34、ボタンは Close Room / Keep Waiting)。' +
-      'U12 で決まったクライアント向けの本文 ("This will leave your current room. Your friend’s room will stay open.") は、出す場面が無い (クライアントは部屋に入ったまま別の画面へは移れない、U9) ので保留。',
+      'U12 で決まったクライアント向けの本文 ("This will leave your current room. Your friend’s room will stay open.") は、出す場面が無い (クライアントは部屋に入ったまま別の画面へは移れない、U9) ので保留。 ' +
+      '2026-10-09 の U57 で、"Close this room?" はホストの ‹ の確認になった。U12 は U57 で無くなった。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U52', title: '開始前の切断の表示: 切れた側も "Connection lost. Reconnecting…" と残りの秒数。部屋のお知らせは Close で閉じる帯',
     desc: '切断した側には "Connection lost. Reconnecting…" と残りの秒数を出す (VS 画面・カウントダウン中の切断 (U32) も)。' +
@@ -1962,7 +1755,8 @@ var UNDECIDED = [
   { id: 'U53', title: 'Ready は送っている間と VS 画面から先は取り消せない (今のモックのまま)',
     desc: '今のモックのまま。Ready を送っている間 ("Confirming…") と、読み込み ("Starting match…")・VS 画面から先は Ready を取り消せない (「VS 画面までは取り消せる」案は採らない)。' +
       '送っている間は Close Room / Leave Room / ‹ も押せない。アプリを離れて Ready が消えたとき (U35) とホストが別の画面へ移って Ready が消えたとき (U14) は、相手に Cancel Ready と同じ "Opponent is no longer ready."。' +
-      '相手が Ready を送っている途中で取り消したときは、相手の Ready が届いて相手が待つ側になる。戻ってきた・再接続したあとにお知らせは出さない。',
+      '相手が Ready を送っている途中で取り消したときは、相手の Ready が届いて相手が待つ側になる。戻ってきた・再接続したあとにお知らせは出さない。 ' +
+      '2026-10-09 の U57 で Close Room / Leave Room のボタンは無くなった (送っている間に ‹ を押せないのはそのまま)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U54', title: 'ランダム対戦と再戦の開始前の切断: 20 秒待ち、戻らなければ取りやめ (勝敗なし・レートは変わらない)。戻ったら VS 画面から',
     desc: 'ランダム対戦と再戦 (Friend Match の再戦も) の VS 画面・カウントダウン中に切断したら、20 秒待つ。戻らなければ試合を取りやめ、勝敗はつけず、レートも変わらない。' +
@@ -1972,7 +1766,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U55', title: '離席中の帯: 友だちがいて Ready していなければ "Friend is in the room"。"Your friend left." は 5 秒',
     desc: 'ホストの離席中、友だちが部屋にいて Ready していないときの帯は "Friend is in the room" (以前のモックの青い "Waiting for your friend…" から変更)。' +
-      '"Your friend left." は 5 秒出す (以前のモックは 3 秒)。5 秒は QA² 側の仮の値 (変わりうる)。',
+      '"Your friend left." は 5 秒出す (以前のモックは 3 秒)。5 秒は QA² 側の仮の値 (変わりうる)。 ' +
+      '2026-10-09 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U56', title: 'Profile: 相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ。次の部屋・次の検索から相手に見える',
     desc: 'Online Battle に Profile を置く (両端末)。Profile 画面の上には VS 画面のカードの見本 (名前・絵文字・あいさつ) を出し、選ぶたびにすぐ変える。下に Save / Cancel (\u2039 は Cancel と同じ)。' +
@@ -1987,4 +1782,12 @@ var UNDECIDED = [
       'モックの localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。' +
       '同じ相手との再戦では値を固定し直さず、ホストの "Join another match" はモックでは固定するときに含めない。Online Battle の Profile のボタンには保存した絵文字を添える。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
+  { id: 'U57', title: '部屋の画面の出口は左上の ‹ だけ。ホストは "Close this room?"、クライアントは "Leave this room?" の確認を出す',
+    desc: '#1891 の YoshiyukiN さんの FB の 1・2 番目。部屋の画面 (Match Code を出している待機・Ready 画面・切断待ちなど) の Close Room (ホスト) と Leave Room (クライアント) のボタンを無くし、' +
+      '左上の ‹ に統一する (役割が \u2039 と重なり、位置的に押し間違えやすいため)。ホストの ‹ は部屋を閉じ、クライアントの ‹ は部屋を抜ける。' +
+      '‹ でも下部のボタンと同じく確認を出し、部屋を閉じる・抜けることを示す: ホストは "Close this room?"、クライアントは "Leave this room?" ' +
+      '(本文は U34 の "No match has started. No win or loss will be recorded."、ボタンは Close Room / Leave Room と Keep Waiting (U11))。Keep Waiting で部屋に残る。' +
+      'ホストが閉じると、相手 (クライアント) は "Room closed. The host left." で Friend Match トップへ (U34)。"Could not reconnect." の画面も Retry と ‹ だけ。' +
+      '部屋を作ったまま他のモードを遊べるのは便利だが、バグの原因になり今は仕様として重いので、部屋を残したまま別の画面へ移ることはできない (以前の U14 の離席と帯 (U1 / U16 / U19 / U55)、U12 の確認は無くなった)。',
+    decided: { by: 'YoshiyukiN さんの FB (#1891、1・2 番目)', date: '2026-10-09' } },
 ];

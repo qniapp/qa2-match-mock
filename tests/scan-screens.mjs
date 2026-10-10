@@ -8,9 +8,11 @@
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
 // 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
-// 部屋の画面 (決定 U1〜U19) は、Match Code の下の "Code expires in 30:00" (U7)、ホストが離れている間だけクライアントのカードのホストが "Away" (U14)、
+// 部屋の画面 (決定 U1〜U19) は、Match Code の下の "Code expires in 30:00" (U7)、クライアントのカードに "Away" が無いこと、
 // 古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
 // 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
+// 部屋の画面の出口は左上の ‹ だけ (決定 U57): Close Room / Leave Room のボタンが無く、‹ はホストで "Close this room?"、クライアントで "Leave this room?" の確認を開き、
+// 確認が画面に収まって Close Room / Leave Room と Keep Waiting を押せることも確かめる。
 // 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
 // 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" であること (U49)、
 // 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
@@ -298,7 +300,8 @@ function scan() {
       const isWaiting = /\.(Game|Opponent)\.(Disconnected|OpponentDisconnected)\b/.test(state);
       if (isWaiting !== !!waitingTimer || (waitingTimer && waitingTimer.textContent !== '20s')) findings.push(`${at}: 切断を待つ間の残りの秒数が ${waitingTimer ? waitingTimer.textContent : 'なし'}`);
       const restText = waitingTimer ? text.replace(waitingTimer.textContent, '') : text;
-      if (/Result|\.Game\.|\.Opponent/.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(restText)) findings.push(`${at}: 秒数がある: ${restText.trim().slice(0, 80)}`);
+      // Ready 画面の *.Lobby.OpponentDisconnected は 20s を出す画面なので含めない (下の Ready 画面の検査で確かめる)
+      if (/Result|\.Game\.|\.Opponent(\.|$|\s)/.test(state) && /\b\d+\s*(s|sec|secs|seconds?)\b/i.test(restText)) findings.push(`${at}: 秒数がある: ${restText.trim().slice(0, 80)}`);
       if (isWaiting) {
         const want = /\.Disconnected\b/.test(state) ? ['Connection lost', 'Reconnecting…'] : ['Your opponent disconnected', 'Waiting for your opponent to reconnect…'];
         const got = [...screen.querySelectorAll('.m-panel .m-title, .m-panel .m-body')].map((e) => e.textContent);
@@ -397,7 +400,7 @@ function scan() {
         const sr = screen.getBoundingClientRect();
         const tr = toast.getBoundingClientRect();
         if (tr.top < sr.top || tr.bottom > sr.bottom || tr.left < sr.left || tr.right > sr.right) findings.push(`${at}: 帯が画面からはみ出している`);
-        screen.querySelectorAll('.btn, .input, .room-notice, .error, .menu-item, .tile').forEach((el) => {
+        screen.querySelectorAll('.btn, .input, .room-notice, .error, .menu-item').forEach((el) => {
           const r = el.getBoundingClientRect();
           if (r.bottom > tr.top + 0.5 && tr.bottom > r.top + 0.5 && r.right > tr.left && tr.right > r.left) findings.push(`${at}: 帯 "${toast.textContent}" が ${el.textContent.trim() || el.className} と重なっている`);
         });
@@ -405,16 +408,11 @@ function scan() {
         const chev = toast.querySelector('.chev');
         if (chev) { const cr = chev.getBoundingClientRect(); if (cr.top < tr.top || cr.bottom > tr.bottom) findings.push(`${at}: 帯の › が帯の外にある (${toast.textContent})`); }
       }
-      if (/⚠ createFailed/.test(state) && (!toast || !/^Connection failed/.test(toast.textContent))) findings.push(`${at}: 作り直しの失敗で "Connection failed" の帯が出ていない`);
       if (screen.querySelector('[data-ev="leaveApp"], [data-ev="disconnect"]')) findings.push(`${at}: ルームのモック操作が端末の画面の中にある`);
       if (/\.FriendMatch\.Lobby\.(Ready|Starting|Reconnecting|OpponentDisconnected|FriendJoined|Connecting|ConnectionLost|FriendDisconnected)/.test(state)) {
         const cards = [...screen.querySelectorAll('.rd-card')];
         const states = cards.map((c) => c.querySelector('.rd-state').textContent);
-        if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready', 'Away'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready" / "Away") でない (${states.join(', ')})`);
-        // ホストが ‹ で離れている間 (決定 U14) だけ、クライアントのカードのホストは "Away"
-        const hostAway = /^Host\.Away\./.test(document.querySelector('.device[data-dev="host"] .state-name').textContent);
-        const wantAway = dev.dataset.dev === 'client' && hostAway;
-        if ((states[1] === 'Away') !== wantAway || states[0] === 'Away') findings.push(`${at}: 相手のカードの "Away" が ${states[1] === 'Away'} (期待: ${wantAway})`);
+        if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready") でない (${states.join(', ')})`);
         if (!cards[0] || !cards[0].querySelector('.you') || screen.querySelectorAll('.rd-card .you').length !== 1) findings.push(`${at}: 自分のカードに YOU が無い`);
         const timer = screen.querySelector('.rd-timer');
         const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /\.(OpponentDisconnected|Reconnecting|ConnectionLost|FriendDisconnected)\b/.test(state) ? '20s' : null;
@@ -437,6 +435,30 @@ function scan() {
           const [a, ra] = parts[i]; const [b, rb] = parts[j];
           if (a.contains(b) || b.contains(a)) continue;
           if (ra.bottom > rb.top + 0.5 && rb.bottom > ra.top + 0.5 && ra.right > rb.left && rb.right > ra.left) findings.push(`${at}: ${a.className} と ${b.className} が重なっている`);
+        }
+      }
+      // 部屋の画面の出口は ‹ だけ (決定 U57)。Close Room / Leave Room のボタンは確認ダイアログの中にだけある
+      if (/\.FriendMatch\.Lobby\./.test(state)) {
+        const exits = [...screen.querySelectorAll('.actions .btn')].map((b) => b.textContent).filter((t) => /^(Close|Leave) Room$/.test(t));
+        if (exits.length) findings.push(`${at}: 部屋の画面に ${exits.join(' / ')} のボタンがある (出口は ‹ だけ)`);
+        const back = screen.querySelector('.hdr .back');
+        // 確認を開いている間は ‹ に行が無い (確認の Keep Waiting / Close Room / Leave Room で答える)
+        const wantBack = /🗨 (closeRoom|leaveRoom)/.test(state) ? 'none'
+          : /\.(Ready\.Confirming|Ready\.OpponentReady\.Confirming|Starting|ConnectionLost|Reconnecting)\b/.test(state) ? 'disabled' : 'button';
+        const gotBack = back && back.tagName === 'BUTTON' && !back.hasAttribute('data-norow') ? 'button' : back && back.classList.contains('disabled') ? 'disabled' : 'none';
+        if (gotBack !== wantBack) findings.push(`${at}: ‹ が ${gotBack} (期待: ${wantBack})`);
+      }
+      const dialog = screen.querySelector('.dialog');
+      const roomDialog = (state.match(/🗨 (closeRoom|leaveRoom)/) || [])[1];
+      if (roomDialog) {
+        const want = roomDialog === 'closeRoom' ? ['Close this room?', 'Close Room', 'Keep Waiting'] : ['Leave this room?', 'Leave Room', 'Keep Waiting'];
+        const got = dialog ? [dialog.querySelector('.d-title').textContent].concat([...dialog.querySelectorAll('.btn')].map((b) => b.textContent)) : [];
+        if (got.join() !== want.join()) findings.push(`${at}: 確認が ${got.join(' / ')} (期待: ${want.join(' / ')})`);
+        if (dialog) {
+          const sr = screen.getBoundingClientRect();
+          const r = dialog.getBoundingClientRect();
+          if (r.top < sr.top || r.bottom > sr.bottom || r.left < sr.left || r.right > sr.right) findings.push(`${at}: 確認が画面からはみ出している`);
+          dialog.querySelectorAll('.btn').forEach((b) => { if (b.hasAttribute('data-norow')) findings.push(`${at}: 確認の ${b.textContent} を押せない`); });
         }
       }
       if (/----/.test(text)) findings.push(`${at}: 値の決まっていない ---- がある`);

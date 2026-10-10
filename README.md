@@ -4,7 +4,7 @@ QA² のオンライン対戦 (Friend Match) の導線を議論するための�
 ホストとクライアントの 2 台の画面を並べ、同じ操作で両方がどう変わるかを一度に見られるようにしています。
 見た目の作り込みよりも、流れの分かりやすさを優先しています。
 
-> 注意: このリポジトリは使い捨てのモックで、製品コードではありません。リポジトリは public で、GitHub Pages (https://qniapp.github.io/qa2-match-mock/ 、`match-flow-mock` ブランチから配信) で公開しています。
+> 注意: このリポジトリは使い捨てのモックで、製品コードではありません。リポジトリは public で、GitHub Pages (https://qniapp.github.io/qa2-match-mock/ 、`main` ブランチから配信) で公開しています。
 
 ## 目的
 
@@ -76,7 +76,7 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 - `copy`: 付属状態の値を別の付属状態へ写す (`{ 写す先: 写す元 }`)。Profile の下書き・保存と、部屋を作る・入る・探し始めるときの固定に使い、表のメモに「写す:」と出します (「Profile (絵文字とあいさつ)」を参照)。
 
 ほかに `SCREENS` (状態 → 画面の描画仕様、トーストもここで決まる)、`DIALOGS`、`TOASTS`、`UNDECIDED` (未決一覧。決定済みの項目は `decided` 付き)、
-`DEVICE_FIELDS` (端末ごとの付属状態: ダイアログ・スタンプ・ミュート・離席中の作り直しの失敗・Profile の絵文字とあいさつ)、`SESSION_FIELDS` (対戦のセッション) が同じファイルにあります。
+`DEVICE_FIELDS` (端末ごとの付属状態: ダイアログ・スタンプ・ミュート・Profile の絵文字とあいさつ)、`SESSION_FIELDS` (対戦のセッション) が同じファイルにあります。
 シナリオは `js/scenarios.js` にイベントの列として定義しており、遷移表の行をそのまま再生します。
 
 自己テスト: `node tests/check.js` で、全シナリオが遷移表どおりに最後まで再生できること、未定義の状態や未決 ID が無いこと、
@@ -90,21 +90,20 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Ho
 続く自動遷移で VS 画面になること、両者がほぼ同時に押しても開始すること、Ready 画面のどの組み合わせからも VS 画面へ直接進む行が無いこと、
 送っている間と読み込み中に押せないものの行が無いこと (読み込み中は Match Code の期限も切れない)、Cancel Ready とアプリを離れたときに自分の Ready だけが消えて相手に "Opponent is no longer ready." が出ること
 (Ready していない側が離れても変わらないこと)、60 秒で両者の Ready が消えて "Ready check timed out…" になること、
-クライアントの Leave Room と ‹ が同じ確認 "Leave this room?" を出し、Keep Waiting で Ready のまま残り、Leave Room でホストに "Your friend left. Waiting for another friend…" が出ること、
-ホストは Close Room で確認を出し、閉じるとクライアントに "Room closed. The host left." が出ること (ホストに Leave Room は無い)、お知らせ付きの Ready 画面 (同期の失敗を含む 4 種類) からも Ready を押せること、
-部屋の画面のカード・文言・カウントダウン (60 / 20)・ボタン (ホストは Close Room、クライアントは Leave Room)・"Code expires in 30:00"、期限切れと "Could not reconnect." の画面、4 つの確認の題名・本文・ボタンを確かめます。
+部屋の画面の出口が左上の ‹ だけで Close Room / Leave Room のボタンが無いこと (U57)、クライアントの ‹ が確認 "Leave this room?" を出し、Keep Waiting で Ready のまま残り、Leave Room でホストに "Your friend left. Waiting for another friend…" が出ること、
+ホストの ‹ が確認 "Close this room?" を出し、Keep Waiting で残り、閉じるとクライアントに "Room closed. The host left." が出ること、お知らせ付きの Ready 画面 (同期の失敗を含む 4 種類) からも Ready を押せること、
+部屋の画面のカード・文言・カウントダウン (60 / 20)・ボタン・"Code expires in 30:00"、期限切れと "Could not reconnect." の画面、2 つの確認の題名・本文・ボタンを確かめます。
 フレンド対戦の部屋 (U1〜U19 で決定) については、参加のあとホスト "Friend joined!" / クライアント "Connecting…" で Ready を押せず、同期 (`sys.roomSynced`、1.5 秒の固定ではない) のあと Ready 画面になること、
-ホストが離れている間は同期しないこと (U4)、部屋での切断のすべての組み合わせで "Connection lost. Reconnecting…" / "Your friend disconnected…" になり、回復・20 秒で "Could not reconnect."・Retry・Leave Room・残った側の Close Room / Leave Room の行き先 (U5)、
-ホストの ‹ が確認なしで部屋を残して帯になり、ホストの Ready が消えること (U14)、帯の文言・色と、タップで部屋の画面に戻るだけで Ready にならないこと (U1 / U16)、
-"Friend joined!" になるのは本当に入った・入り直したときだけで、離席中に抜けると "Your friend left." を一度出すこと (U17)、再接続待ちの帯が "Reconnecting…" で 20 秒で "Waiting for your friend…" になること (U19)、
+部屋での切断のすべての組み合わせで "Connection lost. Reconnecting…" / "Your friend disconnected…" になり、回復・20 秒で "Could not reconnect."・Retry・‹・残った側の ‹ の行き先 (U5)、
+部屋を残したまま離れる状態 (以前の U14 の離席) と帯が無いこと (U57)、"Friend joined!" になるのは本当に入った・入り直したときだけであること (U17)、
 "Connection failed" がサーバーに届かないときだけで役割ごとの文言であること (U6)、期限切れで両者 "Match code expired." になり、ホストは Create Match、クライアントは今の画面のまま Join Match で、時計が止まる間は切れないこと (U7 / U10 / U18)、
-離席中の Create Match は作れたときだけ古い部屋を閉じ、失敗すると古い部屋と帯が残ること (U12)、U1〜U19 (と U32〜U36 / U43) が高宮さん 2026-10-07 の決定で、遷移表・画面・ダイアログに未決として残っていないこと、
+U1〜U19 (と U32〜U36 / U43) が高宮さん 2026-10-07 の決定で、遷移表・画面・ダイアログに未決として残っていないこと、
 U3 / U8 の説明に解消した決定があること、未決が 0 件であること、秒数と 30 分が仮の値であることが右パネルにあること、
 図01 の開始ボタンの名前や古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など)・古い状態・イベント・トグルが残っていないことを確かめます。
 VS 画面・カウントダウン中の切断 (U32 で決定) については、Friend Match の Ready 画面から始まった対戦のときだけ "Connection lost. Reconnecting…" / "Opponent disconnected…" になり
 (ランダム対戦・再戦は U54 の VS 画面での待ち)、回復で両者 Ready 画面、20 秒でホスト側は "Match cancelled…"、クライアント側は "Room closed. The host disconnected." になり、
 戻れなかった側は "Could not reconnect. The match did not start." の Friend Match トップになること (U52)、その間は期限が切れないこと、結果画面へ行かないこと、
-読み込みが 20 秒で "Match could not start…"、同期の失敗で "Couldn’t start the match…" になること (U15) を確かめます。シナリオ 1〜7b / 12〜14 / 19〜20 の流れも確認します。
+読み込みが 20 秒で "Match could not start…"、同期の失敗で "Couldn’t start the match…" になること (U15) を確かめます。シナリオ 1〜7b / 12 / 13 / 19〜20 の流れも確認します。
 ランダム対戦 (U13a で決定) については、相手が見つかると両端末とも直接 VS 画面になること、ランダム対戦の状態から Ready 画面 / "Starting match…" へ進む行が無いこと、
 相手を探す画面が "Searching for an opponent…" と大きな Cancel だけ (トーストなし) であること、シナリオ 11 の流れを確認します。
 相手を探している間の操作 (U13 で決定) については、両端末とも (相手の端末がどの状態でも) Cancel と ‹ が確認ダイアログなしで Online Battle に戻ること、
@@ -138,11 +137,12 @@ U37〜U42 が高宮さん 2026-10-07 の決定であること、モック専用�
 2026-10-08 の決定 (U44〜U55) については、U44〜U55 が高宮さん 2026-10-08 の決定で、遷移表・画面・ダイアログに未決が 1 つも残っていないこと、
 時間切れの勝ち・負けが "Time is up"、同点が "Same score when time ran out" で "Match finished" が残っていないこと (U44)、降参・切断・No contest のあとにどちらからも Rematch が無いこと (U45)、
 切断を待つ間の暗幕が止まった濃さで MATCH MENU は薄いままであること (U46)、次の相手を探している間のアプリを離れると "Search stopped…" (U47)、VS 画面が "Rating {n}" で Rank が無いこと (U48)、
-ミュートのボタンの文言と、VS 画面の切断待ちでもミュートが続くこと (U49)、Close Room の確認の題名と U12 のクライアント向けの本文が保留であること (U51)、
+ミュートのボタンの文言と、VS 画面の切断待ちでもミュートが続くこと (U49)、ホストの確認の題名が "Close this room?" で U12 のクライアント向けの本文が保留であること (U51)、
 部屋のお知らせ 5 種類の文言・Close・Match Code を入れても消えないこと・入れたまま Join Match できること (U52)、Ready を送っている間・読み込み・VS 画面から先に Cancel Ready の行が無いこと (U53)、
 ランダム対戦・ランダム対戦の再戦・Friend Match の再戦の開始前の切断が VS 画面で 20 秒待ち、戻れば VS 画面から、戻らなければ結果画面へは行かずに取りやめになり、
-ランダム対戦は Online Battle の中の通知 (Search again / Close) になること (U54)、"Friend is in the room" と "Your friend left." の 5 秒 (U55)、
-部屋での切断の再接続待ちの間に Match Code の期限が切れ、戻った側も "Match code expired." になること (pi の仮定 3)、ホストの ‹ に確認が無いこと (仮定 1)、"Back to Online Battle" が無いこと (仮定 5) を確かめます。
+ランダム対戦は Online Battle の中の通知 (Search again / Close) になること (U54)、
+部屋での切断の再接続待ちの間に Match Code の期限が切れ、戻った側も "Match code expired." になること (pi の仮定 3)、"Back to Online Battle" が無いこと (仮定 5) を確かめます
+(U55 の帯と、仮定 1 の「ホストの ‹ に確認が無い」は 2026-10-09 の U57 で無くなった)。
 再戦の取り消し (2026-10-08) については、両者のすべての取り消しの状態の一行が "Rematch request cancelled" であることと、リポジトリの文章 (js・README・テストなど) に以前の "was" 付きの文言が残っていないことを確かめます。
 Profile (U56、2026-10-08) については、U56 が高宮さん 2026-10-08 の決定で未決が 0 件のままであること、絵文字 10 個とあいさつ 10 個の候補 (内容と順番)、あいさつの候補・既定値・相手の値・どのシナリオの VS 画面のあいさつにもまっすぐな `'` が無いこと、既定値 👋 "Hello!" とクライアント (ogwssk) の最初の値、
 Profile を開く行とボタンが Online Battle (と、その中の通知) だけにあり、探している間・部屋・対戦中には無いこと (両端末のすべての状態)、Profile 画面の操作と、Save で保存し Cancel / ‹ で捨てること、
@@ -151,7 +151,7 @@ Profile を開く行とボタンが Online Battle (と、その中の通知) だ
 localStorage のキーがモックの名前で区切られ、保存して読み直すと同じ値になり、壊れた値・候補に無い値は最初の値に戻ること、シナリオが保存した値を使わないことを確かめます。
 
 端末の画面の検査: `node tests/scan-screens.mjs` (ヘッドレス Chromium が必要。場所は環境変数 `CHROMIUM` で変えられます) で、
-全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 913 枚) を 1280x720 の画面で実際に描画し (手順は `#s=..&step=..&cd=..` と同じ `MockApp.show` で開く)、
+全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 825 枚) を 1280x720 の画面で実際に描画し (手順は `#s=..&step=..&cd=..` と同じ `MockApp.show` で開く)、
 両端末の画面 (`.screen`) に `仮`・`未決`・`決定`・U 番号・日本語・モックの注記 (`.mock-note`、`.pill-*` など) が無いこと、
 を確認します。各手順で両端末の状態が遷移表の再生結果と同じかも確かめます。
 その前に、hash なしで開いたページが自由操作 (シナリオなし、両端末が Online Battle で、ボタンを押すと進み、参加のあとの同期が実時間で進む) であること、
@@ -164,11 +164,12 @@ No contest にスコアの行が無いこと、モック操作 (時間切れの�
 アプリを離れて検索が止まった画面 (`*.Matchmake.Stopped`) では、通知のボックスが Online Battle のメニューの中にあって暗幕 (`.dim`) が無いこと、
 ボックスが端末の画面に収まっていること、Random Match / Friend Match / Profile と通知のボタンの真ん中を押すとそのボタン自身に当たる (上に何も重なっていない) ことも確かめます (U43)。
 Ready 画面 (U31 / U32 / U36) では、カードが 2 枚 ("✓ Ready" / "Not ready"、自分のカードに `YOU`) あること、数字は決定どおりのカウントダウン (Ready の "60s"、再接続を待つ両者の "20s"、U5 / U32 / U52) だけであること、
-カード・お知らせ・文言・ボタンが画面に収まって重ならないこと、Leave Room / Close Room の確認を開いても後ろのボタンが消えないこと、
+カード・お知らせ・文言・ボタンが画面に収まって重ならないこと、‹ の確認 (Close this room? / Leave this room?) を開いても後ろのボタンが消えないこと、
 「アプリを離れる」「切断する」が端末の画面の中には無く、端末の下にあることも確かめます。
 部屋の画面 (U1〜U19) では、Match Code の下の "Code expires in 30:00" (期限切れと "Could not reconnect." の画面には無い)、数字が Match Code・期限・カウントダウンだけであること、
-ホストが離れている間だけクライアントのカードのホストが "Away" であること、古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
-画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まり、ボタン・入力欄・お知らせと重ならず、文字と › がはみ出さないこと、離席中の作り直しに失敗したときに "Connection failed" が出ることも確かめます。
+クライアントのカードに "Away" が無いこと、古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
+画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まり、ボタン・入力欄・お知らせと重ならず、文字と › がはみ出さないことも確かめます。
+部屋の画面 (U57) では、Close Room / Leave Room のボタンがどこにも無く、‹ を押すとホストは "Close this room?"、クライアントは "Leave this room?" の確認が画面に収まって開き、Close Room / Leave Room と Keep Waiting を押せることも確かめます。
 2026-10-08 の決定 (U44〜U55) では、VS 画面の両者のカードが "Rating 1000" で "Rank" がどこにも無いこと (U48)、部屋のお知らせの帯がその状態のときだけあり、Close を押せ、暗幕が無く、画面に収まってほかの部品と重ならないこと (U52)、
 ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" で状態と合っていること (U49) も確かめます。
 Profile (U56) では、自由操作で Cancel と ‹ は localStorage に書かず、Save した値がページを開き直しても Online Battle と Profile に残ること、
@@ -185,7 +186,7 @@ Profile 画面の候補・選ばれているもの (1 つずつ)・見本・Save
 - 役割: `Host.` / `Client.` (本体の `MultiplayManager.IsHost()` / `IsClient()` [1])
 - 画面: `MultiModeSelection` (Online Battle) / `FriendMatch.Room` (Friend Match トップ) / `FriendMatch.Lobby` (Match Code を発行したあとの待機・Ready) /
   `Matchmake` (ランダム対戦で相手を探す) / `Opponent` (VS 画面) / `Game.Countdown` / `Game.Play` / `Game.MatchMenu` / `Game.SurrenderConfirm` / `WinResult` / `LoseResult`、
-  ホストの離席は `Host.Away.FriendMatchRoom.*` / `Host.Away.StageSelection.*`、Profile 画面は `Profile` (2026-10-08。qa2 本体にまだ無い画面なので、画面の名前をそのまま当てた)
+  ホストの離席は `Host.Away.FriendMatchRoom.*` / `Host.Away.StageSelection.*` (2026-10-09 の U57 で削除)、Profile 画面は `Profile` (2026-10-08。qa2 本体にまだ無い画面なので、画面の名前をそのまま当てた)
 - 本体に 1 対 1 の名前が無いもの (Room、Lobby、Opponent (VS 画面)、Countdown、離席の Away、ステージ選択、図の段階名) には **近い名前を当てた** ので、下の表の「対応」に書いています。
 - 遷移表のグループ名も同じ形にしました (例: `Host.FriendMatch.Lobby.Cancelable`)。グループは状態名と重ならない名前 (`.Any` や形容詞) にしています。JS の変数名は `hostCancelable` などの camelCase です。
 
@@ -197,7 +198,8 @@ URL (`#s=..&step=..&cd=..`) とスクリーンショットのファイル名に�
 対戦後の結果画面の決定 (U20〜U30、2026-10-07) で結果画面を作り直したので、127 状態・34 グループ、遷移表は 235 行になりました (「対戦後の結果画面」を参照)。
 検索停止のお知らせの決定 (U43、2026-10-07) で通知から Random Match / Friend Match へ行く行を足したので、127 状態・34 グループ、遷移表は 239 行になりました (「検索停止のお知らせ」を参照)。
 Ready の決定 (U31 の変更・U32〜U36、2026-10-07) で Ready 画面と開始前の切断を作り直したので、137 状態・44 グループ、遷移表は 258 行になりました (「Ready 画面と開始前の切断」を参照)。
-フレンド対戦の部屋の決定 (U1〜U19、2026-10-07) で部屋の切断・離席の帯・期限切れを作り直したので、今は 145 状態・55 グループ、遷移表は 297 行です (「フレンド対戦の部屋」を参照)。
+フレンド対戦の部屋の決定 (U1〜U19、2026-10-07) で部屋の切断・離席の帯・期限切れを作り直したので、145 状態・55 グループ、遷移表は 297 行になりました (「フレンド対戦の部屋」を参照)。
+その後の 2026-10-08 の決定で 213 状態・68 グループ・408 行になり、部屋の出口を ‹ だけにした決定 (U57、2026-10-09) で離席の状態を消したので、今は 199 状態・61 グループ、遷移表は 325 行です (「2026-10-09 の決定 (U57)」を参照)。
 このとき `Client.FriendMatch.Lobby.MatchExpired` → `Client.FriendMatch.Lobby.CodeExpired`、`Host.Away.*.Ready` → `Host.Away.*.FriendReady` に改名し、図03 の `Host.FriendMatch.Lobby.Connecting` と、同期の前のクライアントの `Waiting` / `FriendJoined` / `HostAway` を削除しました。
 このとき `Ready.WaitingForFriend` → `Ready.WaitingForOpponent`、`Ready.FriendReady` → `Ready.OpponentReady`、`Lobby.StartFailed` → `Lobby.Ready.StartFailed` に改名し、図07 の離席と図04 の "cancelled the match." の状態を削除しました (下の対応表の新名は改名当時のもの)。
 このとき再戦の段階の名前を変えました: 自分が申し込んだ `.RematchWaiting` → `.RematchRequested`、相手から申し込まれた `.RematchRequested` → `.RematchIncoming` (下の対応表の新名は改名当時のもの)。
@@ -257,14 +259,14 @@ Ready の決定 (U31 の変更・U32〜U36、2026-10-07) で Ready 画面と開�
 | `H_EXPIRED` | `Host.FriendMatch.Lobby.MatchExpired` (2026-10-07 に削除、U35) | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `MatchExpired` | 近い名前を当てた (段階名はモック独自) |
 | `C_MATCH_EXPIRED` | `Client.FriendMatch.Lobby.MatchExpired` → `Client.FriendMatch.Lobby.CodeExpired` (2026-10-07、U7) | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `MatchExpired` | 近い名前を当てた (段階名はモック独自) |
 | `H_CODE_EXPIRED` | `Host.FriendMatch.Lobby.CodeExpired` | Unity Lobby (`MultiplayManager.Lobby`) [1] と `FriendMatchView` の Host / Client 画面 [3] + モックの段階 `CodeExpired` | 近い名前を当てた (段階名はモック独自) |
-| `H_AWAY_TOP_WAITING` | `Host.Away.FriendMatchRoom.Waiting` | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
-| `H_AWAY_TOP_JOINED` | `Host.Away.FriendMatchRoom.FriendJoined` | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
-| `H_AWAY_TOP_READY` | `Host.Away.FriendMatchRoom.Ready` → `Host.Away.FriendMatchRoom.FriendReady` (2026-10-07、U1) | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
-| `H_AWAY_TOP_EXPIRED` | `Host.Away.FriendMatchRoom.Expired` | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
-| `H_AWAY_STAGE_WAITING` | `Host.Away.StageSelection.Waiting` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
-| `H_AWAY_STAGE_JOINED` | `Host.Away.StageSelection.FriendJoined` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
-| `H_AWAY_STAGE_READY` | `Host.Away.StageSelection.Ready` → `Host.Away.StageSelection.FriendReady` (2026-10-07、U1) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
-| `H_AWAY_STAGE_EXPIRED` | `Host.Away.StageSelection.Expired` | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_AWAY_TOP_WAITING` | `Host.Away.FriendMatchRoom.Waiting` (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_TOP_JOINED` | `Host.Away.FriendMatchRoom.FriendJoined` (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_TOP_READY` | `Host.Away.FriendMatchRoom.Ready` → `Host.Away.FriendMatchRoom.FriendReady` (2026-10-07、U1) (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_TOP_EXPIRED` | `Host.Away.FriendMatchRoom.Expired` (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02)。`FriendMatchRoom` は `FriendMatchView` の Room 画面 [3] | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_WAITING` | `Host.Away.StageSelection.Waiting` (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_JOINED` | `Host.Away.StageSelection.FriendJoined` (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_READY` | `Host.Away.StageSelection.Ready` → `Host.Away.StageSelection.FriendReady` (2026-10-07、U1) (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
+| `H_AWAY_STAGE_EXPIRED` | `Host.Away.StageSelection.Expired` (2026-10-09 に削除、U57) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
 | `C_AWAY_STAGE_READY` | `Client.Away.StageSelection.Ready` (2026-10-07 に削除、U35) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
 | `C_AWAY_STAGE_EXPIRED` | `Client.Away.StageSelection.Expired` (2026-10-07 に削除、U35) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
 | `H_RANDOM_WAITING` | `Host.Matchmake` | `MatchmakeView` [4] | 一致 |
@@ -294,14 +296,14 @@ Ready の決定 (U31 の変更・U32〜U36、2026-10-07) で Ready 画面と開�
 
 | 旧名 | 新名 | JS の変数名 | 内容 |
 |---|---|---|---|
-| `H_AWAY_PENDING` | `Host.Away.Pending` | `hostAwayPending` | マッチがまだ有効なホストの離席 (FriendMatchRoom / StageSelection × Waiting / FriendJoined / Ready) (6 状態) |
-| `H_CANCELABLE` | `Host.FriendMatch.Lobby.Cancelable` → `Host.FriendMatch.Lobby.Closable` (2026-10-07、U14) | `hostCancelable` → `hostClosable` | ホストが Cancel Match で確認ダイアログを出せるロビーの状態 (8 状態)。2026-10-07 から Close Room と ‹ (部屋を残して離れる) を押せる部屋の画面 (U14) |
+| `H_AWAY_PENDING` | `Host.Away.Pending` (2026-10-09 に削除、U57) | `hostAwayPending` | マッチがまだ有効なホストの離席 (FriendMatchRoom / StageSelection × Waiting / FriendJoined / Ready) (6 状態) |
+| `H_CANCELABLE` | `Host.FriendMatch.Lobby.Cancelable` → `Host.FriendMatch.Lobby.Closable` (2026-10-07、U14) | `hostCancelable` → `hostClosable` | ホストが Cancel Match で確認ダイアログを出せるロビーの状態 (8 状態)。2026-10-07 から Close Room と ‹ (部屋を残して離れる) を押せる部屋の画面 (U14)。2026-10-09 から ‹ で "Close this room?" を出せる部屋の画面 (U57) |
 | `H_WITH_CLIENT` | `Host.FriendMatch.Lobby.WithClient` | `hostWithClient` | クライアントがいるホストのロビーの状態 (7 状態) |
-| `H_EXPIRED_ANY` | `Host.Expired.Any` | `hostExpiredAny` | ホストの期限切れ (ロビーと離席) (4 状態) |
+| `H_EXPIRED_ANY` | `Host.Expired.Any` (2026-10-09 に削除、U57) | `hostExpiredAny` | ホストの期限切れ (ロビーと離席) (4 状態) |
 | `H_ONE_PRESSED` | `Host.FriendMatch.Lobby.Ready.OnePressed` (2026-10-07 に削除) | `hostOnePressed` | 片方だけ押した (U31。当時のボタンは図01 の名前) (2 状態)。Ready 画面のグループ (`*.FriendMatch.Lobby.Ready.Any` など) に置き換え |
 | `C_ONE_PRESSED` | `Client.FriendMatch.Lobby.Ready.OnePressed` (2026-10-07 に削除) | `clientOnePressed` | 片方だけ押した (U31。当時のボタンは図01 の名前) (2 状態)。Ready 画面のグループ (`*.FriendMatch.Lobby.Ready.Any` など) に置き換え |
 | `C_IN_MATCH` | `Client.InMatch` → `Client.FriendMatch.Lobby.InRoom` (2026-10-07) | `clientInMatch` → `clientInRoom` | クライアントがマッチに入っている状態 (ロビーと離席) (11 状態) |
-| `C_LEAVABLE` | `Client.FriendMatch.Lobby.Leavable` | `clientLeavable` | クライアントが Leave Match で確認ダイアログを出せるロビーの状態 (6 状態)。2026-10-07 から Leave Room と ‹ で "Leave this room?" を出せる部屋の画面 (U9) |
+| `C_LEAVABLE` | `Client.FriendMatch.Lobby.Leavable` | `clientLeavable` | クライアントが Leave Match で確認ダイアログを出せるロビーの状態 (6 状態)。2026-10-07 から Leave Room と ‹ で "Leave this room?" を出せる部屋の画面 (U9)。2026-10-09 から ‹ だけ (U57) |
 | `C_TOP_ANY` | `Client.FriendMatch.Room.Any` | `clientRoomAny` | クライアントの Friend Match トップ (Room) のすべて (6 状態) |
 | `C_TOP_FILLED` | `Client.FriendMatch.Room.CodeFilled` | `clientRoomFilled` | Match Code が入力済みの Room (5 状態) |
 | `H_RESULT_ANY` | `Host.Result.Any` | `hostResultAny` | ホストの結果画面のすべて (6 状態) |
@@ -333,24 +335,20 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 
 | ID | シナリオ | 元の図 | 説明 |
 |---|---|---|---|
-| [1](https://qniapp.github.io/qa2-match-mock/#s=1&step=0) | 通常対戦 (ホストが先に Ready) | 01 | ホストが Create Match、クライアントが Match Code で Join Match。サーバーが参加を確認すると、ホストは "Friend joined!"、クライアントは "Connecting…" (どちらも Ready はまだ押せない、U4)。両者が部屋の画面にそろって同期が終わると Ready 画面になる (決まった待ち時間ではない、U4)。Ready 画面にはプレイヤーごとのカード (どちらも "Not ready")、Match Code の下に "Code expires in 30:00" (U7)、ボタンはホストが Ready / Close Room、クライアントが Ready / Leave Room (U14 / U9)。両者が Ready を押したら開始 (U31)。ホストが Ready を押すと送っている間 "Confirming…"、届くとホストのカードが "✓ Ready" になり、ホストは "Waiting for opponent…" と 60 秒のカウントダウンと Cancel Ready、クライアントは "Opponent is ready. Are you?"。クライアントも押すと両者 "Starting match…" → VS 画面 → ゲーム画面に移り、ゲーム本体のカウントダウン (3 → 2 → 1) のあとプレイ開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。モック独自の 3·2·1 は置かない (U2 で決定)。 |
+| [1](https://qniapp.github.io/qa2-match-mock/#s=1&step=0) | 通常対戦 (ホストが先に Ready) | 01 | ホストが Create Match、クライアントが Match Code で Join Match。サーバーが参加を確認すると、ホストは "Friend joined!"、クライアントは "Connecting…" (どちらも Ready はまだ押せない、U4)。両者が部屋の画面にそろって同期が終わると Ready 画面になる (決まった待ち時間ではない、U4)。Ready 画面にはプレイヤーごとのカード (どちらも "Not ready")、Match Code の下に "Code expires in 30:00" (U7)、ボタンは両者とも Ready だけで、部屋の出口は左上の ‹ (U57)。両者が Ready を押したら開始 (U31)。ホストが Ready を押すと送っている間 "Confirming…"、届くとホストのカードが "✓ Ready" になり、ホストは "Waiting for opponent…" と 60 秒のカウントダウンと Cancel Ready、クライアントは "Opponent is ready. Are you?"。クライアントも押すと両者 "Starting match…" → VS 画面 → ゲーム画面に移り、ゲーム本体のカウントダウン (3 → 2 → 1) のあとプレイ開始。VS 画面は合意で追加したもの (図では「カウントダウン & ゲーム開始」のみ)。モック独自の 3·2·1 は置かない (U2 で決定)。 |
 | [1b](https://qniapp.github.io/qa2-match-mock/#s=1b&step=0) | 通常対戦 (クライアントが先に Ready) | 01 | シナリオ 1 と同じだが、クライアントが先に Ready を押す。クライアントは "Waiting for opponent…" と 60 秒のカウントダウン、ホストは "Opponent is ready. Are you?"。ホストも押すと両者 "Starting match…" → VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (U31 / U36)。 |
-| [2a](https://qniapp.github.io/qa2-match-mock/#s=2a&step=0) | 待機中にホストが別画面へ → 友だちが入る → 緑の帯をタップして戻る | 02 (10-07 の決定 U4 / U14 / U16 / U17) | ホストが待機中に ‹ で戻っても部屋は残り、Friend Match トップに青い "Waiting for your friend…" の帯 (U14)。さらに他の画面 (ステージ選択) へ行っても帯が続く。クライアントが入ると帯は緑の "Friend joined!" (U17)。ホストが部屋の画面にいないので同期は終わらず、クライアントは "Connecting…" のまま (カードのホストは "Away"、U4)。ホストが緑の帯をタップすると部屋の画面に戻り (U16)、両者がそろって同期が終わると Ready 画面。そのあと両者が Ready を押して開始。 |
-| [2b](https://qniapp.github.io/qa2-match-mock/#s=2b&step=0) | 待機中にホストが別画面へ → 放置して期限切れ → 作り直す | 02 (10-07 の決定 U7 / U10 / U18) | ホストが別画面のまま放置すると Match Code の期限 (30 分、仮) が切れ、濃い赤の "Match code expired." の帯 (U7)。クライアントは別の画面へ移されず、部屋の画面のまま "Match code expired." と Join Match (U18 / U10)。ホストが帯をタップすると部屋の画面に "Match code expired." と Create Match (Ready は出さない、U10)。ホストが Create Match で新しい部屋を作り、クライアントは Join Match で Friend Match トップへ戻って新しい Match Code を入れる。 |
-| [2c](https://qniapp.github.io/qa2-match-mock/#s=2c&step=0) | Ready 画面でホストが ‹ → 友だちが Ready → "Friend is ready!" をタップして戻る | 02 (10-07 の決定 U1 / U14) | ホストが Ready を押したあと ‹ で離れると、部屋は残るがホストの Ready は消え (U14)、クライアントには "Opponent is no longer ready." (カードのホストは "Away")。ホストの帯は "Friend is in the room" (U55)。クライアントが Ready を押すと、ホストの帯は赤い "Friend is ready!" (U1)。タップすると部屋の画面に戻るだけで、Ready は押さない (U1 / U16)。戻った画面で Ready を押して開始。 |
-| [2d](https://qniapp.github.io/qa2-match-mock/#s=2d&step=0) | ホストの離席中に友だちが抜ける → "Your friend left." を一度 → 入り直す | 02 (10-07 の決定 U17) | Ready 画面でホストが ‹ で離れている間に、クライアントが Leave Room → 確認 "Leave this room?" → Leave Room で抜ける (U9)。ホストの帯に "Your friend left." を一度だけ出し、そのあと青い "Waiting for your friend…" に戻る (U17。出す長さは 5 秒 (仮)、U55)。クライアントが同じ Match Code で入り直すと、本当に入り直したので帯は緑の "Friend joined!" (U17)。ホストがタップして戻ると同期して Ready 画面。 |
-| [2e](https://qniapp.github.io/qa2-match-mock/#s=2e&step=0) | ホストの離席中に友だちが切断 → "Reconnecting…" → 20 秒で "Waiting for your friend…" | 02 / 03 (10-07 の決定 U5 / U19) | Ready 画面でホストが ‹ で離れている間に、クライアントの接続が切れる (端末の下のモック操作「切断する」)。ホストの帯は青い "Waiting for your friend…" ではなく "Reconnecting…" (U19)、クライアントは "Connection lost. Reconnecting…" (U5)。ホストがステージ選択へ移っても帯は続く。20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、ホストの帯は "Waiting for your friend…" に戻り、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。クライアントが Retry してつながると部屋に入り直し、ホストの帯は緑の "Friend joined!" (U17)。ホストがタップして戻ると同期して Ready 画面。 |
 | [3a](https://qniapp.github.io/qa2-match-mock/#s=3a&step=0) | Ready 画面でホストが切断 → 20 秒のうちに戻る → もう一度 Ready | 03 (10-07 の決定 U5 で置き換え) | クライアントが Ready を押して待っている間にホストの接続が切れる (端末の下のモック操作「切断する」)。両者の Ready は消え、20 秒 (仮) まで自動で再接続する (U5)。ホストは "Connection lost. Reconnecting…"、クライアントは "Your friend disconnected. Waiting for them to reconnect…"。20 秒のうちに戻る (右パネルの環境イベント「通信が回復する」) と、両者とも Ready していない Ready 画面に戻る (入り直しではないので "Friend joined!" は出さない、U17)。両者が Ready を押して開始。図03 の「両者が "Connecting…" → "Connection lost." → Cancel Match」の流れは、この決定で置き換えた。 |
-| [3b](https://qniapp.github.io/qa2-match-mock/#s=3b&step=0) | Ready 画面でクライアントが切断 → 戻らない → Could not reconnect → Leave Room | 03 (10-07 の決定 U5 で置き換え) | クライアントの接続が切れ、20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、クライアントは "Could not reconnect." と Retry / Leave Room (U5)。ホストは空の部屋を残して "Waiting for your friend…" (同じ Match Code)。クライアントが Leave Room → 確認 → Leave Room で Friend Match トップへ戻る (U5 / U9)。 |
-| [3c](https://qniapp.github.io/qa2-match-mock/#s=3c&step=0) | Ready 画面でホストが切断 → 戻らない → Retry → 空の部屋に戻る | 03 (10-07 の決定 U5 で置き換え、10-08 の U52 で "The room was closed." と Close を追加) | ホストの接続が切れると、両者に 20 秒のカウントダウン ("Connection lost. Reconnecting…" は U52)。20 秒 (仮) たっても戻らないと、ホストは "Could not reconnect." と Retry / Leave Room、クライアントは Friend Match トップへ戻り、"The room was closed." の帯 (U52。"You left the room" とは出さない)。ホストが Retry してつながる (右パネルの環境イベント「通信が回復する」) と、残しておいた空の部屋に戻る ("Waiting for your friend…"、U5)。クライアントが Match Code を入れても帯は残り (U52)、Close で閉じる。同じ Match Code で入り直すと "Friend joined!" (U17)。 |
-| [3d](https://qniapp.github.io/qa2-match-mock/#s=3d&step=0) | 友だちの切断を待っている間にホストが ‹ → "Reconnecting…" の帯 → 戻ってくる | 03 (10-07 の決定 U14 / U19) | クライアントの接続が切れ、ホストが "Your friend disconnected…" で待っている間に ‹ で離れる。部屋は残り、帯は青い "Waiting for your friend…" ではなく "Reconnecting…" (U19、図03 の「‹ で青い待機の帯」を置き換えた)。20 秒のうちにクライアントが戻ると、クライアントは Ready 画面に戻り、ホストの帯は "Friend is in the room" (U55)。ホストがタップして Ready 画面に戻る (U16)。 |
-| [4](https://qniapp.github.io/qa2-match-mock/#s=4&step=0) | ホストが Close Room (部屋を閉じる) | 04 (10-07 の決定 U14 / U34 で変更) | ホストが Close Room を押すと確認 (題名 "Close this room?"、U51。本文 "No match has started. No win or loss will be recorded."、U34。ボタン Close Room / Keep Waiting、U11)。Close Room で部屋を閉じ、ホストは Friend Match トップ、クライアントは "Room closed. The host left." で Friend Match トップへ (U34)。部屋を閉じるのは Close Room だけで、‹ では閉じない (U14)。 |
-| [4b](https://qniapp.github.io/qa2-match-mock/#s=4b&step=0) | Close Room の確認で Keep Waiting | 04 (10-07 の決定 U11 / U14) | ホストが Ready を押したあと Close Room を押し、確認で Keep Waiting (以前の "Go Back"、U11) を選ぶと部屋に残る (Ready もそのまま)。そのあとクライアントも Ready を押して開始。 |
-| [5](https://qniapp.github.io/qa2-match-mock/#s=5&step=0) | Ready 画面でクライアントが Leave Room → 同じ Match Code で入り直す | 05 (10-07 の決定 U9 / U34 で変更) | クライアントが Leave Room → 確認 "Leave this room?" / "No match has started. No win or loss will be recorded." → Leave Room (U9 / U34)。クライアントは Match Code が残った Friend Match トップへ。ホストは "Your friend left. Waiting for another friend…" (U34)。Match Code は変わらないので、クライアントが Join Match で入り直すとホストは "Friend joined!" (本当に入り直したので、U17)。図05 の "left the match." → 自動で待機に戻る流れは、この 1 画面にまとめた。 |
-| [5b](https://qniapp.github.io/qa2-match-mock/#s=5b&step=0) | 同期の前 ("Connecting…") のクライアントが ‹ → Keep Waiting → Leave Room | なし (10-07 の決定 U9 / U11) | 部屋に入った直後 (同期の前) のクライアントは "Connecting…"。以前はボタンが無かったが、Leave Room を出す (U9)。‹ を押すと Leave Room と同じ確認 "Leave this room?" (U9)。Keep Waiting で残り (U11)、Leave Room → Leave Room で抜けると、ホストは "Your friend left. Waiting for another friend…"。 |
+| [3b](https://qniapp.github.io/qa2-match-mock/#s=3b&step=0) | Ready 画面でクライアントが切断 → 戻らない → Could not reconnect → ‹ で抜ける | 03 (10-07 の決定 U5 で置き換え、10-09 の U57 で ‹ に) | クライアントの接続が切れ、20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、クライアントは "Could not reconnect." と Retry (U5)。ホストは空の部屋を残して "Waiting for your friend…" (同じ Match Code)。クライアントが ‹ → 確認 "Leave this room?" → Leave Room で Friend Match トップへ戻る (U5 / U57)。 |
+| [3c](https://qniapp.github.io/qa2-match-mock/#s=3c&step=0) | Ready 画面でホストが切断 → 戻らない → Retry → 空の部屋に戻る | 03 (10-07 の決定 U5 で置き換え、10-08 の U52 で "The room was closed." と Close を追加) | ホストの接続が切れると、両者に 20 秒のカウントダウン ("Connection lost. Reconnecting…" は U52)。20 秒 (仮) たっても戻らないと、ホストは "Could not reconnect." と Retry (出口は ‹、U57)、クライアントは Friend Match トップへ戻り、"The room was closed." の帯 (U52。"You left the room" とは出さない)。ホストが Retry してつながる (右パネルの環境イベント「通信が回復する」) と、残しておいた空の部屋に戻る ("Waiting for your friend…"、U5)。クライアントが Match Code を入れても帯は残り (U52)、Close で閉じる。同じ Match Code で入り直すと "Friend joined!" (U17)。 |
+| [3e](https://qniapp.github.io/qa2-match-mock/#s=3e&step=0) | Ready 画面でホストが切断 → 戻らない → Could not reconnect → ‹ で部屋を閉じる | 03 (10-07 の決定 U5、10-09 の U57) | ホストの接続が切れ、20 秒 (仮) たっても戻らないと、ホストは "Could not reconnect." と Retry、クライアントは Friend Match トップに "The room was closed." の帯 (U5 / U52)。ホストが ‹ を押すと確認 "Close this room?" (U57)、Close Room で Friend Match トップへ (クライアントはもう Friend Match トップにいる)。 |
+| [4](https://qniapp.github.io/qa2-match-mock/#s=4&step=0) | Ready 画面でホストが ‹ → "Close this room?" → 部屋を閉じる | 04 (10-07 の決定 U34、10-09 の U57 で ‹ に) | ホストの部屋の画面に Close Room のボタンは無く、出口は左上の ‹ だけ (U57)。‹ を押すと確認 (題名 "Close this room?"、U51。本文 "No match has started. No win or loss will be recorded."、U34。ボタン Close Room / Keep Waiting、U11)。Close Room で部屋を閉じ、ホストは Friend Match トップ、クライアントは "Room closed. The host left." で Friend Match トップへ (U34)。部屋を残したまま別の画面へ移ることはできない (U57)。 |
+| [4b](https://qniapp.github.io/qa2-match-mock/#s=4b&step=0) | ホストの ‹ の確認で Keep Waiting (Ready のまま残る) | 04 (10-07 の決定 U11、10-09 の U57) | ホストが Ready を押したあと ‹ を押し、確認 "Close this room?" で Keep Waiting (U11) を選ぶと部屋に残る (Ready もそのまま)。そのあとクライアントも Ready を押して開始。 |
+| [4c](https://qniapp.github.io/qa2-match-mock/#s=4c&step=0) | 友だちを待っている間にホストが ‹ → Keep Waiting → ‹ → 部屋を閉じる | なし (10-09 の決定 U57) | ホストが Create Match で部屋を作り、"Waiting for your friend…" の間に ‹ を押すと確認 "Close this room?" (U57)。Keep Waiting で部屋に残り (Match Code はそのまま)、もう一度 ‹ → Close Room で部屋を閉じて Friend Match トップへ。クライアントは関与しない。 |
+| [5](https://qniapp.github.io/qa2-match-mock/#s=5&step=0) | Ready 画面でクライアントが ‹ → "Leave this room?" → 抜ける → 同じ Match Code で入り直す | 05 (10-07 の決定 U34、10-09 の U57 で ‹ に) | クライアントの部屋の画面に Leave Room のボタンは無く、出口は左上の ‹ だけ (U57)。‹ → 確認 "Leave this room?" / "No match has started. No win or loss will be recorded." → Leave Room (U9 / U34)。クライアントは Match Code が残った Friend Match トップへ。ホストは "Your friend left. Waiting for another friend…" (U34)。Match Code は変わらないので、クライアントが Join Match で入り直すとホストは "Friend joined!" (本当に入り直したので、U17)。図05 の "left the match." → 自動で待機に戻る流れは、この 1 画面にまとめた。 |
+| [5b](https://qniapp.github.io/qa2-match-mock/#s=5b&step=0) | 同期の前 ("Connecting…") のクライアントが ‹ → Keep Waiting → ‹ → 抜ける | なし (10-07 の決定 U9 / U11、10-09 の U57) | 部屋に入った直後 (同期の前) のクライアントは "Connecting…"。‹ を押すと確認 "Leave this room?" (U9 / U57)。Keep Waiting で残り (U11)、もう一度 ‹ → Leave Room で抜けると、ホストは "Your friend left. Waiting for another friend…"。 |
 | [6](https://qniapp.github.io/qa2-match-mock/#s=6&step=0) | 読み込みが 20 秒で終わらない → もう一度 Ready | 06 (10-07 の決定 U32 で変更) | 両者が Ready を押し ("Starting match…")、読み込みが 20 秒 (仮) で終わらない (右パネルの環境イベント) と、両者に "Match could not start. Please try again." を出して Ready 画面に戻る (U32)。両者の Ready は消える。もう一度両者が Ready を押して VS 画面へ。 |
 | [6b](https://qniapp.github.io/qa2-match-mock/#s=6b&step=0) | 開始の同期に失敗 → もう一度 Ready | 06 (10-07 の決定 U15 で変更) | 両者が Ready を押したあと、開始の同期に失敗する (右パネルの環境イベント) と、両者の Ready を消して "Couldn’t start the match. Please ready up again." (U15)。ふつうの Ready の流れ (60 秒の期限つき) からやり直し、両者が Ready を押して VS 画面へ。Match Code が有効な間は何度でもやり直せる。図06 の "Unable to start the match." を置き換えた。 |
-| [7a](https://qniapp.github.io/qa2-match-mock/#s=7a&step=0) | Ready 画面でクライアントが ‹ → 確認 → Keep Waiting → ‹ → 抜ける | 07 (10-07 の決定 U9 / U35 で置き換え) | クライアントが Ready を押したあと ‹ (別の画面へ移る) を押すと、Leave Room と同じ確認 "Leave this room?" (U9 / U35)。Keep Waiting で残り (Ready もそのまま、U11)、もう一度 ‹ → Leave Room で抜ける。ホストは "Your friend left. Waiting for another friend…" (U34)。図07 の「別画面へ移ってもマッチを残し、赤いトーストで戻る」流れは無くなった (クライアントは部屋に入ったまま別の画面へは移れない)。 |
+| [7a](https://qniapp.github.io/qa2-match-mock/#s=7a&step=0) | Ready 画面でクライアントが ‹ → 確認 → Keep Waiting → ‹ → 抜ける | 07 (10-07 の決定 U9 / U35 で置き換え) | クライアントが Ready を押したあと ‹ (別の画面へ移る) を押すと、確認 "Leave this room?" (U9 / U35 / U57)。Keep Waiting で残り (Ready もそのまま、U11)、もう一度 ‹ → Leave Room で抜ける。ホストは "Your friend left. Waiting for another friend…" (U34)。図07 の「別画面へ移ってもマッチを残し、赤いトーストで戻る」流れは無くなった (クライアントは部屋に入ったまま別の画面へは移れない)。 |
 | [7b](https://qniapp.github.io/qa2-match-mock/#s=7b&step=0) | Ready のあとアプリを離れる → Ready が消える | 07 (10-07 の決定 U35 で置き換え) | ホストが Ready を押したあと、アプリを離れる (バックグラウンド・画面ロック。端末の下のモック操作「アプリを離れる」) と、ホストの Ready は消えて部屋には残る (U35)。クライアントには "Opponent is no longer ready." (Cancel Ready と同じ表示、U53)。そのあと両者が Ready を押して開始。 |
 | [8](https://qniapp.github.io/qa2-match-mock/#s=8&step=0) | 無効な Match Code | 08 | Join Match すると赤字で "Match not found. Check the Match Code and try again." を表示し、画面はそのまま。 |
 | [9](https://qniapp.github.io/qa2-match-mock/#s=9&step=0) | Match Code が期限切れ | 09 | Join Match すると赤字で "The match has expired."。 |
@@ -362,9 +360,8 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 | [11g](https://qniapp.github.io/qa2-match-mock/#s=11g&step=0) | ランダム対戦 → アプリを離れて検索が止まる → 通知を出したまま Friend Match | 10-07 の決定 (U43) | ホストがアプリを離れて検索が止まり、Online Battle の中に "Search stopped while the app was in the background."。通知はモーダルではないので、そのまま Friend Match を押せる (U43)。ほかの画面へ移ると通知は消え、‹ で Online Battle に戻っても出ない。通知は自動では消えない。 |
 | [11e](https://qniapp.github.io/qa2-match-mock/#s=11e&step=0) | ランダム対戦 → 60 秒で見つからない → Search again | 10-07 の決定 (U13) | ホストだけが相手を探し、見つからないまま 60 秒たつ (端末の下のモック操作「60 秒たつ」。60 秒という長さは仮) と、元の画面 (Online Battle) に "No opponent found." と Search again / Close (U13)。Search again でもう一度探し、クライアントも Random Match を選ぶと相手が見つかって VS 画面へ (U13a)。 |
 | [11f](https://qniapp.github.io/qa2-match-mock/#s=11f&step=0) | ランダム対戦 → 60 秒で見つからない → Close | 10-07 の決定 (U13) | ホストが相手を探し、見つからないまま 60 秒 (仮) たつと "No opponent found."。Close で通知を閉じ、Online Battle のまま (U13)。 |
-| [12](https://qniapp.github.io/qa2-match-mock/#s=12&step=0) | VS 画面中にクライアントが切断 → 戻らない → 同じ Match Code で入り直す | なし (10-07 の決定 U32、10-08 の U52 で Match Code を入れ直す手順を追加) | VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」) と、試合はまだ始まっていないので両者の Ready を消して止める (U32)。ホストは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Close Room、クライアントは "Connection lost. Reconnecting…" と 20 秒のカウントダウン (U52)。20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、ホストは "Match cancelled. Opponent did not reconnect." (結果なし) で同じ Match Code のまま部屋に残る。クライアントは Friend Match トップに "Could not reconnect. The match did not start." の帯 (U52)。もう一度 Match Code を入れて Join Match で入ると "Friend joined!"。部屋 (Ready 画面・読み込み) での切断は U5 で、文言と流れが違う (3a〜3d)。 |
+| [12](https://qniapp.github.io/qa2-match-mock/#s=12&step=0) | VS 画面中にクライアントが切断 → 戻らない → 同じ Match Code で入り直す | なし (10-07 の決定 U32、10-08 の U52 で Match Code を入れ直す手順を追加) | VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」) と、試合はまだ始まっていないので両者の Ready を消して止める (U32)。ホストは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウン (出口は ‹、U57)、クライアントは "Connection lost. Reconnecting…" と 20 秒のカウントダウン (U52)。20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、ホストは "Match cancelled. Opponent did not reconnect." (結果なし) で同じ Match Code のまま部屋に残る。クライアントは Friend Match トップに "Could not reconnect. The match did not start." の帯 (U52)。もう一度 Match Code を入れて Join Match で入ると "Friend joined!"。部屋 (Ready 画面・読み込み) での切断は U5 で、文言と流れが違う (3a〜3c / 3e)。 |
 | [13](https://qniapp.github.io/qa2-match-mock/#s=13&step=0) | Create / Join がサーバーに届かない (Connection failed) | 00 (トーストのみ、10-07 の決定 U6) | "Connection failed" のトーストは、Create Match / Join Match がサーバーに届かないときだけ出す (U6)。ホストは "Couldn’t create a room. Try again."、クライアントは "Couldn’t join the room. Try again."。Match Code の誤り・期限切れ・満員 (8〜10) や閉じた部屋の表示とは別。モックではモック設定の「接続失敗」で再現する。トーストはタップで閉じる。 |
-| [14](https://qniapp.github.io/qa2-match-mock/#s=14&step=0) | 離席中に Create Match → 確認 → 古い部屋は新しい部屋を作れてから閉じる | なし (10-01 合意、10-07 の決定 U12) | Ready 画面でホストが ‹ で Friend Match トップへ戻り (部屋は残る、U14)、もう一度 Create Match を押すと "Create a new match?"。本文はホスト向けの "This will close your current room. Your friend will return to Friend Match." (U12)。[Keep Current Match] で今の部屋のまま、[Create Match] で作り直す。新しい部屋を作れたときだけ古い部屋を閉じ、クライアントは "Room closed. The host left." で Friend Match トップへ (U12 / U34)。作れなかったとき (モック設定「Create Match の結果 = 接続失敗」、自由操作で試せる) は古い部屋も帯もそのままで、"Connection failed" のトーストを出す (U6)。 |
 | [15](https://qniapp.github.io/qa2-match-mock/#s=15&step=0) | Friend Match の対戦後 (ホスト勝利 → 両者が抜ける) | なし (10-07 の決定 U20〜U26) | 通常対戦でゲームまで進み、時間切れでホストの得点が上 (ホストの下のモック操作「勝ち」) だと、ホストは "WIN!"、クライアントは自動で "LOSE" の結果画面。両者の名前・スコア・終わった理由 ("Time is up"、U44) と "No rating change (friend match)" (U20 / U21)。ボタンは Rematch と Back to Friend Match (U22)。ホストが Back to Friend Match で Friend Match トップへ抜けると、クライアントの結果画面はそのまま "Your opponent left. Rematch is not available." (U24 / U25)。続けてクライアントも抜ける。 |
 | [15b](https://qniapp.github.io/qa2-match-mock/#s=15b&step=0) | Friend Match の対戦後 (時間切れでホストが負け → クライアントが先に抜ける) | なし (10-07 の決定 U20〜U26) | 時間切れでホストの得点が下 (ホストの下のモック操作「負け」) だと、ホストは "LOSE"、クライアントは自動で "WIN!"。今度はクライアントが先に Back to Friend Match で抜け、ホストに "Your opponent left. Rematch is not available." (U25)。 |
 | [15c](https://qniapp.github.io/qa2-match-mock/#s=15c&step=0) | Friend Match の再戦 (申し込み → 応じる → VS) | なし (10-07 の決定 U23 / U30) | ホストが勝ったあと、クライアントが Rematch を押すと "Waiting for your opponent…" と Cancel Request、ホストには "Your opponent wants a rematch" と Rematch / Decline (U23 / U30)。ホストが Rematch で応じると、ロビーの Ready を挟まずにそのまま VS 画面 → ゲーム本体のカウントダウン → プレイ開始 (U23)。今度は時間切れでクライアントが勝つ。 |
@@ -387,9 +384,9 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 | [18e](https://qniapp.github.io/qa2-match-mock/#s=18e&step=0) | ランダム対戦で切断負け (レートが変わる) | なし (10-07 の決定 U28 / U21) | ランダム対戦でホストの接続が切れ、20 秒 (仮) たっても戻らないと、ホストの負け: ホストは 1000 → 988 (-12)、クライアントは 1000 → 1012 (+12) (U28 / U21)。 |
 | [19](https://qniapp.github.io/qa2-match-mock/#s=19&step=0) | Cancel Ready (Ready を取り消しても部屋に残る) | なし (10-07 の決定 U34 / U36) | クライアントが Ready を押したあと、Cancel Ready で取り消す。クライアントは部屋に残って "Not ready" に戻り、ホストには "Opponent is no longer ready." (U34)。そのあとホストが Ready を押すと、今度はホストが "Waiting for opponent…" になる。 |
 | [19b](https://qniapp.github.io/qa2-match-mock/#s=19b&step=0) | Ready のタイムアウト (60 秒) | なし (10-07 の決定 U33) | ホストが Ready を押し、クライアントが 60 秒 (仮) 押さない (右パネルの環境イベント) と、両者の Ready を消して両者に "Ready check timed out. Press Ready when you’re ready." (U33)。罰はなく、どちらも部屋に残る。もう一度両者が Ready を押して開始。 |
-| [19c](https://qniapp.github.io/qa2-match-mock/#s=19c&step=0) | カウントダウン中にホストが切断 → 20 秒のうちに戻る → もう一度 Ready | なし (10-07 の決定 U32) | ゲーム本体のカウントダウン中にホストの接続が切れる (端末の下のモック操作「切断する」)。3-2-1 のあとサーバーが確認するまでは試合開始ではないので、勝敗はつけず、両者の Ready を消して止める (U32)。クライアントは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Leave Room、ホストは "Connection lost. Reconnecting…" と 20 秒のカウントダウン (U52)。20 秒 (仮) のうちに戻る (右パネルの環境イベント「通信が回復する」) と、両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。 |
+| [19c](https://qniapp.github.io/qa2-match-mock/#s=19c&step=0) | カウントダウン中にホストが切断 → 20 秒のうちに戻る → もう一度 Ready | なし (10-07 の決定 U32) | ゲーム本体のカウントダウン中にホストの接続が切れる (端末の下のモック操作「切断する」)。3-2-1 のあとサーバーが確認するまでは試合開始ではないので、勝敗はつけず、両者の Ready を消して止める (U32)。クライアントは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウン (出口は ‹、U57)、ホストは "Connection lost. Reconnecting…" と 20 秒のカウントダウン (U52)。20 秒 (仮) のうちに戻る (右パネルの環境イベント「通信が回復する」) と、両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。 |
 | [19d](https://qniapp.github.io/qa2-match-mock/#s=19d&step=0) | VS 画面中にホストが切断 → 戻らない → Room closed | なし (10-07 の決定 U32) | VS 画面中にホストの接続が切れると、両者の Ready を消して止める (U32)。クライアントは "Opponent disconnected…" で 20 秒 (仮) 待つ。ホストが戻らないと、クライアントは "Room closed. The host disconnected." で Friend Match トップへ (U32)。ホストは Friend Match トップに "Could not reconnect. The match did not start." (U52)。部屋での切断 (U5) では、ホストが戻らなくても部屋は残る (3c)。 |
-| [19e](https://qniapp.github.io/qa2-match-mock/#s=19e&step=0) | 友だちの切断を待っている間に Close Room | なし (10-07 の決定 U5 / U14 / U34) | Ready 画面でクライアントの接続が切れ、ホストが "Your friend disconnected. Waiting for them to reconnect…" で待っている間に Close Room を押す (U5 / U14)。確認のあと Close Room で部屋を閉じる (U34)。切断中のクライアントは、戻ったときに "Room closed. The host left." の Friend Match トップ (モックの仮定。お知らせは Close で閉じる帯、U52)。 |
+| [19e](https://qniapp.github.io/qa2-match-mock/#s=19e&step=0) | 友だちの切断を待っている間にホストが ‹ → 部屋を閉じる | なし (10-07 の決定 U5 / U34、10-09 の U57) | Ready 画面でクライアントの接続が切れ、ホストが "Your friend disconnected. Waiting for them to reconnect…" で待っている間に ‹ を押す (U5 / U57)。確認 "Close this room?" のあと Close Room で部屋を閉じる (U34)。切断中のクライアントは、戻ったときに "Room closed. The host left." の Friend Match トップ (モックの仮定。お知らせは Close で閉じる帯、U52)。 |
 | [20](https://qniapp.github.io/qa2-match-mock/#s=20&step=0) | 両者が Ready 画面にいる間に期限切れ → Create Match / Join Match | なし (10-07 の決定 U7 / U10 / U18) | 両者が Ready 画面にいる間に Match Code の期限 (30 分、仮) が切れる (右パネルの環境イベント) と、両者に "Match code expired." (U7)。Ready は消え、Ready のボタンも出さない (U10)。ホストには Create Match、クライアントには Join Match。クライアントは別の画面へ移されず、今の画面のまま (U18)。ホストが Create Match で新しい部屋を作り、クライアントが Join Match → 新しい Match Code を入れて入る。 |
 | [21](https://qniapp.github.io/qa2-match-mock/#s=21&step=0) | ランダム対戦の VS 画面中に切断 → 20 秒のうちに戻る → VS 画面からやり直す | なし (10-08 の決定 U54) | ランダム対戦の VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」)。試合はまだ始まっていないが、Ready 画面は無いので VS 画面のまま 20 秒 (仮) 待つ (U54)。表示は対戦中の切断 (U46) と同じで、ホストは "Your opponent disconnected"、クライアントは "Connection lost" と、どちらも残りの秒数。20 秒のうちに戻る (端末の下のモック操作「再接続する」か右パネルの環境イベント) と、VS 画面からやり直してゲーム本体のカウントダウン → プレイ開始。 |
 | [21b](https://qniapp.github.io/qa2-match-mock/#s=21b&step=0) | ランダム対戦のカウントダウン中に切断 → 戻らない → 取りやめ → Search again | なし (10-08 の決定 U52 / U54) | ランダム対戦のゲーム本体のカウントダウン中にホストの接続が切れ、20 秒 (仮) たっても戻らない (端末の下のモック操作「20 秒たつ」) と、試合を取りやめる (U54)。勝敗は無く、レートも変わらない。ホストは Online Battle の中に "Could not reconnect. The match did not start." (U52)、クライアントは "Match cancelled. Opponent did not reconnect."。どちらも Search again / Close (U54。U43 と同じくモーダルではない)。両者が Search again で探し直すと、相手が見つかって新しいランダム対戦の VS 画面 (レートが変わる対戦)。 |
@@ -399,11 +396,65 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 
 次の注記は、いくつかのシナリオに共通です。
 
-- **フレンド対戦の部屋** (シナリオ 2a / 2b / 2c / 2d / 2e / 3a / 3b / 3c / 3d / 4 / 4b / 5 / 5b / 7a / 14 / 19e / 20): フレンド対戦の部屋は 2026-10-07 に決定 (U1〜U19。細部は 2026-10-08 の U51 / U52 / U55)。ホストの ‹ は確認なしで部屋を残して帯で示し (U14)、クライアントの ‹ は退出の確認 (U9)。秒数 (再接続の 20 秒・Ready の 60 秒) と Match Code の期限 30 分は QA² 側の仮の値で、タイマーは右パネルの環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。
+- **フレンド対戦の部屋** (シナリオ 3a / 3b / 3c / 3e / 4 / 4b / 4c / 5 / 5b / 7a / 19e / 20): フレンド対戦の部屋は 2026-10-07 に決定 (U1〜U19。細部は 2026-10-08 の U51 / U52)。2026-10-09 の U57 で、部屋の出口は左上の ‹ だけになった (ホストは "Close this room?" で部屋を閉じ、クライアントは "Leave this room?" で抜ける。部屋を残したまま別の画面へは移れない)。秒数 (再接続の 20 秒・Ready の 60 秒) と Match Code の期限 30 分は QA² 側の仮の値で、タイマーは右パネルの環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。
 - **Ready 画面と開始前の切断** (シナリオ 1 / 1b / 6 / 6b / 7b / 12 / 19 / 19b / 19c / 19d): Ready 画面と開始前の切断は 2026-10-07 に決定 (U31 の Ready への変更、U32〜U36。細部は 2026-10-08 の U52 / U53)。Ready を取り消せるのは届いたあとの Ready 画面だけで、試合が始まる (3-2-1 のあとサーバーが確認する) までは勝敗を記録しない。秒数 (Ready の 60 秒・再接続の 20 秒・読み込みの 20 秒) は QA² 側の仮の値で、タイマーは右パネルの環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。
 - **対戦後** (シナリオ 15 / 15b / 15c / 15d / 15e / 15f / 15g / 15h / 16d / 17 / 17b / 17c / 18 / 18b / 18c / 18d / 18e / 21c): 結果画面は 2026-10-07 に決定 (U20〜U30。細部は 2026-10-08 の U44〜U50)。時間切れの勝ち / 負け / 同点と「切断する」は端末の下のモック操作で、得点の計算は対象外。秒数 (20 秒・3 秒・5 秒・60 秒) と Elo の値 (初期値 1000、K=24) は QA² 側の仮の値で、タイマーは右パネルの環境イベントか端末の下のモック操作で進める。
 - **Profile** (シナリオ 22 / 22b): 2026-10-08 に決定 (U56)。開けるのは Online Battle からだけ。候補と既定値は QA² 側の仮の値。シナリオは localStorage に関係なく、いつも最初の値 (ホスト 👋 "Hello!"、クライアント 😎 "Let’s go!") から始まる。
 - **MATCH MENU** (シナリオ 16 / 16b / 16c): オンライン対戦の MATCH MENU は 2026-10-07 に決定 (案A、U37〜U42)。試合は止まらず (Time.timeScale = 0 にしない、BGM も下げない)、暗幕は薄くゲーム画面が見えたまま。ボタンは CONTINUE と SURRENDER だけで、対戦中に REMATCH / RETRY は無い (U39)。
+
+## 2026-10-09 の決定 (U57: 部屋の出口は ‹ だけ)
+
+qniapp/qa2#1891 の YoshiyukiN さんの「FB意見まとめ」の 1・2 番目を反映しました (3 番目以降は未反映)。**未決は 0 件のまま** です。
+
+- **1 番目**: Close ボタン (ホスト) と Leave ボタン (クライアント) は左上の Back (‹) と役割が重なり、位置的に押し間違えやすいので、Back に統一する。
+  部屋を作ったまま他のモードを遊べるのは便利だが、バグの原因になり、今は仕様として重い。
+- **2 番目**: Back でも下部のボタンと同じく確認ダイアログを出し、部屋を閉じる・抜けることをユーザーに示す。
+
+モックでは次のようにしました。
+
+| | ホスト | クライアント |
+|---|---|---|
+| 部屋の画面のボタン | Close Room は無い。出口は左上の ‹ だけ | Leave Room は無い。出口は左上の ‹ だけ |
+| ‹ の確認の題名 | "Close this room?" (部屋を閉じる) | "Leave this room?" (部屋から抜ける) |
+| 本文 | "No match has started. No win or loss will be recorded." (U34) | 同じ |
+| ボタン | [Close Room] (赤) / [Keep Waiting] | [Leave Room] (赤) / [Keep Waiting] |
+| Keep Waiting | 確認を閉じて部屋に残る (Ready もそのまま、U11) | 同じ |
+| Close Room / Leave Room | 部屋を閉じて Friend Match トップへ。クライアントは "Room closed. The host left." で Friend Match トップへ (U34) | 部屋を抜けて、Match Code が残った Friend Match トップへ。ホストは "Your friend left. Waiting for another friend…" (U34) |
+
+- 対象はすべての部屋の画面です: 友だちを待っている間、入った直後 (同期の前)、Ready 画面 (お知らせ付きを含む)、相手の切断を待っている間、"Could not reconnect." の画面。
+  送っている間 ("Confirming…")・読み込み中・自分の再接続中は、これまでどおり ‹ を押せません (U53)。期限切れの画面の ‹ は、部屋がもう無いので確認なしで Friend Match トップへ戻ります。
+- 部屋を残したまま別の画面へ移ることはできません。以前のホストの ‹ (確認なしで部屋を残し、行った先の画面の帯で部屋の様子を示す、U14) と、
+  その帯 (U1 / U16 / U17 の "Your friend left." / U19 / U55)、離席中の Create Match / Join Match の確認 (U12)、クライアントのカードの "Away" (U36) は無くなりました。
+  それぞれの決定の説明 (右パネルの「決定」タブ) に、U57 で変わったことを書き足しています。
+- ダイアログの題名・本文・ボタンの文言は今のまま (U9 / U11 / U34 / U51) で、#1891 の 3 番目以降の FB (Code expires の表示、名前、コピーボタンなど) はまだ反映していません。
+
+状態・イベント:
+
+| 変更 | 状態 / イベント |
+|---|---|
+| 削除 | 状態 `Host.Away.FriendMatchRoom.*` / `Host.Away.StageSelection.*` (7 種類 × 2 か所の 14 状態)、画面 `stage` (ステージ選択の例) |
+| 削除 | グループ `Host.Away.Pending` / `Host.Away.WithFriend` / `Host.Away.*.Pending` / `Host.Away.*.Vacant` / `Host.Expired.Any` |
+| 削除 | イベント `host.closeRoom` / `client.leaveRoom` / `host.leaveRoom` / `host.dialog.leaveRoom` / `host.joinMatch` / `host.dialog.createMatch` / `host.dialog.joinMatch` / `host.dialog.keepCurrent` / `sys.friendLeftShown`、ダイアログ `newMatch` / `joinAnother`、帯 7 種類、付属状態 `Failed` |
+| 意味を変更 | `host.back`: 部屋の画面では確認 "Close this room?" を出す (`Host.FriendMatch.Lobby.Closable` に "Could not reconnect." を足した)。`client.back`: 部屋の画面では確認 "Leave this room?" を出す |
+
+遷移表は 408 行から 325 行に、状態は 213 から 199 に、グループは 68 から 61 に、シナリオは 63 から 58 になりました。
+シナリオ 2a〜2e / 3d / 14 (離席) は削除し、3e (ホストが戻らず "Could not reconnect." から ‹ で閉じる) と 4c (友だちを待っている間の ‹) を足しました。
+3b / 4 / 4b / 5 / 5b / 19e は Close Room / Leave Room の代わりに ‹ を押す手順にしました (手順の数は同じ)。
+
+- `index.html#s=4&step=6` - ホストの部屋の画面 (Ready 画面)。ボタンは Ready だけで、出口は左上の ‹
+- `index.html#s=4&step=7` - ホストの ‹ の確認 "Close this room?"
+- `index.html#s=4&step=8` - Close Room のあと: ホストは Friend Match トップ、クライアントは "Room closed. The host left."
+- `index.html#s=4b&step=10` - Keep Waiting で部屋に残る (Ready もそのまま)
+- `index.html#s=4c&step=3` - 友だちを待っている間のホストの ‹ の確認
+- `index.html#s=5&step=7` - クライアントの ‹ の確認 "Leave this room?"
+- `index.html#s=5&step=8` - Leave Room のあと: クライアントは Friend Match トップ、ホストは "Your friend left. Waiting for another friend…"
+- `index.html#s=5b&step=7` - クライアントが Keep Waiting で部屋に残る
+
+![ホストの ‹ の確認 "Close this room?" (U57)](docs/screenshots/08-host-cancel-dialog.png)
+
+![クライアントの ‹ の確認 "Leave this room?" (U57)](docs/screenshots/80-u57-client-leave-dialog.png)
+
+![友だちを待っている間のホストの ‹ の確認 (U57)](docs/screenshots/81-u57-host-waiting-close-dialog.png)
 
 ## Profile (絵文字とあいさつ)
 
@@ -424,7 +475,7 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 - **開ける場所**: 対戦の外だけ。Online Battle と、その中の "Search stopped…" などの通知を出している間に開けます (開くと通知は消える、U43)。
   "No opponent found." を出している間は開けません (2026-10-08 に決定)。相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中には、Profile の行もボタンもありません。
 - **値を固定するとき**: 部屋を作る・部屋に入る・相手を探し始める (Random Match / Search again / Find Next Opponent) ときに、保存した値を相手に見せる値として固定します。
-  変えたものが相手に見えるのは、次の部屋・次の検索からです。今いる部屋と同じ相手との再戦では固定し直しません。ホストの "Join another match" はモックが入室を省いているので、固定するときに含めません (2026-10-08 に決定)。遷移表では、固定する行のメモに「写す: hostShownEmoji←hostEmoji, …」と出します。
+  変えたものが相手に見えるのは、次の部屋・次の検索からです。今いる部屋と同じ相手との再戦では固定し直しません。ホストの "Join another match" はモックが入室を省いているので、固定するときに含めません (2026-10-08 に決定。2026-10-09 の U57 で、この確認自体が無くなった)。遷移表では、固定する行のメモに「写す: hostShownEmoji←hostEmoji, …」と出します。
 - **保存先**: ブラウザの localStorage だけ (キーは `qa2-match-mock.profile`、端末ごとに `host` / `client`)。読めない・候補に無い値は最初の値に戻します。
   モックでは自由操作のときだけ読み書きします。シナリオ (外れて操作したときも含む) は localStorage を読まず書かず、いつも最初の値から始まります (2026-10-08 に決定)。スクリーンショットとテストは保存した値に左右されません。
 - **変わらないもの**: 結果画面のスタンプ (U27 の 3 種類) は変わりません。スタンプのミュート (U49) は VS 画面のあいさつを隠しません。
@@ -592,6 +643,7 @@ Friend Match トップの部屋のお知らせは、画面の上の帯 (文言�
 | ID | 手順 | 見られる画面 |
 |---|---|---|
 | 3c | 14 | 8: ホストが戻らず、クライアントは Friend Match トップに "The room was closed." → 11: Match Code を入れても帯は残る → 12: Close → 13: 入り直して "Friend joined!" |
+| 3e | 10 | 8: ホストが戻らず "Could not reconnect." / クライアントは "The room was closed." → 9: ‹ で "Close this room?" (U57) → 10: Friend Match トップへ |
 | 12 | 15 | 12: VS 画面中にクライアントが切断 (クライアント "Connection lost. Reconnecting…" と 20s) → 13: 戻らず、クライアントは "Could not reconnect. The match did not start." → 14: Match Code を入れる → 15: 入り直して "Friend joined!" |
 | 15d | 19 | 16: 取り消し (両者に一行) → 17: 3 秒たっても一行は残る → 18: また申し込む |
 | 17c | 12 | 8: 次の相手を探している間にアプリを離れて "Search stopped…" (U47) → 9: Search again → 12: 相手が見つかる |
@@ -627,8 +679,6 @@ Friend Match トップの部屋のお知らせは、画面の上の帯 (文言�
 
 ![VS 画面の Rating (U48)](docs/screenshots/03-normal-vs.png)
 
-![Friend is in the room の帯 (U55)](docs/screenshots/62-away-ready-cleared.png)
-
 ![時間切れの引き分け: Same score when time ran out (U44)](docs/screenshots/45-draw.png)
 
 ![Mute opponent emotes (U49)](docs/screenshots/44-stamps-muted.png)
@@ -638,6 +688,9 @@ Friend Match トップの部屋のお知らせは、画面の上の帯 (文言�
 高宮さんの決定 (2026-10-07) で、Friend Match の部屋 (Match Code を作ってから試合が始まるまで) の未決 U1〜U19 がすべて決まりました。
 U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのクライアントの出口) は、それぞれ以前の決定 U32 / U34 で決まっていたので決定済みにし、U13 はすでに決定済みです。
 これで U1〜U19 と U32 / U43 に未決はありません。この節の「仮」(U51 / U52 / U53 / U55) は 2026-10-08 にすべて決まりました (「2026-10-08 の決定 (U44〜U55)」を参照。下の表には → で今の動きを書き足しています)。
+
+> 2026-10-09 の U57 で、部屋の出口は左上の ‹ だけになりました (「2026-10-09 の決定 (U57)」を参照)。Close Room / Leave Room のボタン、ホストの離席と帯 (U1 / U14 / U16 / U19 / U55)、離席中の作り直しの確認 (U12) は無くなりました。
+> 下の「部屋の画面」は今の動きに書き直し、離席の帯とシナリオ 2a〜2e / 3d / 14 は当時の記録として残しています。
 
 **秒数 (再接続の 20 秒) と Match Code の期限 30 分は QA² 側の仮の値です** (変わりうる)。
 電話の画面には決定どおり "Code expires in 30:00" を出しますが、それが仮の値であることは右パネルの説明・遷移表のメモ・この README にだけ書きます。
@@ -666,21 +719,24 @@ U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのク
 
 | 段階 | ホスト | クライアント |
 |---|---|---|
-| 友だちを待っている | "Waiting for your friend…"、Close Room | - |
-| 入った直後 (同期の前、U4) | カード 2 枚と "Friend joined!"、Ready (押せない表示) / Close Room | カード 2 枚と "Connecting…"、Ready (押せない表示) / Leave Room |
-| Ready 画面 (U36) | Ready (押すと Cancel Ready) / Close Room | Ready (押すと Cancel Ready) / Leave Room |
+| 友だちを待っている | "Waiting for your friend…" | - |
+| 入った直後 (同期の前、U4) | カード 2 枚と "Friend joined!"、Ready (押せない表示) | カード 2 枚と "Connecting…"、Ready (押せない表示) |
+| Ready 画面 (U36) | Ready (押すと Cancel Ready) | Ready (押すと Cancel Ready) |
 | 部屋で切断 (U5、自分の接続が切れた) | "Connection lost. Reconnecting…" (ボタンなし、‹ も押せない) → 2026-10-08: と "20s" (U52) | 同じ |
-| 部屋で切断 (U5、相手の接続が切れた) | "Your friend disconnected. Waiting for them to reconnect…"、Close Room → 2026-10-08: と "20s" (2026-10-08 に確認) | 同じ文言、Leave Room |
-| 20 秒で再接続できなかった (U5) | "Could not reconnect."、Retry / Leave Room | 同じ |
+| 部屋で切断 (U5、相手の接続が切れた) | "Your friend disconnected. Waiting for them to reconnect…" と "20s" (2026-10-08 に確認) | 同じ |
+| 20 秒で再接続できなかった (U5) | "Could not reconnect."、Retry | 同じ |
 | 期限切れ (U7 / U10 / U18) | "Match code expired."、Create Match | "Match code expired."、Join Match (今の画面のまま) |
 
 - Match Code の下にはいつも "Code expires in 30:00" を出します (期限切れと "Could not reconnect." の画面は除く、U7)。
-- 部屋を出るボタンは、ホストが **Close Room** (U14)、クライアントが **Leave Room** (U9) です。以前の Cancel Match / Leave Match と、Ready 画面の両者の Leave Room (SPEC14 の仮) をこの 2 つにまとめました。
-- 確認: クライアントの Leave Room と ‹ は "Leave this room?" / "No match has started. No win or loss will be recorded." / [Leave Room] [Keep Waiting] (U9 / U11 / U34)。
-  ホストの Close Room は "Close this room?" / 同じ本文 / [Close Room] [Keep Waiting] (題名は 2026-10-08 に U51 で決定)。"Could not reconnect." の Leave Room は、ホストもクライアントも "Leave this room?" です。
-- ホストが部屋の画面を離れている間、クライアントのカードのホストは "Away" です (図02 の "Host User / Away")。状態名ではなく、ホストの端末の状態 (`Host.Away.*`) で決まる表示です。
+- 部屋を出るボタンはありません。出口はどの段階も左上の ‹ だけです (U57、2026-10-09)。以前はホストが Close Room (U14)、クライアントが Leave Room (U9) でした。
+- 確認: クライアントの ‹ は "Leave this room?" / "No match has started. No win or loss will be recorded." / [Leave Room] [Keep Waiting] (U9 / U11 / U34 / U57)。
+  ホストの ‹ は "Close this room?" / 同じ本文 / [Close Room] [Keep Waiting] (題名は 2026-10-08 に U51 で決定)。"Could not reconnect." の画面の ‹ も、ホストは "Close this room?"、クライアントは "Leave this room?" です。
+- 送っている間 ("Confirming…")・読み込み中・自分の再接続中は ‹ を押せません (U53)。期限切れの画面の ‹ は、部屋がもう無いので確認なしで Friend Match トップへ戻ります。
+- 以前は、ホストが部屋の画面を離れている間、クライアントのカードのホストを "Away" にしていました (図02)。U57 で離席が無くなったので、"Away" も無くなりました。
 
-### ホストが ‹ で離れている間の帯 (U1 / U14 / U16 / U17 / U19)
+### ホストが ‹ で離れている間の帯 (U1 / U14 / U16 / U17 / U19、2026-10-09 の U57 で無くなった)
+
+> この節は当時の記録です。U57 で、ホストは部屋を残したまま離れられなくなり、帯と離席中の作り直しの確認は無くなりました。
 
 ホストが ‹ で部屋の画面を離れても部屋は残り、Friend Match トップ (とステージ選択) の下の帯で部屋の様子を示します (図02)。帯はどれもタップすると部屋の画面に戻るだけで、Ready は押しません。
 
@@ -730,9 +786,9 @@ U3 (VS 画面中の切断の戻り先) と U8 (ホストが閉じたあとのク
 | 端末の下 `モック操作 (ルーム)` | アプリを離れる (その人の Ready が消える、U35)、切断する (部屋での切断、U5) | 部屋の画面 |
 | 端末の下 `モック操作 (対戦)` → 2026-10-08 から `モック操作 (時間切れ)` | 切断する (VS 画面・カウントダウン中の切断、U32。2026-10-08 からはランダム対戦と再戦でも押せる、U54) | VS 画面・カウントダウン |
 | 右パネルの環境イベント | 通信が回復する、切断から 20 秒たつ、Match Code の期限 (30 分、仮) が切れる、開始の同期に失敗する、読み込みが 20 秒で終わらない、片方が Ready のまま 60 秒たつ | 部屋・読み込み・再接続待ち |
-| 右パネルのモック設定 | Create Match / Join Match の結果 = 接続失敗 (U6。離席中の作り直しにも効く) | Friend Match トップ・離席中の Create Match の確認 |
+| 右パネルのモック設定 | Create Match / Join Match の結果 = 接続失敗 (U6。当時は離席中の作り直しにも効いた。U57 で離席は無くなった) | Friend Match トップ |
 
-参加の確認と同期 (`sys.roomSynced`) と、"Your friend left." を出し終わる (`sys.friendLeftShown`) は自動遷移です。自由操作ではそれぞれ 0.8 秒・5 秒 (2026-10-08 に U55 で 3 秒から変更) で進み、シナリオでは手順として 1 つずつ進みます。
+参加の確認と同期 (`sys.roomSynced`) は自動遷移です。自由操作では 0.8 秒で進み、シナリオでは手順として 1 つずつ進みます (当時あった "Your friend left." を出し終わる `sys.friendLeftShown` (5 秒、U55) は U57 で無くなった)。
 
 ### 状態・イベント
 
@@ -770,48 +826,37 @@ Friend Match のシナリオは、参加のあとの自動遷移が 2 つ (`sys.
 | ID | 手順 | 見られる画面 |
 |---|---|---|
 | 1 | 13 | 5: ホスト "Friend joined!" / クライアント "Connecting…" (Ready は押せない) → 6: 同期が終わって Ready 画面 ("Code expires in 30:00") |
-| 2a | 16 | 4: ステージ選択に青い帯 → 7: 友だちが入って緑の "Friend joined!" (クライアントは "Connecting…"、カードのホストは "Away") → 8: タップで戻る → 9: 同期して Ready 画面 |
-| 2b | 14 | 8: 期限切れ。ホストの帯は "Match code expired."、クライアントはその場で "Match code expired." と Join Match → 9: ホストがタップして Create Match → 11: 新しい部屋 / クライアントは Friend Match トップ → 13: 入り直す |
-| 2c | 17 | 9: Ready していたホストが ‹ で離れて Ready が消える (クライアントに "Opponent is no longer ready.") → 11: 友だちが Ready して赤い "Friend is ready!" → 12: タップで戻るだけ ("Opponent is ready. Are you?") → 14: ホストも Ready して "Starting match…" |
-| 2d | 13 | 9: 離席中に友だちが抜けて "Your friend left." → 10: 青い帯に戻る → 11: 入り直して緑の "Friend joined!" |
-| 2e | 14 | 8: 離席中に友だちが切断して "Reconnecting…" (クライアントは "Connection lost. Reconnecting…") → 10: 20 秒で "Waiting for your friend…" / "Could not reconnect." → 12: Retry でつながって "Friend joined!" |
+| ~~2a~~ | - | 2026-10-09 の U57 で削除 (当時: 4: ステージ選択に青い帯 → 7: 友だちが入って緑の "Friend joined!" (クライアントは "Connecting…"、カードのホストは "Away") → 8: タップで戻る → 9: 同期して Ready 画面) |
+| ~~2b~~ | - | 2026-10-09 の U57 で削除 (当時: 8: 期限切れ。ホストの帯は "Match code expired."、クライアントはその場で "Match code expired." と Join Match → 9: ホストがタップして Create Match → 11: 新しい部屋 / クライアントは Friend Match トップ → 13: 入り直す) |
+| ~~2c~~ | - | 2026-10-09 の U57 で削除 (当時: 9: Ready していたホストが ‹ で離れて Ready が消える (クライアントに "Opponent is no longer ready.") → 11: 友だちが Ready して赤い "Friend is ready!" → 12: タップで戻るだけ ("Opponent is ready. Are you?") → 14: ホストも Ready して "Starting match…") |
+| ~~2d~~ | - | 2026-10-09 の U57 で削除 (当時: 9: 離席中に友だちが抜けて "Your friend left." → 10: 青い帯に戻る → 11: 入り直して緑の "Friend joined!") |
+| ~~2e~~ | - | 2026-10-09 の U57 で削除 (当時: 8: 離席中に友だちが切断して "Reconnecting…" (クライアントは "Connection lost. Reconnecting…") → 10: 20 秒で "Waiting for your friend…" / "Could not reconnect." → 12: Retry でつながって "Friend joined!") |
 | 3a | 17 | 9: ホストが切断 (ホスト "Connection lost. Reconnecting…" / クライアント "Your friend disconnected…") → 10: 戻って両者 Ready 画面 |
-| 3b | 10 | 8: クライアントが戻らず "Could not reconnect." / ホストは空の部屋 → 10: Leave Room で Friend Match トップへ |
+| 3b | 10 | 8: クライアントが戻らず "Could not reconnect." / ホストは空の部屋 → 9: ‹ で "Leave this room?" → 10: Friend Match トップへ |
 | 3c | 14 | 8: ホストが戻らず "Could not reconnect." / クライアントは Friend Match トップに "The room was closed." (2026-10-08、U52) → 10: Retry でつながって空の部屋 → 11: Match Code を入れても帯は残る → 12: Close で閉じる → 13: 入り直して "Friend joined!" |
-| 3d | 10 | 8: 友だちの切断を待っている間に ‹ で離れて "Reconnecting…" → 9: 戻ってきて青い帯 → 10: タップで Ready 画面 |
-| 4 | 8 | 7: ホストの Close Room の確認 → 8: クライアントは "Room closed. The host left." |
-| 4b | 13 | 9: Close Room の確認 → 10: Keep Waiting で Ready のまま残る → 13: VS 画面 |
-| 5 | 10 | 8: クライアントが抜けて "Your friend left. Waiting for another friend…" → 9: 入り直して "Friend joined!" → 10: 同期して Ready 画面 |
-| 5b | 9 | 6: 同期の前のクライアントが ‹ → "Leave this room?" → 7: Keep Waiting → 9: Leave Room で抜ける |
+| ~~3d~~ | - | 2026-10-09 の U57 で削除 (当時: 8: 友だちの切断を待っている間に ‹ で離れて "Reconnecting…" → 9: 戻ってきて青い帯 → 10: タップで Ready 画面) |
+| 4 | 8 | 7: ホストの ‹ で "Close this room?" (U57) → 8: クライアントは "Room closed. The host left." |
+| 4b | 13 | 9: ホストの ‹ の確認 → 10: Keep Waiting で Ready のまま残る → 13: VS 画面 |
+| 4c | 6 | 3: 友だちを待っている間の ‹ で "Close this room?" → 4: Keep Waiting → 6: 部屋を閉じて Friend Match トップ |
+| 5 | 10 | 7: クライアントの ‹ で "Leave this room?" (U57) → 8: クライアントが抜けて "Your friend left. Waiting for another friend…" → 9: 入り直して "Friend joined!" → 10: 同期して Ready 画面 |
+| 5b | 9 | 6: 同期の前のクライアントが ‹ → "Leave this room?" → 7: Keep Waiting → 8: もう一度 ‹ → 9: Leave Room で抜ける |
 | 6b | 18 | 10: "Starting match…" → 11: 同期に失敗して "Couldn’t start the match. Please ready up again." → 16: もう一度 Ready して VS 画面 |
 | 7a | 12 | 9: Ready のあとクライアントが ‹ → "Leave this room?" → 10: Keep Waiting → 12: ‹ → Leave Room |
 | 13 | 7 | 5: ホスト "Couldn’t create a room. Try again." / クライアント "Couldn’t join the room. Try again." → 7: タップで閉じる |
-| 14 | 11 | 8: 離席中の Create Match の確認 (ホスト向けの本文) → 9: Keep Current Match → 11: 作れたので古い部屋を閉じ、クライアントは "Room closed. The host left." |
-| 19e | 9 | 7: クライアントが切断 → 8: 待っている間に Close Room の確認 → 9: 部屋を閉じる |
+| ~~14~~ | - | 2026-10-09 の U57 で削除 (当時: 8: 離席中の Create Match の確認 (ホスト向けの本文) → 9: Keep Current Match → 11: 作れたので古い部屋を閉じ、クライアントは "Room closed. The host left.") |
+| 19e | 9 | 7: クライアントが切断 → 8: 待っている間にホストの ‹ で "Close this room?" → 9: 部屋を閉じる |
 | 20 | 14 | 9: 両者が Ready 画面にいる間に期限切れ (ホスト Create Match / クライアント Join Match) → 10: ホストが作り直す → 13: クライアントが新しい Match Code で入る → 14: Ready 画面 |
 
 - `index.html#s=1&step=5` - 同期の前: ホスト "Friend joined!" / クライアント "Connecting…"
-- `index.html#s=2c&step=11` - 離席中のホストに "Friend is ready!"
-- `index.html#s=2e&step=8` - 離席中の帯が "Reconnecting…"
 - `index.html#s=3a&step=9` - 部屋での切断 (U5)
-- `index.html#s=3b&step=8` - "Could not reconnect." と Retry / Leave Room
+- `index.html#s=3b&step=8` - "Could not reconnect." と Retry (出口は ‹)
 - `index.html#s=20&step=9` - 期限切れ (両者 "Match code expired.")
 
 ![同期の前 (Friend joined! / Connecting…)](docs/screenshots/60-room-friend-joined.png)
 
-![離席中に友だちが入った (緑の Friend joined!、カードのホストは Away)](docs/screenshots/61-away-friend-joined.png)
-
-![Ready していたホストが離れて Ready が消えた](docs/screenshots/62-away-ready-cleared.png)
-
-![離席中のホストに Friend is ready!](docs/screenshots/05-host-away-ready-toast.png)
-
-![離席中に友だちが抜けた (Your friend left.)](docs/screenshots/63-away-friend-left.png)
-
-![離席中に友だちが切断 (Reconnecting…)](docs/screenshots/64-away-reconnecting.png)
-
 ![部屋での切断 (Connection lost. Reconnecting… / Your friend disconnected…)](docs/screenshots/07-connection-lost.png)
 
-![Could not reconnect. (Retry / Leave Room)](docs/screenshots/65-u5-could-not-reconnect.png)
+![Could not reconnect. (Retry と ‹)](docs/screenshots/65-u5-could-not-reconnect.png)
 
 ![Retry でホストが空の部屋に戻る](docs/screenshots/66-u5-host-retry-empty-room.png)
 
@@ -819,11 +864,7 @@ Friend Match のシナリオは、参加のあとの自動遷移が 2 つ (`sys.
 
 ![期限切れ (Create Match / Join Match)](docs/screenshots/68-code-expired-both.png)
 
-![離席中に期限切れ (帯とクライアントのその場の表示)](docs/screenshots/06-host-away-code-expired.png)
-
 ![同期の前のクライアントの ‹ (Leave this room?)](docs/screenshots/69-leave-confirm-connecting.png)
-
-![離席中の Create Match の確認 (ホスト向けの本文)](docs/screenshots/70-create-new-match-dialog.png)
 
 ![同期の失敗 (Couldn’t start the match.)](docs/screenshots/71-sync-failed.png)
 
@@ -853,22 +894,23 @@ Ready を取り消せるのは、届いたあとの Ready 画面だけです (�
 
 | 段階 | 自分のカード / 相手のカード | 画面の中ほど | ボタン |
 |---|---|---|---|
-| どちらも押していない | Not ready / Not ready | (なし) | **Ready** / Close Room (ホスト)・Leave Room (クライアント) |
-| 自分が押して送っている | Not ready / Not ready | (なし) | Confirming… (無効表示) / Close Room・Leave Room (無効表示) |
-| 自分だけ Ready | ✓ Ready / Not ready | "Waiting for opponent…" と "60s" | Cancel Ready / Close Room・Leave Room |
-| 相手だけ Ready | Not ready / ✓ Ready | "Opponent is ready. Are you?" | **Ready** / Close Room・Leave Room |
-| 相手だけ Ready で、自分も押して送っている | Not ready / ✓ Ready | "Opponent is ready. Are you?" | Confirming… (無効表示) / Close Room・Leave Room (無効表示) |
+| どちらも押していない | Not ready / Not ready | (なし) | **Ready** |
+| 自分が押して送っている | Not ready / Not ready | (なし) | Confirming… (無効表示、‹ も押せない) |
+| 自分だけ Ready | ✓ Ready / Not ready | "Waiting for opponent…" と "60s" | Cancel Ready |
+| 相手だけ Ready | Not ready / ✓ Ready | "Opponent is ready. Are you?" | **Ready** |
+| 相手だけ Ready で、自分も押して送っている | Not ready / ✓ Ready | "Opponent is ready. Are you?" | Confirming… (無効表示、‹ も押せない) |
 | 両者 Ready (読み込み) | ✓ Ready / ✓ Ready | "Starting match…" | (なし、‹ も押せない) |
-| タイムアウト・相手が取り消した・読み込みの失敗・同期の失敗 | Not ready / Not ready | お知らせの枠 ("Ready check timed out…" / "Opponent is no longer ready." / "Match could not start. Please try again." / "Couldn’t start the match. Please ready up again.") | **Ready** / Close Room・Leave Room |
-| 相手が切断 (VS 画面・カウントダウン中、U32) | Not ready / Not ready | "Opponent disconnected." "Waiting for them to reconnect…" と "20s" | Close Room・Leave Room |
+| タイムアウト・相手が取り消した・読み込みの失敗・同期の失敗 | Not ready / Not ready | お知らせの枠 ("Ready check timed out…" / "Opponent is no longer ready." / "Match could not start. Please try again." / "Couldn’t start the match. Please ready up again.") | **Ready** |
+| 相手が切断 (VS 画面・カウントダウン中、U32) | Not ready / Not ready | "Opponent disconnected." "Waiting for them to reconnect…" と "20s" | (なし) |
 | 自分が切断 (VS 画面・カウントダウン中、U32) | Not ready / Not ready | ~~"Reconnecting…"~~ → "Connection lost. Reconnecting…" と "20s" (2026-10-08、U52) | (なし、‹ も押せない) |
 
 部屋 (Ready 画面・読み込み) での切断の画面 (U5) は「フレンド対戦の部屋」にあります。
+2026-10-09 の U57 で、どの段階にも Close Room / Leave Room のボタンは無く、部屋の出口は左上の ‹ だけです (上の表のボタンの列は今の動き)。
 
 - カードは自分が左 (`YOU` 付き)、相手が右です。名前はロビーの "Host User" / "Client User" (架空) のままです。
-- クライアントの Leave Room と ‹ は、どちらも確認 "Leave this room?" / "No match has started. No win or loss will be recorded." / [Leave Room] [Keep Waiting] を出します (U9 / U11 / U34)。
-  ホストの Close Room は "Close this room?" / 同じ本文 / [Close Room] [Keep Waiting] (U14。題名は 2026-10-08 に U51 で決定)。確認を開いても Ready はそのままで、Keep Waiting で閉じるとそのまま待てます。
-- 部屋を出るボタンは、SPEC14 では Ready 画面でホスト・クライアントとも Leave Room (仮) にしていましたが、2026-10-07 の決定でホストは Close Room (U14)、クライアントは Leave Room (U9) になりました。
+- クライアントの ‹ は確認 "Leave this room?" / "No match has started. No win or loss will be recorded." / [Leave Room] [Keep Waiting] を出します (U9 / U11 / U34 / U57)。
+  ホストの ‹ は "Close this room?" / 同じ本文 / [Close Room] [Keep Waiting] (U57。題名は 2026-10-08 に U51 で決定)。確認を開いても Ready はそのままで、Keep Waiting で閉じるとそのまま待てます。
+- 部屋を出るボタンは、SPEC14 では Ready 画面でホスト・クライアントとも Leave Room (仮) にしていましたが、2026-10-07 の決定でホストは Close Room (U14)、クライアントは Leave Room (U9) になり、2026-10-09 の U57 でどちらのボタンも無くなりました (出口は ‹ だけ)。
 - 2026-10-03 の U31 のときの "Friend is ready!" (相手の名前の下の緑の帯) と、押したあとの開始ボタンの無効表示は、カードの "✓ Ready" に置き換えました
   ("Friend is ready!" の文言は、U1 で離席中のホストへの赤い帯として使っています)。
 
@@ -876,11 +918,11 @@ Ready を取り消せるのは、届いたあとの Ready 画面だけです (�
 
 | 場面 | 切断した側 | 残った側 |
 |---|---|---|
-| VS 画面・カウントダウン中に切断 (端末の下の「切断する」) | Ready 画面に ~~"Reconnecting…"~~ → "Connection lost. Reconnecting…" と "20s" (2026-10-08、U52) | Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と "20s"、Close Room / Leave Room。両者の Ready は消える |
+| VS 画面・カウントダウン中に切断 (端末の下の「切断する」) | Ready 画面に ~~"Reconnecting…"~~ → "Connection lost. Reconnecting…" と "20s" (2026-10-08、U52) | Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と "20s" (出口は ‹)。両者の Ready は消える |
 | 20 秒のうちに戻る (右パネルの環境イベント「通信が回復する」) | Ready 画面 (Not ready) | Ready 画面 (Not ready)。両者ともう一度 Ready を押し、カウントダウンは 3 から |
 | 20 秒たっても戻らない: クライアントが切断していた | Friend Match トップに "Could not reconnect. The match did not start." の帯 (2026-10-08、U52。入力欄は空で、Match Code を入れ直せば同じ部屋に入れる) | ホスト: "Match cancelled. Opponent did not reconnect."。結果なし、同じ Match Code のまま次の友だちを待つ |
 | 20 秒たっても戻らない: ホストが切断していた | Friend Match トップに "Could not reconnect. The match did not start." の帯 (2026-10-08、U52) | クライアント: Friend Match トップに "Room closed. The host disconnected." |
-| 待っている間に Close Room / Leave Room | 戻ったとき、ホストなら "Your friend left…"、クライアントなら "Room closed. The host left." (モックの仮定。お知らせは Close で閉じる帯、U52) | 確認のあと、抜ける (ホストなら部屋を閉じる) |
+| 待っている間に ‹ → 確認 → Close Room / Leave Room | 戻ったとき、ホストなら "Your friend left…"、クライアントなら "Room closed. The host left." (モックの仮定。お知らせは Close で閉じる帯、U52) | 確認のあと、抜ける (ホストなら部屋を閉じる) |
 | 読み込み ("Starting match…") が 20 秒で終わらない (右パネルの環境イベント) | - | 両者に "Match could not start. Please try again."、Ready 画面に戻る (両者の Ready は消える) |
 
 - VS 画面とカウントダウン中の切断のこの扱い (Ready 画面に戻す) は、Friend Match の Ready 画面から始まった対戦だけです。
@@ -896,14 +938,14 @@ Ready を取り消せるのは、届いたあとの Ready 画面だけです (�
 | Cancel Ready | Ready 画面 (Not ready)、ルームに残る | "Opponent is no longer ready." |
 | アプリを離れる (端末の下の「アプリを離れる」) | Ready が消える (Ready していなければ何も変わらない)、ルームに残る | Ready していたなら "Opponent is no longer ready." (2026-10-08 に U53 で決定) |
 | 片方が Ready のまま 60 秒 (右パネルの環境イベント) | "Ready check timed out. Press Ready when you’re ready." | 同じ |
-| クライアントの Leave Room / ‹ → 確認 → Leave Room | Match Code が入力欄に残った Friend Match トップ | ホスト: "Your friend left. Waiting for another friend…" (同じ Match Code。自動では進まない) |
-| ホストの Close Room → 確認 → Close Room | Friend Match トップ | クライアント: Friend Match トップに "Room closed. The host left." |
-| ホストの ‹ (U14) | 部屋を残して Friend Match トップへ。帯で部屋の様子を示し、ホストの Ready は消える | Ready していたホストが離れたら "Opponent is no longer ready."、カードのホストは "Away" |
+| クライアントの ‹ → 確認 "Leave this room?" → Leave Room | Match Code が入力欄に残った Friend Match トップ | ホスト: "Your friend left. Waiting for another friend…" (同じ Match Code。自動では進まない) |
+| ホストの ‹ → 確認 "Close this room?" → Close Room (U57) | Friend Match トップ | クライアント: Friend Match トップに "Room closed. The host left." |
+| ~~ホストの ‹ (U14)~~ | ~~部屋を残して Friend Match トップへ。帯で部屋の様子を示し、ホストの Ready は消える~~ → 2026-10-09 の U57 で無くなった (ホストの ‹ は上の確認) | ~~Ready していたホストが離れたら "Opponent is no longer ready."、カードのホストは "Away"~~ |
 
 U35 で、Ready 画面から別の画面へ移るときは確認を出して部屋を抜けることになったので (2026-10-07 の U14 からはクライアントだけ。ホストは部屋を残して帯)、図07 の「クライアントが別画面へ移ってもマッチを残し、赤い "Ready to start" トーストで戻る」流れと、
 そのあとの期限切れ ("Match expired." の画面の開始ボタン、U10 / クライアント側の表示、U18) は無くなりました (U10 / U18 は 2026-10-07 にあらためて決定)。
 同じく、図04 の "Host User / cancelled the match." の画面 (U8) と、図05 の "left the match." → 自動で待機に戻る流れは、U34 の表示に置き換えました。
-Ready 画面より前の部屋の画面のボタンも、2026-10-07 にホストは Close Room、クライアントは Leave Room になりました (U9 / U14。SPEC14 では図どおり Cancel Match / Leave Match でした)。
+Ready 画面より前の部屋の画面のボタンも、2026-10-07 にホストは Close Room、クライアントは Leave Room になりました (U9 / U14。SPEC14 では図どおり Cancel Match / Leave Match でした)。2026-10-09 の U57 で、どちらも左上の ‹ にまとめました。
 
 ### モック操作 (端末の外)
 
@@ -950,9 +992,9 @@ Friend Match のシナリオは、両者の Ready に "Confirming…" の手順�
 |---|---|---|
 | 1 | 13 | 6: Ready 画面 (両者 Not ready) → 7: ホストが Ready、"Confirming…" → 8: ホスト "Waiting for opponent…" と 60s / クライアント "Opponent is ready. Are you?" → 9: クライアントも押して "Confirming…" → 10: "Starting match…" → 11: VS 画面 |
 | 1b | 13 | 8: クライアントが先に Ready (クライアント "Waiting for opponent…" / ホスト "Opponent is ready. Are you?") → 11: VS 画面 |
-| 4 | 8 | 7: ホストの Close Room の確認 → 8: ホストは Friend Match トップ、クライアントは "Room closed. The host left." |
-| 4b | 13 | 9: ホストの Close Room の確認 → 10: Keep Waiting で Ready のまま残る → 13: VS 画面 |
-| 5 | 10 | 8: クライアントが抜け、ホストは "Your friend left. Waiting for another friend…" → 9: 同じ Match Code で入り直す |
+| 4 | 8 | 7: ホストの ‹ で "Close this room?" → 8: ホストは Friend Match トップ、クライアントは "Room closed. The host left." |
+| 4b | 13 | 9: ホストの ‹ の確認 → 10: Keep Waiting で Ready のまま残る → 13: VS 画面 |
+| 5 | 10 | 7: クライアントの ‹ で "Leave this room?" → 8: クライアントが抜け、ホストは "Your friend left. Waiting for another friend…" → 9: 同じ Match Code で入り直す |
 | 6 | 18 | 10: "Starting match…" → 11: 20 秒で終わらず "Match could not start. Please try again." → 16: もう一度 Ready して VS 画面 |
 | 7a | 12 | 9: クライアントが Ready のあと ‹ → "Leave this room?" → 10: Keep Waiting → 12: もう一度 ‹ → Leave Room、ホストは "Your friend left…" |
 | 7b | 16 | 9: ホストがアプリを離れて Ready が消え、クライアントに "Opponent is no longer ready." |
@@ -982,9 +1024,11 @@ Friend Match のシナリオは、両者の Ready に "Confirming…" の手順�
 
 ![Ready のタイムアウト](docs/screenshots/54-ready-timeout.png)
 
-![ホストの Close Room の確認](docs/screenshots/08-host-cancel-dialog.png)
+![ホストの ‹ の確認 "Close this room?" (U57)](docs/screenshots/08-host-cancel-dialog.png)
 
-![クライアントの ‹ でも同じ確認 "Leave this room?" (U9 / U35)](docs/screenshots/12-client-away.png)
+![クライアントの ‹ の確認 "Leave this room?" (U57)](docs/screenshots/80-u57-client-leave-dialog.png)
+
+![Ready のあとのクライアントの ‹ の確認 "Leave this room?" (U9 / U35)](docs/screenshots/12-client-away.png)
 
 ![ホストが部屋を閉じた (Room closed. The host left.)](docs/screenshots/09-host-cancelled.png)
 
@@ -1000,7 +1044,7 @@ Friend Match のシナリオは、両者の Ready に "Confirming…" の手順�
 
 ![切断したホストが戻らない (Room closed. The host disconnected.)](docs/screenshots/57-u32-host-disconnected.png)
 
-![友だちの切断を待っている間に Close Room](docs/screenshots/59-u32-leave-room.png)
+![友だちの切断を待っている間にホストの ‹ で "Close this room?"](docs/screenshots/59-u32-leave-room.png)
 
 ### 以前の U31 (2026-10-03) からの変更
 
@@ -1561,6 +1605,11 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 
 ### 決定済み
 
+- **U57 部屋の出口は左上の ‹ だけ** - 決定 (YoshiyukiN さんの FB、#1891 の 1・2 番目、2026-10-09)  
+  - 部屋の画面の Close Room (ホスト) と Leave Room (クライアント) のボタンを無くし、左上の ‹ に統一する。ホストの ‹ は部屋を閉じ、クライアントの ‹ は部屋を抜ける。
+  - ‹ でも確認を出す: ホストは "Close this room?" ([Close Room] / [Keep Waiting])、クライアントは "Leave this room?" ([Leave Room] / [Keep Waiting])。本文は U34。Keep Waiting で部屋に残る。
+  - 部屋を残したまま別の画面へは移れない (U14 の離席と帯、U12 の確認は無くなった)。
+  詳しくは「2026-10-09 の決定 (U57: 部屋の出口は ‹ だけ)」を見てください。
 - **U56 Profile (絵文字とあいさつ)** - 決定 (高宮さん 2026-10-08)  
   - Online Battle の Profile で、相手に見せる絵文字 (10 個) とあいさつ (10 個) を 1 つずつ選ぶ。既定値は 👋 "Hello!"。名前は変えられない。
   - 開けるのは対戦の外だけ。値は部屋を作る・入る・探し始めるときに固定し、次の部屋・次の検索から相手に見える。保存はブラウザ (localStorage) だけ。

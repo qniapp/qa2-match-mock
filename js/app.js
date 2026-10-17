@@ -7,7 +7,7 @@
 
   var MATCH_CODE = 'QWERTY123';
   // Match Code のコピーのボタン。ふつうのコピーのアイコン (重なった 2 枚の紙) で、ホストにだけ出す (#1891 の FB 5)
-  var COPY_BUTTON = '<button type="button" class="copy" aria-label="Copy room code" title="Copy room code">' +
+  var COPY_BUTTON = '<button type="button" class="copy" aria-label="Copy match code" title="Copy match code">' +
     '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>';
   var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
@@ -215,22 +215,15 @@
         return '<button type="button" class="menu-item"' + attrs(dev, it.event) + '>' + esc(it.label) + '<span class="chev">›</span></button>';
       }).join('') + inlineNoticeHtml(dev, s.inlineNotice) + '</div>';
     },
+    // Friend Match トップ (決定 U63、#1891 の FB 19): New Match と Join Match の 2 つだけ。Match Code は Join Match で開く Join a Match に入れる
     friendTop: function (dev, s) {
-      var input = s.input
-        ? '<span class="value">' + esc(s.input) + '</span>'
-        : '<span class="placeholder">Match Code</span>';
       return header(dev, s, s.title) +
         '<div class="body">' +
         roomNoticeHtml(dev, s.roomNotice) +
-        '<div class="sec-label">Create Match</div>' +
-        '<button type="button" class="btn big"' + attrs(dev, 'createMatch') + '>Create Match</button>' +
-        '<div class="sec-label second">Enter Match Code</div>' +
-        (Engine.canFire(app.state, dev + '.enterCode')
-          ? '<button type="button" class="input"' + attrs(dev, 'enterCode') + '>' + input + '</button>'
-          : '<div class="input">' + input + '</div>') +
-        '<button type="button" class="btn"' + attrs(dev, 'joinMatch') + '>Join Match</button>' +
-        (s.error ? '<p class="error">' + esc(s.error) + '</p>' : '') +
-        '</div>';
+        '<div class="ft-buttons">' +
+        '<button type="button" class="btn big"' + attrs(dev, 'createMatch') + '>New Match</button>' +
+        '<button type="button" class="btn big"' + attrs(dev, 'openJoin') + '>Join Match</button>' +
+        '</div></div>' + (s.join ? joinDialogHtml(dev, s.join) : '');
     },
     lobby: function (dev, s) {
       return header(dev, s, s.title) +
@@ -399,7 +392,21 @@
       '<div class="rd-timer m-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div></div></div>';
   }
 
-  // Friend Match トップの部屋のお知らせ (決定 U52)。モーダルではない帯で、Close で閉じる (Match Code を入れても消えない)
+  // Join a Match のダイアログ (決定 U63)。右上の × で閉じる。Match Code の誤り・満員の赤字は入力欄の下に出す
+  function joinDialogHtml(dev, j) {
+    var value = j.input ? '<span class="value">' + esc(j.input) + '</span>' : '<span class="placeholder">Enter code</span>';
+    var field = Engine.canFire(app.state, dev + '.enterCode')
+      ? '<button type="button" class="input" aria-label="Match Code"' + attrs(dev, 'enterCode') + '>' + value + '</button>'
+      : '<div class="input" role="textbox" aria-readonly="true" aria-label="Match Code">' + value + '</div>';
+    return '<div class="dim"><div class="dialog join-dialog" role="dialog" aria-label="Join a Match">' +
+      '<button type="button" class="d-close" aria-label="Close"' + attrs(dev, 'closeJoin') + '>\u00d7</button>' +
+      '<div class="d-title">Join a Match</div>' +
+      '<div class="d-label" aria-hidden="true">Match Code</div>' + field +
+      (j.error ? '<p class="error" role="alert">' + esc(j.error) + '</p>' : '') +
+      '<button type="button" class="btn primary"' + attrs(dev, 'joinMatch') + '>Join</button></div></div>';
+  }
+
+  // Friend Match トップの部屋のお知らせ (決定 U52)。モーダルではない帯で、Close で閉じる (Join a Match を開いて Match Code を入れても消えない、U63)
   function roomNoticeHtml(dev, n) {
     if (!n) return '';
     return '<div class="room-notice" role="status"><p class="rn-text">' + sentences(n.text) + '</p>' + n.buttons.map(function (b) {

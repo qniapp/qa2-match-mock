@@ -108,7 +108,7 @@ function resultAny(role) {
   return list.concat(specialResults(role), [role + '.NoContestResult']);
 }
 function isResultState(name) { return /^(Host|Client)\.(Win|Lose|Draw|NoContest)Result(\.|$)/.test(name); }
-// 同じ相手と対戦している間 (VS 画面・ゲーム画面・結果画面)。スタンプのミュートはこの間だけ続く (決定 U49、再戦を含む)
+// 同じ相手と対戦している間 (VS 画面・ゲーム画面・結果画面)。右パネルの「対戦:」はこの間だけ出す
 function isWithOpponent(name) { return isResultState(name) || /^(Host|Client)\.(Opponent(\.|$)|Game\.)/.test(name); }
 var hostResultAny = resultAny('Host');
 var clientResultAny = resultAny('Client');
@@ -143,14 +143,12 @@ function always() { return true; }
 // 端末ごとの付属状態。keeps(状態名) が偽の画面へ移ると初期値に戻る (initial は値か、端末 ('host' / 'client') を受け取る関数)
 //   Dialog: 確認ダイアログ (画面が変わると閉じる)
 //   Stamp:  自分が送ったスタンプ (U27)。'gg' などは表示中 (3 秒、仮)、'sent' は消えたが次を送れるまでの待ち (送ってから 5 秒、仮)
-//   Mute:   相手のスタンプを出さない (U27)。同じ相手と続けて対戦している間 (再戦を含む) だけ続く (決定 U49)
 //   Emoji / Greeting:           保存した絵文字とあいさつ (U56)。ブラウザの localStorage に残る (読み書きは app.js、自由操作のときだけ)
 //   DraftEmoji / DraftGreeting: Profile 画面で選んでいるもの。開いたときに保存した値を写し、Save で保存した値へ写す。Cancel / ‹ で捨てる
 //   ShownEmoji / ShownGreeting: 相手に見せる値。部屋を作る・部屋に入る・相手を探し始めるときに保存した値を写す (行の copy、遷移表の末尾で付ける)
 var DEVICE_FIELDS = {
   Dialog: { initial: null, keeps: function () { return false; } },
   Stamp: { initial: null, keeps: isResultState },
-  Mute: { initial: false, keeps: isWithOpponent },
   Emoji: { initial: function (d) { return PROFILE_INITIAL[d].emoji; }, keeps: always },
   Greeting: { initial: function (d) { return PROFILE_INITIAL[d].greeting; }, keeps: always },
   DraftEmoji: { initial: null, keeps: isProfileScreen },
@@ -780,7 +778,7 @@ var TRANSITIONS = (function () {
   });
 
   // === 結果画面のスタンプ (決定 U27、高宮さん 2026-10-07) ===
-  // 👏 Good game / 🤝 Thanks for the match / 👍 Nice。1 つ 3 秒 (仮) 表示し、次を送れるのは送ってから 5 秒 (仮) 後。相手のスタンプはミュートできる (U49: 同じ相手と続けて対戦している間だけ)。
+  // 👏 Good game / 🤝 Thanks for the match / 👍 Nice。1 つ 3 秒 (仮) 表示し、次を送れるのは送ってから 5 秒 (仮) 後。ミュートは無い (#1891 の FB 8)。
   // 3 秒・5 秒は端末の下のモック操作
   [['host', 'Host', 'client'], ['client', 'Client', 'host']].forEach(function (p) {
     var d = p[0];
@@ -801,16 +799,12 @@ var TRANSITIONS = (function () {
     var any = d === 'host' ? hostResultAny : clientResultAny;
     STAMPS.forEach(function (s) {
       T({ from: mine(stampable, field('Stamp', null)), event: d + '.stamp.' + s.id, to: mine('=', {}), set: field('Stamp', s.id),
-        note: '決定 (U27): ' + s.emoji + ' "' + s.text + '" を送る。両者の画面に 3 秒 (仮) 出る。決定 (U49): 相手がミュートしていても自分の画面には出し、相手にミュートは知らせない', decided: ['U27', 'U49'] });
+        note: '決定 (U27): ' + s.emoji + ' "' + s.text + '" を送る。両者の画面に 3 秒 (仮) 出る (ミュートは無い、U49 / #1891 の FB 8)', decided: ['U27', 'U49'] });
     });
     T({ from: mine(any, field('Stamp', STAMPS.map(function (s) { return s.id; }))), event: d + '.stampShown', to: mine('=', {}), set: field('Stamp', 'sent'),
       note: 'モック操作。決定 (U27): 3 秒 (仮) たつとスタンプが消える。次を送れるのは送ってから 5 秒 (仮) 後', decided: ['U27'] });
     T({ from: mine(any, field('Stamp', STAMPS.map(function (s) { return s.id; }).concat(['sent']))), event: d + '.stampInterval', to: mine('=', {}), set: field('Stamp', null),
       note: 'モック操作。決定 (U27): 送ってから 5 秒 (仮) たつと次を送れる (表示中なら同時に消える)', decided: ['U27'] });
-    T({ from: mine(stampable, field('Mute', false)), event: d + '.muteStamps', to: mine('=', {}), set: field('Mute', true),
-      note: '決定 (U27 / U49): "Mute opponent emotes" で相手のスタンプをミュートする。同じ相手と続けて対戦している間 (再戦を含む) だけ続く。相手には知らせない', decided: ['U27', 'U49'] });
-    T({ from: mine(stampable, field('Mute', true)), event: d + '.unmuteStamps', to: mine('=', {}), set: field('Mute', false),
-      note: '決定 (U27 / U49): "Unmute opponent emotes" でミュートを解く', decided: ['U27', 'U49'] });
   });
 
   // === Profile (決定 U56、高宮さん 2026-10-08) ===
@@ -908,8 +902,6 @@ var EVENT_LABELS = {
   'host.stamp.nice': 'ホスト: スタンプ 👍 Nice を送る',
   'host.stampShown': 'ホスト: 送ったスタンプが出てから 3 秒 (仮) たつ (モック操作)',
   'host.stampInterval': 'ホスト: スタンプを送ってから 5 秒 (仮) たつ (モック操作)',
-  'host.muteStamps': 'ホスト: Mute opponent emotes を押す (相手のスタンプをミュート)',
-  'host.unmuteStamps': 'ホスト: Unmute opponent emotes を押す (ミュートを解く)',
   'host.dialog.closeRoom': 'ホスト: ダイアログで Close Room',
   'host.dialog.keepWaiting': 'ホスト: ダイアログで Keep Waiting',
   'client.friendMatch': 'クライアント: Friend Match を選ぶ',
@@ -946,8 +938,6 @@ var EVENT_LABELS = {
   'client.stamp.nice': 'クライアント: スタンプ 👍 Nice を送る',
   'client.stampShown': 'クライアント: 送ったスタンプが出てから 3 秒 (仮) たつ (モック操作)',
   'client.stampInterval': 'クライアント: スタンプを送ってから 5 秒 (仮) たつ (モック操作)',
-  'client.muteStamps': 'クライアント: Mute opponent emotes を押す (相手のスタンプをミュート)',
-  'client.unmuteStamps': 'クライアント: Unmute opponent emotes を押す (ミュートを解く)',
   'client.dialog.leaveRoom': 'クライアント: ダイアログで Leave Room',
   'client.dialog.keepWaiting': 'クライアント: ダイアログで Keep Waiting',
   'sys.roomSynced': '自動: サーバーが参加を確認し、両者が部屋の画面にそろって同期が終わる',
@@ -1075,7 +1065,7 @@ var GAME_COUNTDOWN_CONTEXT = 'ゲーム本体のカウントダウン（VsAI と
   'ランダム対戦と再戦は Ready 画面に戻さずに 20 秒 (仮) 待ち、戻ったら VS 画面からやり直す (U54)。';
 var VS_CONTEXT = 'VS 画面 (10-01 の合意)。両者の名前・レーティング・あいさつ。架空の "Rank" はやめ、Friend Match でも "Rating {n}" を出す (決定 U48)。' +
   'モックは両者とも Elo の初期値 1000 (QA² 側の仮の値)。ここでの切断は、Friend Match の Ready 画面から始まった対戦なら U32、ランダム対戦と再戦なら U54。' +
-  '絵文字とあいさつは Profile で保存した値を、部屋を作った・入った・相手を探し始めたときに固定したもの (決定 U56。スタンプのミュートでは隠さない)。';
+  '絵文字とあいさつは Profile で保存した値を、部屋を作った・入った・相手を探し始めたときに固定したもの (決定 U56)。';
 var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のメニューボタン (☰) で MATCH MENU を開く (U37、試合は止まらない)。' +
   '決着は時間切れで、得点の高いほうが勝ち・同点なら引き分け (U44)。端末の下のモック操作「時間切れ」の勝ち / 負け / 同点で決着させ、「切断する」でこの端末の接続が切れる (U28 / U46)。';
 // 結果画面の説明。端末の画面には出さず、右パネルに出す。秒数・Elo の値が QA² 側の仮の値であることもここと README にだけ書く
@@ -1096,7 +1086,7 @@ var RESULT_PHASE_CONTEXT = {
   OpponentLeft: '相手が結果画面を抜けた (決定 U25)。勝敗とレートは変わらず、再戦はできない。',
 };
 var STAMP_CONTEXT = 'スタンプ (決定 U27): 👏 Good game / 🤝 Thanks for the match / 👍 Nice。1 つ 3 秒 (仮) 出て、次を送れるのは送ってから 5 秒 (仮) 後 (どちらも端末の下のモック操作で進める)。' +
-  '"Mute opponent emotes" で相手のスタンプをミュートでき、同じ相手と続けて対戦している間 (再戦を含む) だけ続く。自分のスタンプは自分の画面に出し、ミュートしたことは相手に知らせない (U49)。';
+  '相手のスタンプのミュートは無く、送ったスタンプはいつも両者の画面に出る (U49、#1891 の FB 8)。';
 var MATCHMAKE_CONTEXT = 'ランダム対戦で相手を探している画面 (決定 U13a / U13)。相手が見つかり次第 VS 画面へ進む (Ready 画面は無い)。' +
   'Cancel と ‹ はどちらも確認なしで Online Battle へ戻る (U13)。探している間は、ほかの画面へは行けない。' +
   'アプリを離れる (バックグラウンド・画面ロック) と検索を止める。60 秒探しても見つからなければ Online Battle に "No opponent found." を出す (60 秒という長さは仮)。' +
@@ -1628,9 +1618,9 @@ var UNDECIDED = [
   { id: 'U26', title: '結果画面から自動では次へ進まない',
     desc: '結果画面はタイムアウトで次の画面へ自動で進むことはしない。ボタンを押すまで結果画面に留まる。モックにも結果画面からの自動遷移は無い。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
-  { id: 'U27', title: '結果画面のスタンプ: 👏 Good game / 🤝 Thanks for the match / 👍 Nice。表示 3 秒、間隔 5 秒、ミュートあり',
+  { id: 'U27', title: '結果画面のスタンプ: 👏 Good game / 🤝 Thanks for the match / 👍 Nice。表示 3 秒、間隔 5 秒',
     desc: '結果画面で 3 種類のスタンプを送れる: 👏 "Good game"、🤝 "Thanks for the match"、👍 "Nice"。1 つのスタンプは 3 秒表示し、次を送れるのは送ってから 5 秒後。' +
-      '相手のスタンプはミュートできる。3 秒と 5 秒は QA² 側の仮の値 (変わりうる)。送った本人の画面にも出し、ミュートは同じ相手と続けて対戦している間だけ続く (U49、2026-10-08)。',
+      '3 秒と 5 秒は QA² 側の仮の値 (変わりうる)。送った本人の画面にも出す。決めたときは相手のスタンプをミュートできたが、#1891 の FB 8 でやめた (U49)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U28', title: '対戦中の切断: 片方なら 20 秒待って切断した側の負け。両者の切断・サービス障害は No contest',
     desc: '片方が切断したら 20 秒待ち、戻らなければ切断した側の負け (ランダム対戦ではレートも変わる)。' +
@@ -1735,9 +1725,9 @@ var UNDECIDED = [
     desc: 'VS 画面の架空の "Rank 12" / "Rank 9" はやめ、レーティング (U21 の Elo) を "Rating {n}" で出す。Friend Match の VS 画面でも出す (Friend Match ではレートは変わらない)。' +
       'モックでは両者とも Elo の初期値 1000 (QA² 側の仮の値) を出す。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
-  { id: 'U49', title: 'スタンプのミュートは同じ相手と続けて対戦している間だけ。自分のスタンプは自分に見え、相手には知らせない',
-    desc: '相手のスタンプのミュートは、同じ相手と続けて対戦している間 (再戦を含む) だけ続く。結果画面を抜けて別の相手と対戦すると解ける。' +
-      '自分が送ったスタンプは自分の画面に出す。ミュートしたことは相手に知らせない。ボタンは "Mute opponent emotes" / "Unmute opponent emotes"。',
+  { id: 'U49', title: 'スタンプのミュートは無い (#1891 の FB 8 でやめた)。送ったスタンプは両者の画面に出る',
+    desc: '決めたときは "Mute opponent emotes" / "Unmute opponent emotes" で相手のスタンプをミュートでき、同じ相手と続けて対戦している間 (再戦を含む) だけ続くとしていたが、' +
+      '#1891 の FB 8 でミュートの設定ごとやめた。送ったスタンプは、送った本人と相手の両方の画面に出る。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U50', title: '再戦が取り消し・辞退・期限切れになったら、もう一方にも一行を出し、次の操作まで残す',
     desc: 'U30 のメッセージに加えて、もう一方にも出す: 取り消した側に "Rematch request cancelled"、断った側に "Rematch declined"、申し込まれたまま期限が切れた側に "Rematch request expired"。' +
@@ -1778,7 +1768,7 @@ var UNDECIDED = [
       PROFILE_GREETINGS.map(function (g) { return '"' + g.text + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
       '全員の既定値は \u{1F44B} "Hello!"。開けるのは対戦の外だけで、相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
       '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から。保存はブラウザ (localStorage) だけ。' +
-      '結果画面のスタンプ (U27) は変わらず、スタンプのミュート (U49) で VS 画面のあいさつは隠れない。候補と既定値は QA² 側の仮の値 (変わりうる)。' +
+      '結果画面のスタンプ (U27) は変わらない。候補と既定値は QA² 側の仮の値 (変わりうる)。' +
       'あいさつのアポストロフィはどれも \u2019。10-08 に候補を 4 つ同じ位置で入れ替えた (うち 2 つは協力しているように聞こえたため)。' +
       '相手 (ogwssk) も Profile を変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
       '次のことも 2026-10-08 に確認: \u2039 は Cancel と同じで確認を出さない。Online Battle の中の "Search stopped\u2026" などの通知を出している間も開け (開くと通知は消える、U43)、"No opponent found." を出している間は開けない。' +

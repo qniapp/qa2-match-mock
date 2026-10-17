@@ -15,7 +15,7 @@
 // 部屋の画面の出口は左上の ‹ だけ (決定 U57): Close Room / Leave Room のボタンが無く、‹ はホストで "Close this room?"、クライアントで "Leave this room?" の確認を開き、
 // 確認が画面に収まって Close Room / Leave Room と Keep Waiting を押せることも確かめる。
 // 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
-// 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" であること (U49)、
+// 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、結果画面にスタンプのミュートのボタンが無いこと (U49、#1891 の FB 8)、
 // 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
 // 最初に、hash なしで開くと自由操作 (両端末が最初の画面で、ボタンを押せ、自動遷移が実時間で進む) で、ページに消した部品 (左のシナリオのパネル、
 // 右パネルの状態名の行・「ほか:」のバッジの列・ログタブ、凡例の未決・点線 / 実線、端末の上の黄色い未決の帯、未決トグルのラジオ) が無く、
@@ -103,9 +103,8 @@ try {
   await open('');
   pageFindings.push(...await evaluate(profileReload));
   // localStorage に既定値と違う値がある状態で全シナリオを描く (シナリオはいつも最初の値から)
-  const { frames, findings, norow, mutedVs } = await evaluate(scan);
+  const { frames, findings, norow } = await evaluate(scan);
   findings.unshift(...pageFindings);
-  if (!mutedVs) findings.push('スタンプをミュートしたままの VS 画面 (あいさつが隠れないこと) を描いたシナリオが無い');
 
   console.log(`${frames} 枚 (全シナリオの全手順と、カウントダウン 3 / 2 / 1) の両端末の画面を確かめました`);
   const norowStates = Object.keys(norow);
@@ -120,7 +119,7 @@ try {
     console.log('ok  左のシナリオのパネル、右パネルの状態名の行・「ほか:」・ログタブ、凡例の未決・点線 / 実線、端末の上の未決の帯、トグルのラジオはありません');
     console.log('ok  タブの名前は「決定」で、モック設定は閉じています');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
-    console.log(`ok  Profile: Cancel は保存せず、Save したものは開き直しても残り、シナリオは localStorage に関係なく最初の値から。ミュートしたままの VS 画面 ${mutedVs} 枚にもあいさつがあります`);
+    console.log(`ok  Profile: Cancel は保存せず、Save したものは開き直しても残り、シナリオは localStorage に関係なく最初の値から`);
   }
 } finally {
   await cleanup();
@@ -239,7 +238,6 @@ function scan() {
   const findings = [];
   const norow = {};
   let frames = 0;
-  let mutedVs = 0;
   let current = null; // 描いている手順の遷移表の状態
   // 手順の移動は MockApp.show (#s=..&step=..&cd=.. の deep link と同じ) を直接呼んで行う。
   // hash を書き換えて回すと、Chromium が短時間の大量の history.replaceState を黙って捨てるため、途中から手順が進まなくなる。
@@ -322,7 +320,7 @@ function scan() {
         if (ratings.join() !== `Rating ${ELO.initial},Rating ${ELO.initial}`) findings.push(`${at}: VS 画面のレーティングが ${ratings.join(' / ')}`);
       }
       if (/\bRank\b/.test(text)) findings.push(`${at}: "Rank" が残っている`);
-      // VS 画面の絵文字とあいさつ (決定 U56): 部屋を作った・入った・探し始めたときに固定した値。スタンプのミュート (U49) でも隠さない
+      // VS 画面の絵文字とあいさつ (決定 U56): 部屋を作った・入った・探し始めたときに固定した値
       const d = dev.dataset.dev;
       if (screen.querySelector('.vs')) {
         ['host', 'client'].forEach((who) => {
@@ -331,7 +329,6 @@ function scan() {
           if (card !== want) findings.push(`${at}: VS 画面の ${who} のカードが ${card} (期待: ${want})`);
           if (card.includes("'")) findings.push(`${at}: VS 画面の ${who} のあいさつにまっすぐな ' (’ にそろえる)`);
         });
-        if (current[d + 'Mute']) mutedVs++;
       }
       // Online Battle の Profile (決定 U56): 保存した絵文字を添える。押せるのは Online Battle とその中の通知のときだけ
       const pItem = screen.querySelector('.menu-item.secondary');
@@ -382,10 +379,8 @@ function scan() {
         });
         if (close) { const cr = close.getBoundingClientRect(); if (cr.right > nr.right || cr.top < nr.top || cr.bottom > nr.bottom) findings.push(`${at}: Close が帯からはみ出している`); }
       }
-      // スタンプのミュート (決定 U49)
-      const mute = screen.querySelector('.r-mute');
-      if (mute && !/^.?.?(Mute|Unmute) opponent emotes$/u.test(mute.textContent)) findings.push(`${at}: ミュートのボタンが ${mute.textContent}`);
-      if (mute && (/🔕/.test(state) !== /Unmute/.test(mute.textContent))) findings.push(`${at}: ミュートのボタンが状態と合わない (${mute.textContent})`);
+      // スタンプのミュートは無い (U49、#1891 の FB 8)
+      if (/opponent emotes/i.test(text) || /🔕/.test(state)) findings.push(`${at}: スタンプのミュートが残っている`);
       // Ready 画面 (決定 U31 / U32 / U36) と部屋の画面 (決定 U1〜U19)。古い文言は出さない
       const OLD = text.match(/Start Match|Ready to start|Stay in Room|Go Back|Leave Match|Cancel Match|Cancel this match|Leave this match|Match expired\.|cancelled the match|left the match\./);
       if (OLD) findings.push(`${at}: 古い文言 "${OLD[0]}" が残っている`);
@@ -510,5 +505,5 @@ function scan() {
       }
     }
   });
-  return { frames, findings, norow, mutedVs };
+  return { frames, findings, norow };
 }

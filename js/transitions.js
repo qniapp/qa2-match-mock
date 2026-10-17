@@ -1678,7 +1678,8 @@ var UNDECIDED = [
       '2026-10-17 の U63 で、クライアントの "Leave this match?" の残るボタンは Stay になった (ホストの "Cancel this match?" は Keep Waiting のまま)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U12', title: '"Create a new match?" / "Join another match?" の本文は役割で変える。古い部屋は新しい部屋に入れてから閉じる',
-    desc: '本文はホストが "This will close your current room. Your friend will return to Friend Match."、クライアントが "This will leave your current room. Your friend’s room will stay open."。' +
+    desc: '本文はホストが "This will close your current match. Your friend will return to Friend Match."、クライアントが "This will leave your current match. Your friend’s room will stay open."。' +
+      '2026-10-17 に room を match に変えた (以前は "This will close your current room." / "This will leave your current room.")。' +
       '古い部屋を閉じるのは、新しい部屋を作れた・入れたときだけ (作れなければ古い部屋はそのまま。モックではモック設定「Create Match の結果 = 接続失敗」で試せる)。' +
       'ボタンは 10-01 の合意どおり Create Match / Join Match と Keep Current Match。クライアント向けの本文を出す場面はモックに無いので保留 (U51、2026-10-08)。 ' +
       '2026-10-10 の U57 で無くなった (部屋を残したまま Friend Match トップへ戻れないので、この確認を出す場面が無い)。',
@@ -1886,7 +1887,7 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U51', title: 'ホストの確認の題名は "Cancel this match?" (U63)。U12 のクライアント向けの本文は保留',
     desc: 'ホストの確認の題名は、決めたときは "Close this room?" のまま (本文は U34、ボタンは Close Room / Keep Waiting)。2026-10-17 の U63 で "Cancel this match?" と Cancel Match / Keep Waiting になった。' +
-      'U12 で決まったクライアント向けの本文 ("This will leave your current room. Your friend’s room will stay open.") は、出す場面が無い (クライアントは部屋に入ったまま別の画面へは移れない、U9) ので保留。 ' +
+      'U12 で決まったクライアント向けの本文 ("This will leave your current match. Your friend’s room will stay open."。2026-10-17 に room を match に変えた (以前は "This will leave your current room.")) は、出す場面が無い (クライアントは部屋に入ったまま別の画面へは移れない、U9) ので保留。 ' +
       '2026-10-10 の U57 で、この確認はホストの ‹ の確認になった。U12 は U57 で無くなった。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U52', title: '開始前の切断の表示: 切れた側も "Connection lost. Reconnecting…" と残りの秒数。部屋のお知らせは Close で閉じる帯',
@@ -1906,8 +1907,8 @@ var UNDECIDED = [
       'モックでは、待っている間は VS 画面の上に対戦中の切断 (U46) と同じ表示と残りの秒数、取りやめたあとは Online Battle の中の通知 (U43 と同じ見せ方)。' +
       'Friend Match の再戦を取りやめたあとは両者とも Friend Match トップの帯で、残った側は "Match cancelled. Opponent did not reconnect." (行き先と文言は 2026-10-08 に確認)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
-  { id: 'U55', title: '離席中の帯: 友だちがいて Ready していなければ "Friend is in the room"。"Your friend left." は 5 秒',
-    desc: 'ホストの離席中、友だちが部屋にいて Ready していないときの帯は "Friend is in the room" (以前のモックの青い "Waiting for your friend…" から変更)。' +
+  { id: 'U55', title: '離席中の帯: 友だちがいて Ready していなければ "Friend is in the match"。"Your friend left." は 5 秒',
+    desc: 'ホストの離席中、友だちが部屋にいて Ready していないときの帯は "Friend is in the match" (以前のモックの青い "Waiting for your friend…" から変更)。2026-10-17 に room を match に変えた (以前は "Friend is in the room")。' +
       '"Your friend left." は 5 秒出す (以前のモックは 3 秒)。5 秒は QA² 側の仮の値 (変わりうる)。 ' +
       '2026-10-10 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },

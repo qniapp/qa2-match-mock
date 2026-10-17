@@ -28,7 +28,7 @@
 //   .Ready                     どちらも Ready していない
 //   .Ready.TimedOut など        どちらも Ready していない + お知らせ (タイムアウト U33 / 相手が取り消した U34 / 読み込みが 20 秒で終わらない U32 / 同期の失敗 U15)
 //   .Ready.Confirming          自分が Ready を押して送っている ("Confirming…")
-//   .Ready.WaitingForOpponent  自分だけ Ready ("Waiting for opponent…"、60 秒のカウントダウン、Cancel Ready)
+//   .Ready.WaitingForOpponent  自分だけ Ready ("Waiting for opponent…" と待っている印 (秒数は出さない)、Cancel Ready)
 //   .Ready.OpponentReady       相手だけ Ready ("Opponent is ready. Are you?")。.Confirming は自分も押して送っている
 function lobbyState(R, s) { return R + '.FriendMatch.Lobby.' + s; }
 var READY_NOTICES = ['TimedOut', 'OpponentNotReady', 'StartFailed', 'SyncFailed'];
@@ -674,7 +674,7 @@ var TRANSITIONS = (function () {
       to: { host: resultState('Host', p[1]), client: resultState('Client', OPPOSITE[p[1]]) },
       note: 'モック操作: 時間切れ。押した側が' + mine + '、相手は自動で' + (p[1] === 'Draw' ? '同じく引き分け' : '逆の結果') + '。' +
         '決定 (U44): 終わった理由は ' + (p[1] === 'Draw' ? '"Same score when time ran out"' : '"Time is up"') + '。' +
-        '決定 (U20): 結果画面に勝敗・両者の名前・スコア・終わった理由。MATCH MENU や降参の確認を開いていても試合は続いているので、そのまま結果画面へ (U37)',
+        '決定 (U20): 結果画面に勝敗・両者の名前・終わった理由 (スコアは出さない、FB 7)。MATCH MENU や降参の確認を開いていても試合は続いているので、そのまま結果画面へ (U37)',
       decided: ['U44', 'U20', 'U37'] });
   });
   // 決定 (U28): 片方が切断したら 20 秒 (仮) 待ち、戻らなければ切断した側の負け。両者の切断・サービス障害は No contest
@@ -1024,10 +1024,8 @@ function ratingText(outcome, session) {
   if (outcome === 'NoContest') return 'No rating change (no contest)';
   if (!session.rated) return 'No rating change (rematch)';
   var delta = eloDelta(ELO.initial, ELO.initial, OUTCOME_SCORE[outcome]);
-  return ELO.initial + ' \u2192 ' + (ELO.initial + delta) + ' (' + (delta > 0 ? '+' + delta : delta < 0 ? '-' + -delta : '\u00B10') + ')';
+  return ELO.initial + ' \u2192 ' + (ELO.initial + delta) + ' (' + (delta > 0 ? '+' + delta : delta < 0 ? '\u2212' + -delta : '\u00B10') + ')';
 }
-// 試合のスコア (モックのデモ値。自分 - 相手)。決まっていないとき (No contest) は行ごと出さない (U20)
-var DEMO_SCORES = { Win: [3200, 2750], Lose: [2750, 3200], Draw: [2900, 2900] };
 // 結果画面のボタン (決定 U22 / U24 / U41)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める
 function resultButtons(spec, match) {
   if (spec.reason === 'surrendered') return [{ label: 'Back to Online', event: 'backToOnlineBattle', primary: true }];
@@ -1071,7 +1069,7 @@ var VS_CONTEXT = 'VS 画面 (10-01 の合意)。両者の名前・レーティ�
 var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のメニューボタン (☰) で MATCH MENU を開く (U37、試合は止まらない)。' +
   '決着は時間切れで、得点の高いほうが勝ち・同点なら引き分け (U44)。端末の下のモック操作「時間切れ」の勝ち / 負け / 同点で決着させ、「切断する」でこの端末の接続が切れる (U28 / U46)。';
 // 結果画面の説明。端末の画面には出さず、右パネルに出す。秒数・Elo の値が QA² 側の仮の値であることもここと README にだけ書く
-var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両者の名前・スコア・終わった理由を出す (スコアはモックのデモ値。No contest のように決まっていないときは行ごと出さない)。' +
+var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両者の名前・終わった理由とレーティングの変化を出す。スコアは出さない (qniapp/qa2#1891 FB 7)。' +
   '時間切れで終わったときの理由は "Time is up"、同点の引き分けは "Same score when time ran out" (U44)。' +
   'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
   'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら Find Next Opponent / Rematch / Back to Online。自動では次へ進まない (U26)。';
@@ -1113,7 +1111,7 @@ var SPECIAL_RESULT_CONTEXT = {
   OpponentSurrendered: '相手が降参したので勝ち。"Your opponent surrendered" を出す (決定 U38)。降参で終わった試合のあとは、どちらからも再戦できない (U45)。',
   Disconnected: '自分の接続が切れ、20 秒 (仮) のうちに戻れなかったので負け (決定 U28)。ランダム対戦ではレートも変わる。切断で終わった試合のあとは再戦できない (U45)。',
   OpponentDisconnected: '相手の接続が切れ、20 秒 (仮) のうちに戻らなかったので勝ち (決定 U28)。切断で終わった試合のあとは再戦できない (U45)。',
-  NoContest: '両者の切断かサービス障害で、勝敗なし (決定 U28)。"No contest due to a connection error"、レートは変わらない。スコアは決まっていないので行ごと出さない (U20)。再戦はできない (U45)。',
+  NoContest: '両者の切断かサービス障害で、勝敗なし (決定 U28)。"No contest due to a connection error"、レートは変わらない。再戦はできない (U45)。',
 };
 var DISCONNECT_CONTEXT = {
   self: 'この端末の接続が切れた (決定 U28)。20 秒 (仮) のうちに戻れば試合を続け、戻れなければ負け。待っている間はサーバーが両者のゲームと得点を止め、' +
@@ -1160,7 +1158,7 @@ var READY_NOTICE_TEXT = {
   StartFailed: 'Match could not start. Please try again.',
   SyncFailed: 'Couldn\u2019t start the match. Please ready up again.',
 };
-var READY_TIMERS = { ready: 60, reconnect: 20 }; // 秒。どちらも QA² 側の仮の値 (U33 / U5 / U32 / U46 / U54)
+var READY_TIMERS = { reconnect: 20 }; // 秒。QA² 側の仮の値 (U5 / U32 / U46 / U54)。Ready の 60 秒 (U33) は画面に出さない (#1891 の FB 6)
 var ROOM_RULES_CONTEXT = 'Match Code の期限は 30 分 (QA² 側の仮の値) で、サーバーが数え、画面には出さない (決定 U7 / U58)。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は時計が止まり、部屋での切断 (U5) の再接続待ちの間は止まらない (U7)。' +
   'ホストにだけ、Match Code の下に "Share this code with your friend!" を出す (U58)。' +
   '部屋の画面の出口は左上の \u2039 だけで、Close Room / Leave Room のボタンは無い (決定 U57、#1891 の FB 1・2)。ホストの \u2039 は確認 "Close this room?" のあと部屋を閉じ (U51)、' +
@@ -1171,7 +1169,8 @@ var READY_CONTEXT = 'Ready 画面 (決定 U31 変更 / U36)。プレイヤーご
 var RECONNECT_TIMER_CONTEXT = '20 秒は QA² 側の仮の値で、モックは "20s" のまま描く。';
 var READY_PHASE_CONTEXT = {
   Confirming: 'Ready を送っている間 (決定 U36)。ボタンが "Confirming\u2026" になり、届くと自動で次へ進む (モックは 0.8 秒)。送っている間は Ready を取り消せず、\u2039 も押せない (U53)。',
-  WaitingForOpponent: '自分だけ Ready (決定 U36)。"Waiting for opponent\u2026" と 60 秒のカウントダウン、Cancel Ready。60 秒は QA² 側の仮の値で、モックは押した直後の "60s" のまま描く。' +
+  WaitingForOpponent: '自分だけ Ready (決定 U36)。"Waiting for opponent\u2026" と待っている印 (Searching for an opponent… と同じ点の動き)、Cancel Ready。' +
+    '残りの秒数は急かされている印象を与えるので出さない (#1891 の FB 6)。60 秒は QA² 側の仮の値。' +
     '相手が押さないまま 60 秒たつと (右パネルの環境イベント) 両者の Ready が消えて "Ready check timed out…" (U33)。Cancel Ready で取り消しても、部屋には残る (U34)。',
   OpponentReady: '相手だけ Ready (決定 U36)。"Opponent is ready. Are you?"。Ready を押せば開始する。',
   TimedOut: '片方が Ready のまま 60 秒 (仮) たったので、両者の Ready を消した (決定 U33)。罰はなく、どちらも部屋に残る。',
@@ -1292,9 +1291,10 @@ var SCREENS = (function () {
     return { roomNotice: { text: ROOM_NOTICES[key], buttons: [{ label: 'Close', event: 'closeNotice' }] }, decided: decided,
       context: ROOM_CONTEXT[key === 'MatchCancelled' ? 'RoomMatchCancelled' : key] };
   }
-  // 部屋の画面。ホストにだけ Match Code の下に "Share this code with your friend!" (決定 U58)。期限が切れた画面と再接続できなかった画面では出さない
+  // 部屋の画面。ホストにだけ Match Code の下に "Share this code with your friend!" (決定 U58)。期限が切れた画面と再接続できなかった画面では出さない。
+  // Match Code のコピーのボタン (アイコン) もホストにだけ出す (#1891 の FB 5)。期限が切れた画面では出さない
   function lobby(R, extra) {
-    return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [], codeHint: R === 'Host' }, extra);
+    return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [], codeHint: R === 'Host', copyCode: R === 'Host' }, extra);
   }
   // Ready 画面: プレイヤーごとのカード (自分・相手の Ready)、状況の一行、カウントダウン (秒)、お知らせ、ボタン。
   // 部屋を出るボタンは無く、‹ で確認を出す (決定 U57。ホストは "Close this room?"、クライアントは "Leave this room?")
@@ -1314,7 +1314,7 @@ var SCREENS = (function () {
     notice('StartFailed', ['U32']);
     notice('SyncFailed', ['U15', 'U33']);
     S[L('Ready.Confirming')] = readyLobby(R, false, false, 'Confirming', { back: 'disabled', buttons: [B.confirming], decided: ['U53'] });
-    S[L('Ready.WaitingForOpponent')] = readyLobby(R, true, false, 'WaitingForOpponent', { status: READY_TEXT.waiting, timer: READY_TIMERS.ready,
+    S[L('Ready.WaitingForOpponent')] = readyLobby(R, true, false, 'WaitingForOpponent', { status: READY_TEXT.waiting, dots: true,
       buttons: [B.cancelReady], decided: ['U33', 'U34'] });
     S[L('Ready.OpponentReady')] = readyLobby(R, false, true, 'OpponentReady', { status: READY_TEXT.opponentReady });
     S[L('Ready.OpponentReady.Confirming')] = readyLobby(R, false, true, 'Confirming', { status: READY_TEXT.opponentReady, back: 'disabled',
@@ -1336,7 +1336,7 @@ var SCREENS = (function () {
     S[L('OpponentDisconnected')] = readyLobby(R, false, false, 'OpponentDisconnected', { status: READY_TEXT.opponentDisconnected, timer: READY_TIMERS.reconnect,
       buttons: [], decided: ['U32', 'U34'] });
     // 期限切れ (決定 U7 / U10 / U18): Ready は出さず、ホストは Create Match、クライアントは Join Match
-    S[L('CodeExpired')] = lobby(R, { status: ROOM_TEXT.codeExpired, codeHint: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
+    S[L('CodeExpired')] = lobby(R, { status: ROOM_TEXT.codeExpired, codeHint: false, copyCode: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
       decided: ['U7', 'U10'].concat(R === 'Client' ? ['U18'] : []), context: ROOM_CONTEXT.CodeExpired });
   }
   var errMsg = {
@@ -1589,7 +1589,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U20', title: '結果画面: 勝敗・両者の名前・スコア・終わった理由を出す',
     desc: '結果画面には、勝敗 (Win / Lose / Draw / No contest。画面は "WIN!" / "LOSE" / "DRAW" / "NO CONTEST")、両者の名前、スコア、終わった理由を出す。' +
-      'スコアが決まっていないときは、"----" などを出さずに行ごと出さない (モックでは No contest のとき)。モックのスコアはデモ値。' +
+      'スコアが決まっていないときは、"----" などを出さずに行ごと出さない。' +
+      '2026-10-17 の qniapp/qa2#1891 FB 7 で、スコアはどの結果画面にも出さず、勝敗とレーティングの変化だけにした。' +
       '通常の決着のときの終わった理由の文言と引き分けになる条件は U44 で決まった (2026-10-08: 時間切れで "Time is up"、同点なら "Same score when time ran out")。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U21', title: 'レーティング: Friend Match は変わらない。ランダム対戦は Elo (初期値 1000、K=24)。同じ相手との再戦は変わらない',
@@ -1667,11 +1668,12 @@ var UNDECIDED = [
       'そのため、図07 の「クライアントが別画面へ移ってもマッチを残し、赤い "Ready to start" トーストで戻る」流れは無くなった (U10 / U18 も解消)。アプリを離れたときに相手に出す表示は U53 ("Opponent is no longer ready.")。ホストの ‹ は U14 (2026-10-07) で変わった: 部屋を残して帯で示し、ホストの Ready は消える。確認を出すのはクライアントだけ (U9)。 ' +
       '2026-10-10 の U57 で、ホストの ‹ も確認 ("Close this room?") を出すようになった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
-  { id: 'U36', title: 'Ready 画面: プレイヤーごとのカード ("✓ Ready" / "Not ready")。押した側に "Waiting for opponent…"・60 秒のカウントダウン・Cancel Ready',
-    desc: 'Ready 画面にはプレイヤーごとにカードを出し (ホストが離れている間、クライアントのカードのホストは "Away")、"✓ Ready" か "Not ready" を表示する。Ready を押した側には "Waiting for opponent…"、60 秒のカウントダウン、Cancel Ready を出す。' +
+  { id: 'U36', title: 'Ready 画面: プレイヤーごとのカード ("✓ Ready" / "Not ready")。押した側に "Waiting for opponent…"・Cancel Ready',
+    desc: 'Ready 画面にはプレイヤーごとにカードを出し (ホストが離れている間、クライアントのカードのホストは "Away")、"✓ Ready" か "Not ready" を表示する。Ready を押した側には "Waiting for opponent…"、待っている印、Cancel Ready を出す。' +
       '押していない側には "Opponent is ready. Are you?" を出す。押して送っている間は "Confirming…" を出す。' +
-      'モックではカードの順は自分が左 (YOU 付き)、"Confirming…" は Ready ボタンの場所に無効表示で出す。カウントダウンは押した直後の "60s" のまま描く (実時間では減らさない)。 ' +
-      '2026-10-10 の U57 でホストは部屋を離れられなくなったので、カードの "Away" は無い。',
+      'モックではカードの順は自分が左 (YOU 付き)、"Confirming…" は Ready ボタンの場所に無効表示で出す。待っている印は "Searching for an opponent…" と同じ点の動き。 ' +
+      '2026-10-10 の U57 でホストは部屋を離れられなくなったので、カードの "Away" は無い。' +
+      '決めたときは 60 秒のカウントダウンも出していたが、急かされている印象を与えるので秒数は出さないことにした (#1891 の FB 6)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U37', title: 'オンライン対戦は ☰ MATCH MENU。開いても試合は止まらない',
     desc: '案A。オンライン対戦では VsAI のポーズポップアップの代わりに MATCH MENU (☰) を出す。VsAI やソロのポーズのように Time.timeScale = 0 でゲームを止めることはせず、メニューを開いている間も試合は続く。' +
@@ -1704,7 +1706,7 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U44', title: '時間切れで得点の高いほうが勝ち、同点なら引き分け ("Time is up" / "Same score when time ran out")',
     desc: '試合は時間切れで終わり、得点の高いほうが勝ち。同点なら引き分け (DRAW)。結果画面の終わった理由は、時間切れなら "Time is up"、同点の引き分けなら "Same score when time ran out" ' +
-      '(以前のモックの仮の "Match finished" を置き換えた)。モックでは端末の下のモック操作「時間切れ」の勝ち / 負け / 同点で決着させる (得点の計算は対象外。スコアはデモ値)。',
+      '(以前のモックの仮の "Match finished" を置き換えた)。モックでは端末の下のモック操作「時間切れ」の勝ち / 負け / 同点で決着させる (得点の計算は対象外。結果画面にスコアは出さない、FB 7)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U45', title: '降参・切断・No contest で終わった試合のあとは、どちらからも再戦できない',
     desc: '降参・切断で勝敗が決まった試合と、No contest の試合のあとは、どちらの側にも Rematch を出さない (降参で勝った側からも申し込めない)。これまでのモックのとおり。' +

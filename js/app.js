@@ -174,7 +174,10 @@
     if (spec.back === 'disabled') back = '<span class="back disabled" aria-disabled="true">‹</span>';
     else if (spec.back) back = '<button type="button" class="back"' + attrs(dev, spec.back) + ' aria-label="Back">‹</button>';
     else back = '<span class="back hidden-back">‹</span>';
-    return '<div class="hdr">' + back + '<div class="title">' + esc(title || '') + '</div></div>';
+    // Random Match と Friend Match トップの右上の Profile (決定 U56、#1891 の FB 12)。保存した絵文字を添え、押すと今の画面の上にダイアログで開く
+    var profile = spec.profile ? '<button type="button" class="hdr-profile" aria-haspopup="dialog"' + attrs(dev, 'profile') + '>' +
+      '<span class="hp-emoji" aria-hidden="true">' + esc(app.state[dev + 'Emoji']) + '</span>Profile</button>' : '';
+    return '<div class="hdr">' + back + '<div class="title">' + esc(title || '') + '</div>' + profile + '</div>';
   }
 
   function buttonsHtml(dev, buttons) {
@@ -205,30 +208,8 @@
   var VIEWS = {
     online: function (dev, s) {
       return header(dev, s, s.title) + '<div class="menu">' + s.items.map(function (it) {
-        // Profile (決定 U56) は対戦の入口より控えめにし、保存した絵文字を添える
-        var label = it.profile ? '<span class="mi-label"><span class="mi-emoji" aria-hidden="true">' + app.state[dev + 'Emoji'] + '</span>' + esc(it.label) + '</span>' : esc(it.label);
-        return '<button type="button" class="menu-item' + (it.profile ? ' secondary' : '') + '"' + attrs(dev, it.event) + '>' + label + '<span class="chev">›</span></button>';
+        return '<button type="button" class="menu-item"' + attrs(dev, it.event) + '>' + esc(it.label) + '<span class="chev">›</span></button>';
       }).join('') + inlineNoticeHtml(dev, s.inlineNotice) + '</div>';
-    },
-    // Profile 画面 (決定 U56): 上に VS 画面のカードの見本 (選ぶたびに変わる)、絵文字とあいさつを 1 つずつ、下に Save / Cancel
-    profile: function (dev, s) {
-      var emoji = app.state[dev + 'DraftEmoji'];
-      var greeting = app.state[dev + 'DraftGreeting'];
-      var choice = function (cls, ev, selected, label, content) {
-        return '<button type="button" class="' + cls + (selected ? ' selected' : '') + '" aria-pressed="' + selected + '"' +
-          (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
-      };
-      return header(dev, s, s.title) + '<div class="profile">' +
-        '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(PLAYERS[dev].name, emoji, greeting) + '</div>' +
-        '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
-          return choice('pf-emoji', 'pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
-        }).join('') + '</div>' +
-        '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
-          return choice('pf-greet', 'pickGreeting.' + g.id, g.text === greeting, null, esc(g.text));
-        }).join('') + '</div></div>' +
-        '<div class="actions pf-actions"><div class="btn-row">' +
-        '<button type="button" class="btn primary"' + attrs(dev, 'saveProfile') + '>Save</button>' +
-        '<button type="button" class="btn"' + attrs(dev, 'cancelProfile') + '>Cancel</button></div></div>';
     },
     friendTop: function (dev, s) {
       var input = s.input
@@ -324,7 +305,7 @@
 
   function fmt(n) { return n.toLocaleString('en-US'); }
 
-  // VS 画面のカードの中身。Profile の見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)
+  // VS 画面のカードの中身。Profile のダイアログの見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)
   function vsCardBody(name, emoji, greeting, rating) {
     return '<div class="vs-emoji">' + esc(emoji) + '</div>' +
       '<div class="vs-name">' + esc(name) + '</div>' +
@@ -444,7 +425,10 @@
       return '<span class="mc-label">モック操作 (切断中):</span>' + envBtn('net.recovered', overlay === DISCONNECT_OVERLAYS.self ? '再接続する' : '相手が戻る') +
         envBtn('timer.disconnectTimeout', '20 秒たつ');
     }
-    if (/\.Matchmake/.test(state) && MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(app.state, dev + '.' + ev); })) {
+    // Profile のダイアログ (決定 U56) を開いている間も検索中の操作を出す (ダイアログの外の操作なので、押せない表示になる)
+    var undimmed = Object.assign({}, app.state);
+    undimmed[dev + 'Dialog'] = null;
+    if (/\.Matchmake/.test(state) && MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(undimmed, dev + '.' + ev); })) {
       return '<span class="mc-label">モック操作 (検索中):</span>' + btn('leaveApp', 'アプリを離れる') + btn('searchTimeout', '60 秒たつ');
     }
     if (/\.FriendMatch\.Lobby\./.test(state)) {
@@ -475,9 +459,35 @@
       }).join('') + '</div></div>';
   }
 
+  // Profile のダイアログ (決定 U56、#1891 の FB 12): 今の画面の上に、題名と右上の ×、VS 画面のカードの見本 (選ぶたびに変わる)、
+  // 絵文字とあいさつを 1 つずつ、下に Save / Cancel。× と Cancel (と Esc) は同じ
+  function profileDialogHtml(dev, d) {
+    var emoji = app.state[dev + 'DraftEmoji'];
+    var greeting = app.state[dev + 'DraftGreeting'];
+    var choice = function (cls, ev, selected, label, content) {
+      return '<button type="button" class="' + cls + (selected ? ' selected' : '') + '" aria-pressed="' + selected + '"' +
+        (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
+    };
+    var titleId = 'pf-title-' + dev;
+    return '<div class="dim"><div class="dialog pf-dialog" role="dialog" aria-modal="true" aria-labelledby="' + titleId + '">' +
+      '<div class="pf-head"><div class="d-title" id="' + titleId + '">' + esc(d.title) + '</div>' +
+      '<button type="button" class="pf-close" aria-label="Close"' + attrs(dev, d.close) + '>×</button></div>' +
+      '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(PLAYERS[dev].name, emoji, greeting) + '</div>' +
+      '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
+        return choice('pf-emoji', 'dialog.pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
+      }).join('') + '</div>' +
+      '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
+        return choice('pf-greet', 'dialog.pickGreeting.' + g.id, g.text === greeting, null, esc(g.text));
+      }).join('') + '</div>' +
+      '<div class="btn-row pf-actions">' +
+      '<button type="button" class="btn primary"' + attrs(dev, 'dialog.saveProfile') + '>Save</button>' +
+      '<button type="button" class="btn"' + attrs(dev, d.close) + '>Cancel</button></div></div></div>';
+  }
+
   function dialogHtml(dev, key) {
     if (!key) return '';
     var d = DIALOGS[key];
+    if (d.profile) return profileDialogHtml(dev, d);
     return '<div class="dim"><div class="dialog" role="dialog"><div class="d-title">' + esc(d.title) + '</div>' +
       '<p class="d-body">' + esc(d.body) + '</p>' +
       d.buttons.map(function (b) {
@@ -496,9 +506,14 @@
     var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + noticeHtml(dev, spec.notice) + dialogHtml(dev, dlg);
     // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを最初からやり直させない)
     if (screen.dataset.html !== html) {
+      // 差し替える前にフォーカスしていたボタンへ、差し替えたあともフォーカスを戻す (キーボードで Profile の候補を続けて選べるように)。
+      // Profile のダイアログを開いたときは、フォーカスをダイアログの中 (×) へ移す
+      var focused = screen.contains(document.activeElement) && document.activeElement.dataset.ev;
       screen.className = 'screen view-' + spec.view;
       screen.innerHTML = html;
       screen.dataset.html = html;
+      var target = (focused && $('[data-ev="' + focused + '"]', screen)) || (dlg && $('.pf-dialog .pf-close', screen));
+      if (target && (focused || dlg)) target.focus({ preventScroll: true });
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
   }
@@ -627,6 +642,8 @@
     Engine.DEVICES.forEach(function (d) {
       add(d, sc && sc[d + 'Note']);
       [].concat(SCREENS[app.state[d]].context).forEach(function (text) { add(d, text); });
+      var dlg = app.state[d + 'Dialog'];
+      if (dlg) add(d, DIALOGS[dlg].context);
     });
     return lines.map(function (text) {
       var who = seen[text].map(function (d) {
@@ -760,9 +777,20 @@
     else if (t.id === 'filter-available') renderTable();
   });
 
+  // Esc で Profile のダイアログを閉じる (× と Cancel と同じ)。両端末で開いているときは、フォーカスのある端末 (無ければホスト) を閉じる
+  function closeProfileByEsc(target) {
+    var focusedDev = target.closest && target.closest('.device');
+    var devs = Engine.DEVICES.filter(function (d) { return app.state[d + 'Dialog'] === 'profile'; });
+    if (!devs.length) return false;
+    var dev = focusedDev && devs.indexOf(focusedDev.dataset.dev) !== -1 ? focusedDev.dataset.dev : devs[0];
+    userFire(dev + '.' + DIALOGS.profile.close);
+    return true;
+  }
+
   document.addEventListener('keydown', function (e) {
     if (e.target.closest('input, select, textarea')) return;
-    if (e.key === 'ArrowRight') nextStep();
+    if (e.key === 'Escape' && closeProfileByEsc(e.target)) e.preventDefault();
+    else if (e.key === 'ArrowRight') nextStep();
     else if (e.key === 'ArrowLeft' && app.scenario) rebuild(app.step - 1);
   });
 

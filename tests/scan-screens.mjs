@@ -387,14 +387,14 @@ function scan() {
       if (OLD) findings.push(`${at}: 古い文言 "${OLD[0]}" が残っている`);
       // Match Code の期限は画面に出さない (U58)
       if (/expires in/i.test(text)) findings.push(`${at}: Match Code の期限の表示が残っている`);
-      // 部屋の画面: ホストにだけ Match Code の下に "Share this code with your friend!" (U58)。期限切れと再接続できなかった画面には出さない。数字は Match Code・カウントダウンだけ
+      // 部屋の画面: ホストにだけ Match Code の下に "Share this code with your friend!" (U58)。期限切れと再接続できなかった画面には出さない。数字は Match Code・カードのレーティング (#1891 FB 4)・カウントダウンだけ
       const hint = screen.querySelector('.code-hint');
       const wantHint = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.(CodeExpired|CouldNotReconnect)\b/.test(state);
       if (!!hint !== wantHint || (hint && hint.textContent !== CODE_HINT)) findings.push(`${at}: Match Code の下の一行が ${hint ? hint.textContent : 'なし'} (期待: ${wantHint ? CODE_HINT : 'なし'})`);
       if (/\.FriendMatch\.Lobby\./.test(state)) {
         const timerText = (screen.querySelector('.rd-timer') || { textContent: '\u0000' }).textContent;
-        const rest = text.replace(MATCH_CODE_TEXT, '').replace(timerText, '');
-        if (/\d/.test(rest)) findings.push(`${at}: Match Code・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
+        const rest = [...screen.querySelectorAll('.rd-rating')].reduce((t, r) => t.replace(r.textContent, ''), text.replace(MATCH_CODE_TEXT, '').replace(timerText, ''));
+        if (/\d/.test(rest)) findings.push(`${at}: Match Code・レーティング・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
       }
       // 画面の下の帯 (トースト): 端末の画面に収まり、ボタンや入力欄・お知らせと重ならない。作り直しに失敗したとき (⚠ createFailed) は "Connection failed" (U6 / U12)
       const toast = screen.querySelector('.toast');
@@ -416,6 +416,11 @@ function scan() {
         const states = cards.map((c) => c.querySelector('.rd-state').textContent);
         if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready") でない (${states.join(', ')})`);
         if (!cards[0] || !cards[0].querySelector('.you') || screen.querySelectorAll('.rd-card .you').length !== 1) findings.push(`${at}: 自分のカードに YOU が無い`);
+        // 名前の横にレーティング (#1891 FB 4)。VS 画面と同じ名前と Rating 1000 (決定 U48)
+        const names = cards.map((c) => c.querySelector('.rd-name').textContent);
+        const wantNames = d === 'host' ? ['Yasuhito1000', 'ogwssk1000'] : ['ogwssk1000', 'Yasuhito1000'];
+        if (names.join() !== wantNames.join() || cards.some((c) => !c.querySelector('.rd-name .rd-rating'))) findings.push(`${at}: カードの名前とレーティングが ${names.join(', ')}`);
+        cards.forEach((c) => { const n = c.querySelector('.rd-name'); if (n.scrollWidth > c.clientWidth) findings.push(`${at}: カードの名前がはみ出している (${n.textContent})`); });
         const timer = screen.querySelector('.rd-timer');
         const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /\.(OpponentDisconnected|Reconnecting|ConnectionLost|FriendDisconnected)\b/.test(state) ? '20s' : null;
         if ((timer ? timer.textContent : null) !== wantTimer) findings.push(`${at}: カウントダウンが ${timer ? timer.textContent : 'なし'} (期待: ${wantTimer || 'なし'})`);

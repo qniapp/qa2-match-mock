@@ -213,6 +213,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   font-size: 10px; font-weight: 700; line-height: 16px; background: var(--text); color: var(--navy);
 }
 .rd-name { font-size: 16px; font-weight: 700; margin-bottom: 10px; white-space: nowrap; }
+.rd-rating { margin-left: 6px; font-size: 13px; font-weight: 400; color: var(--muted); }
 .rd-state {
   display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
   color: #9AA3B8; background: rgba(255, 255, 255, 0.05); border: 1px solid #3A4466;

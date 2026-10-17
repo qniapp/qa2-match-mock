@@ -4,17 +4,18 @@
 // ランダム対戦の画面に 60 秒 (仮の長さ) が出ないこと、検索中のモック操作が端末の外にあることも確かめる (決定 U13)。
 // アプリを離れて検索が止まった通知がモーダルではなく、メニューをさまたげないことも確かめる (決定 U43)。
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
-// No contest にスコアの行が無いこと (値が決まっていないスコアは "----" ではなく行ごと出さない) も確かめる (決定 U20 / U27 / U28 / U30)。
+// 結果画面にスコアの行が無いこと (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ) も確かめる (決定 U20 / U27 / U28 / U30)。
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
-// 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
+// 再接続を待つ 20s のカウントダウンだけが数字として出ること (自分だけ Ready で待つ間は秒数ではなく待っている印 (点の動き) を出す、#1891 の FB 6)、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
-// 部屋の画面 (決定 U1〜U19) は、Match Code の下にホストにだけ "Share this code with your friend!" があり期限の表示が無いこと (U58)、クライアントのカードに "Away" が無いこと、
+// 部屋の画面 (決定 U1〜U19) は、Match Code の下にホストにだけ "Share this code with your friend!" があり期限の表示が無いこと (U58)、
+// Match Code のコピーのボタンがホストにだけ ("Copy room code" の名前付きのアイコン。期限切れには無い、#1891 FB 5) あること、クライアントのカードに "Away" が無いこと、
 // 古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
 // 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
 // 部屋の画面の出口は左上の ‹ だけ (決定 U57): Close Room / Leave Room のボタンが無く、‹ はホストで "Close this room?"、クライアントで "Leave this room?" の確認を開き、
 // 確認が画面に収まって Close Room / Leave Room と Keep Waiting を押せることも確かめる。
 // 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
-// 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" であること (U49)、
+// 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、結果画面にスタンプのミュートのボタンが無いこと (U49、#1891 の FB 8)、
 // 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
 // 最初に、hash なしで開くと自由操作 (両端末が最初の画面で、ボタンを押せ、自動遷移が実時間で進む) で、ページに消した部品 (左のシナリオのパネル、
 // 右パネルの状態名の行・「ほか:」のバッジの列・ログタブ、凡例の未決・点線 / 実線、端末の上の黄色い未決の帯、未決トグルのラジオ) が無く、
@@ -25,7 +26,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, extname, normalize } from 'node:path';
+import { join, extname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -40,9 +41,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const url = `http://127.0.0.1:${server.address().port}/index.html`;
 
-const profile = mkdtempSync(join(tmpdir(), 'qa2-scan-'));
+// Chromium は TMPDIR の下に Unix ソケット (SingletonSocket) を作り、パスが約 108 バイトを超えると起動できない。
+// TMPDIR に .. が含まれるとそのまま長くなるので、正規化してから渡す
+const tmp = resolve(tmpdir());
+const profile = mkdtempSync(join(tmp, 'qa2-scan-'));
 const chrome = spawn(process.env.CHROMIUM || 'chromium', ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`,
-  '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' });
+  '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMPDIR: tmp } });
 const exited = new Promise((r) => chrome.once('exit', r));
 let send = null;
 // Browser.close で子プロセス (ネットワークなど) ごと閉じ、終わってからプロファイルを消す
@@ -99,9 +103,8 @@ try {
   await open('');
   pageFindings.push(...await evaluate(profileReload));
   // localStorage に既定値と違う値がある状態で全シナリオを描く (シナリオはいつも最初の値から)
-  const { frames, findings, norow, mutedVs } = await evaluate(scan);
+  const { frames, findings, norow } = await evaluate(scan);
   findings.unshift(...pageFindings);
-  if (!mutedVs) findings.push('スタンプをミュートしたままの VS 画面 (あいさつが隠れないこと) を描いたシナリオが無い');
 
   console.log(`${frames} 枚 (全シナリオの全手順と、カウントダウン 3 / 2 / 1) の両端末の画面を確かめました`);
   const norowStates = Object.keys(norow);
@@ -116,7 +119,7 @@ try {
     console.log('ok  左のシナリオのパネル、右パネルの状態名の行・「ほか:」・ログタブ、凡例の未決・点線 / 実線、端末の上の未決の帯、トグルのラジオはありません');
     console.log('ok  タブの名前は「決定」で、モック設定は閉じています');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
-    console.log(`ok  Profile: Cancel は保存せず、Save したものは開き直しても残り、シナリオは localStorage に関係なく最初の値から。ミュートしたままの VS 画面 ${mutedVs} 枚にもあいさつがあります`);
+    console.log(`ok  Profile: Cancel は保存せず、Save したものは開き直しても残り、シナリオは localStorage に関係なく最初の値から`);
   }
 } finally {
   await cleanup();
@@ -235,7 +238,6 @@ function scan() {
   const findings = [];
   const norow = {};
   let frames = 0;
-  let mutedVs = 0;
   let current = null; // 描いている手順の遷移表の状態
   // 手順の移動は MockApp.show (#s=..&step=..&cd=.. の deep link と同じ) を直接呼んで行う。
   // hash を書き換えて回すと、Chromium が短時間の大量の history.replaceState を黙って捨てるため、途中から手順が進まなくなる。
@@ -294,7 +296,7 @@ function scan() {
         });
         scroller.scrollTo(sx, sy);
       }
-      // 結果画面とゲーム画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアが決まっていなければ行ごと出さない。
+      // 結果画面とゲーム画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアは出さない (FB 7)。
       // 切断を待つ間 (決定 U46 / U54) だけは、残りの秒数 "20s" を濃い暗幕の上のパネルに出す
       const waitingTimer = screen.querySelector('.m-dim.paused .m-timer');
       const isWaiting = /\.(Game|Opponent)\.(Disconnected|OpponentDisconnected)\b/.test(state);
@@ -318,7 +320,7 @@ function scan() {
         if (ratings.join() !== `Rating ${ELO.initial},Rating ${ELO.initial}`) findings.push(`${at}: VS 画面のレーティングが ${ratings.join(' / ')}`);
       }
       if (/\bRank\b/.test(text)) findings.push(`${at}: "Rank" が残っている`);
-      // VS 画面の絵文字とあいさつ (決定 U56): 部屋を作った・入った・探し始めたときに固定した値。スタンプのミュート (U49) でも隠さない
+      // VS 画面の絵文字とあいさつ (決定 U56): 部屋を作った・入った・探し始めたときに固定した値
       const d = dev.dataset.dev;
       if (screen.querySelector('.vs')) {
         ['host', 'client'].forEach((who) => {
@@ -327,7 +329,6 @@ function scan() {
           if (card !== want) findings.push(`${at}: VS 画面の ${who} のカードが ${card} (期待: ${want})`);
           if (card.includes("'")) findings.push(`${at}: VS 画面の ${who} のあいさつにまっすぐな ' (’ にそろえる)`);
         });
-        if (current[d + 'Mute']) mutedVs++;
       }
       // Online Battle の Profile (決定 U56): 保存した絵文字を添える。押せるのは Online Battle とその中の通知のときだけ
       const pItem = screen.querySelector('.menu-item.secondary');
@@ -378,23 +379,28 @@ function scan() {
         });
         if (close) { const cr = close.getBoundingClientRect(); if (cr.right > nr.right || cr.top < nr.top || cr.bottom > nr.bottom) findings.push(`${at}: Close が帯からはみ出している`); }
       }
-      // スタンプのミュート (決定 U49)
-      const mute = screen.querySelector('.r-mute');
-      if (mute && !/^.?.?(Mute|Unmute) opponent emotes$/u.test(mute.textContent)) findings.push(`${at}: ミュートのボタンが ${mute.textContent}`);
-      if (mute && (/🔕/.test(state) !== /Unmute/.test(mute.textContent))) findings.push(`${at}: ミュートのボタンが状態と合わない (${mute.textContent})`);
+      // スタンプのミュートは無い (U49、#1891 の FB 8)
+      if (/opponent emotes/i.test(text) || /🔕/.test(state)) findings.push(`${at}: スタンプのミュートが残っている`);
       // Ready 画面 (決定 U31 / U32 / U36) と部屋の画面 (決定 U1〜U19)。古い文言は出さない
       const OLD = text.match(/Start Match|Ready to start|Stay in Room|Go Back|Leave Match|Cancel Match|Cancel this match|Leave this match|Match expired\.|cancelled the match|left the match\./);
       if (OLD) findings.push(`${at}: 古い文言 "${OLD[0]}" が残っている`);
       // Match Code の期限は画面に出さない (U58)
       if (/expires in/i.test(text)) findings.push(`${at}: Match Code の期限の表示が残っている`);
-      // 部屋の画面: ホストにだけ Match Code の下に "Share this code with your friend!" (U58)。期限切れと再接続できなかった画面には出さない。数字は Match Code・カウントダウンだけ
+      // 部屋の画面: ホストにだけ Match Code の下に "Share this code with your friend!" (U58)。期限切れと再接続できなかった画面には出さない。数字は Match Code・カードのレーティング (#1891 FB 4)・カウントダウンだけ
       const hint = screen.querySelector('.code-hint');
       const wantHint = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.(CodeExpired|CouldNotReconnect)\b/.test(state);
       if (!!hint !== wantHint || (hint && hint.textContent !== CODE_HINT)) findings.push(`${at}: Match Code の下の一行が ${hint ? hint.textContent : 'なし'} (期待: ${wantHint ? CODE_HINT : 'なし'})`);
+      // Match Code のコピーのボタン (#1891 FB 5): ホストの部屋の画面にだけ、文字の無いアイコンで "Copy room code" の名前と title がある。期限切れには無い
+      const copy = screen.querySelector('.copy');
+      const wantCopy = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.CodeExpired\b/.test(state);
+      if (!!copy !== wantCopy) findings.push(`${at}: Match Code のコピーのボタンが ${copy ? 'ある' : '無い'} (期待: ${wantCopy ? 'ある' : '無い'})`);
+      if (copy && (copy.tagName !== 'BUTTON' || copy.getAttribute('aria-label') !== 'Copy room code' || copy.title !== 'Copy room code' || !copy.querySelector('svg') || copy.textContent.trim())) {
+        findings.push(`${at}: Match Code のコピーのボタンが "Copy room code" の名前付きのアイコンでない`);
+      }
       if (/\.FriendMatch\.Lobby\./.test(state)) {
         const timerText = (screen.querySelector('.rd-timer') || { textContent: '\u0000' }).textContent;
-        const rest = text.replace(MATCH_CODE_TEXT, '').replace(timerText, '');
-        if (/\d/.test(rest)) findings.push(`${at}: Match Code・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
+        const rest = [...screen.querySelectorAll('.rd-rating')].reduce((t, r) => t.replace(r.textContent, ''), text.replace(MATCH_CODE_TEXT, '').replace(timerText, ''));
+        if (/\d/.test(rest)) findings.push(`${at}: Match Code・レーティング・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
       }
       // 画面の下の帯 (トースト): 端末の画面に収まり、ボタンや入力欄・お知らせと重ならない。作り直しに失敗したとき (⚠ createFailed) は "Connection failed" (U6 / U12)
       const toast = screen.querySelector('.toast');
@@ -416,9 +422,16 @@ function scan() {
         const states = cards.map((c) => c.querySelector('.rd-state').textContent);
         if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready") でない (${states.join(', ')})`);
         if (!cards[0] || !cards[0].querySelector('.you') || screen.querySelectorAll('.rd-card .you').length !== 1) findings.push(`${at}: 自分のカードに YOU が無い`);
+        // 名前の横にレーティング (#1891 FB 4)。VS 画面と同じ名前と Rating 1000 (決定 U48)
+        const names = cards.map((c) => c.querySelector('.rd-name').textContent);
+        const wantNames = d === 'host' ? ['Yasuhito1000', 'ogwssk1000'] : ['ogwssk1000', 'Yasuhito1000'];
+        if (names.join() !== wantNames.join() || cards.some((c) => !c.querySelector('.rd-name .rd-rating'))) findings.push(`${at}: カードの名前とレーティングが ${names.join(', ')}`);
+        cards.forEach((c) => { const n = c.querySelector('.rd-name'); if (n.scrollWidth > c.clientWidth) findings.push(`${at}: カードの名前がはみ出している (${n.textContent})`); });
         const timer = screen.querySelector('.rd-timer');
-        const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /\.(OpponentDisconnected|Reconnecting|ConnectionLost|FriendDisconnected)\b/.test(state) ? '20s' : null;
+        const wantTimer = /\.(OpponentDisconnected|Reconnecting|ConnectionLost|FriendDisconnected)\b/.test(state) ? '20s' : null;
         if ((timer ? timer.textContent : null) !== wantTimer) findings.push(`${at}: カウントダウンが ${timer ? timer.textContent : 'なし'} (期待: ${wantTimer || 'なし'})`);
+        const dots = screen.querySelector('.rd-info .dots');
+        if (!!dots !== /WaitingForOpponent/.test(state)) findings.push(`${at}: 待っている印 (点の動き) が ${dots ? 'ある' : '無い'} (FB 6: Waiting for opponent… にだけ出す)`);
         ['leaveApp', 'disconnect'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]`)) findings.push(`${at}: 端末の下のモック操作に ${ev} が無い`);
         });
@@ -465,7 +478,7 @@ function scan() {
       }
       if (/----/.test(text)) findings.push(`${at}: 値の決まっていない ---- がある`);
       if (screen.querySelector('[data-ev="stampShown"], [data-ev="stampInterval"], [data-ev="disconnect"], [data-ev="win"], [data-ev="draw"]')) findings.push(`${at}: モック操作が端末の画面の中にある`);
-      if (/NoContestResult/.test(state) && /Score/.test(text)) findings.push(`${at}: No contest にスコアの行がある`);
+      if (screen.querySelector('.result') && /Score/.test(text)) findings.push(`${at}: 結果画面にスコアの行がある`);
       if (/💬 (gg|thanks|nice)/.test(state)) {
         ['stampShown', 'stampInterval'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]:not([data-norow])`)) findings.push(`${at}: 端末の下のモック操作で ${ev} を押せない`);
@@ -492,5 +505,5 @@ function scan() {
       }
     }
   });
-  return { frames, findings, norow, mutedVs };
+  return { frames, findings, norow };
 }

@@ -106,7 +106,7 @@
     return out;
   }
 
-  // Profile の Save (決定 U56) で保存した値が変わったら localStorage に残す。シナリオの再生中 (外れたあとも) は書かない
+  // Profile (決定 U56) で選んで保存した値が変わったら localStorage に残す。シナリオの再生中 (外れたあとも) は書かない
   function persistProfiles(before, after) {
     if (app.scenario || !storage) return;
     if (JSON.stringify(profilesOf(before)) !== JSON.stringify(profilesOf(after))) ProfileStore.save(storage, profilesOf(after));
@@ -471,19 +471,20 @@
       }).join('') + '</div></div>';
   }
 
-  // Profile のダイアログ (決定 U56、#1891 の FB 12): 今の画面の上に、題名と右上の ×、VS 画面のカードの見本 (選ぶたびに変わる)、
-  // 絵文字とあいさつを 1 つずつ、下に Save / Cancel。× と Cancel (と Esc) は同じ
+  // Profile のダイアログ (決定 U56、#1891 の FB 12): 今の画面の上に、左上の ‹ と題名、VS 画面のカードの見本、絵文字とあいさつを 1 つずつ。
+  // 選ぶとすぐ保存し、下に "Saved" を出す。閉じるのは ‹ だけ (Save / Cancel・×・Esc・外側を押して閉じるは無い、#1891 の FB 14)
   function profileDialogHtml(dev, d) {
-    var emoji = app.state[dev + 'DraftEmoji'];
-    var greeting = app.state[dev + 'DraftGreeting'];
+    var emoji = app.state[dev + 'Emoji'];
+    var greeting = app.state[dev + 'Greeting'];
+    var saved = app.state[dev + 'ProfileSaved'];
     var choice = function (cls, ev, selected, label, content) {
       return '<button type="button" class="' + cls + (selected ? ' selected' : '') + '" aria-pressed="' + selected + '"' +
         (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
     };
     var titleId = 'pf-title-' + dev;
     return '<div class="dim"><div class="dialog pf-dialog" role="dialog" aria-modal="true" aria-labelledby="' + titleId + '">' +
-      '<div class="pf-head"><div class="d-title" id="' + titleId + '">' + esc(d.title) + '</div>' +
-      '<button type="button" class="pf-close" aria-label="Close"' + attrs(dev, d.close) + '>×</button></div>' +
+      '<div class="pf-head"><button type="button" class="pf-back" aria-label="Back"' + attrs(dev, d.close) + '>‹</button>' +
+      '<div class="d-title" id="' + titleId + '">' + esc(d.title) + '</div></div>' +
       '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(dev, PLAYERS[dev].name, emoji, greeting) + '</div>' +
       '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
         return choice('pf-emoji', 'dialog.pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
@@ -491,9 +492,8 @@
       '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
         return choice('pf-greet', 'dialog.pickGreeting.' + g.id, g.id === greeting, null, esc(g[app.lang[dev]]));
       }).join('') + '</div>' +
-      '<div class="btn-row pf-actions">' +
-      '<button type="button" class="btn primary"' + attrs(dev, 'dialog.saveProfile') + '>Save</button>' +
-      '<button type="button" class="btn"' + attrs(dev, d.close) + '>Cancel</button></div></div></div>';
+      // 何も選んでいないうちも場所を取っておき、"Saved" が出てもダイアログの高さを変えない
+      '<p class="pf-saved' + (saved ? ' shown' : '') + '" role="status">' + (saved ? '\u2713 Saved' : '') + '</p></div></div>';
   }
 
   function dialogHtml(dev, key) {
@@ -519,13 +519,14 @@
     // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを最初からやり直させない)
     if (screen.dataset.html !== html) {
       // 差し替える前にフォーカスしていたボタンへ、差し替えたあともフォーカスを戻す (キーボードで Profile の候補を続けて選べるように)。
-      // Profile のダイアログを開いたときは、フォーカスをダイアログの中 (×) へ移す
+      // Profile のダイアログを開いたとき (前のフォーカスがダイアログの外) は、フォーカスをダイアログの中 (‹) へ移す
       var focused = screen.contains(document.activeElement) && document.activeElement.dataset.ev;
       screen.className = 'screen view-' + spec.view;
       screen.innerHTML = html;
       screen.dataset.html = html;
-      var target = (focused && $('[data-ev="' + focused + '"]', screen)) || (dlg && $('.pf-dialog .pf-close', screen));
-      if (target && (focused || dlg)) target.focus({ preventScroll: true });
+      var pfDialog = dlg && $('.pf-dialog', screen);
+      var target = (focused && $((pfDialog ? '.pf-dialog ' : '') + '[data-ev="' + focused + '"]', screen)) || (pfDialog && $('.pf-back', pfDialog));
+      if (target) target.focus({ preventScroll: true });
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
     $$('.lang-toggle[data-dev="' + dev + '"] [data-lang]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.lang === app.lang[dev])); });
@@ -816,20 +817,10 @@
     else if (t.id === 'filter-available') renderTable();
   });
 
-  // Esc で Profile のダイアログを閉じる (× と Cancel と同じ)。両端末で開いているときは、フォーカスのある端末 (無ければホスト) を閉じる
-  function closeProfileByEsc(target) {
-    var focusedDev = target.closest && target.closest('.device');
-    var devs = Engine.DEVICES.filter(function (d) { return app.state[d + 'Dialog'] === 'profile'; });
-    if (!devs.length) return false;
-    var dev = focusedDev && devs.indexOf(focusedDev.dataset.dev) !== -1 ? focusedDev.dataset.dev : devs[0];
-    userFire(dev + '.' + DIALOGS.profile.close);
-    return true;
-  }
-
   document.addEventListener('keydown', function (e) {
     if (e.target.closest('input, select, textarea')) return;
-    if (e.key === 'Escape' && closeProfileByEsc(e.target)) e.preventDefault();
-    else if (e.key === 'ArrowRight') nextStep();
+    // Esc では Profile のダイアログを閉じない (閉じるのは左上の ‹ だけ、#1891 の FB 14)
+    if (e.key === 'ArrowRight') nextStep();
     else if (e.key === 'ArrowLeft' && app.scenario) rebuild(app.step - 1);
   });
 

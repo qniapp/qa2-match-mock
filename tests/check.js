@@ -1405,34 +1405,38 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     }
     if (!SCREENS[`${R}.Matchmake`].profile || SCREENS[`${R}.Matchmake`].title !== 'Random Match' || SCREENS[`${R}.FriendMatch.Room`].title !== 'Friend Match') fail(`${R} の Random Match / Friend Match の画面に Profile が無い`);
     if (Engine.canFire(at(`${R}.MultiModeSelection`, `${O}.MultiModeSelection`), `${d}.profile`)) fail(`${R}: Online Battle から Profile を開ける`);
-    // ダイアログの中の操作は、絵文字 10 個・あいさつ 10 個・Save・閉じる (Cancel / × / Esc) だけ。どれも画面はそのまま
+    // ダイアログの中の操作は、絵文字 10 個・あいさつ 10 個 (相手を探している間と Friend Match トップで 1 行ずつ)・‹ で閉じるだけ。
+    // Save / Cancel は無い (#1891 の FB 14)。どれも画面はそのまま
     const inDialog = TRANSITIONS.filter((r) => r.from[d + 'Dialog'] === 'profile');
-    const want = PROFILE_EMOJIS.map((e) => `dialog.pickEmoji.${e.id}`).concat(PROFILE_GREETINGS.map((g) => `dialog.pickGreeting.${g.id}`), ['dialog.saveProfile', 'dialog.saveProfile', 'dialog.closeProfile']);
+    const picks = PROFILE_EMOJIS.map((e) => `dialog.pickEmoji.${e.id}`).concat(PROFILE_GREETINGS.map((g) => `dialog.pickGreeting.${g.id}`));
+    const want = picks.concat(picks, ['dialog.closeProfile']);
     if (inDialog.map((r) => r.event.slice(d.length + 1)).join() !== want.join()) fail(`${R} の Profile のダイアログの操作が ${inDialog.map((r) => r.event).join(', ')}`);
     for (const r of inDialog.concat(TRANSITIONS.filter((x) => x.event === `${d}.profile`))) {
       if (r.to[d] !== '=' || states(r.from[d]).some((n) => !openable.includes(n))) fail(`${r.id}: Profile の行が ${states(r.from[d]).join()} → ${r.to[d]}`);
     }
-    if (DIALOGS.profile.close !== 'dialog.closeProfile') fail('Profile のダイアログの × / Cancel が closeProfile でない');
-    // 見本は選ぶたびに変わる (Draft)。Save で保存し、閉じる (Cancel / × / Esc) は捨てる。保存した値で次に開く。どちらでも画面はそのまま
+    if (DIALOGS.profile.close !== 'dialog.closeProfile') fail('Profile のダイアログの ‹ が closeProfile でない');
+    if (/Escape[\s\S]{0,80}Profile|pf-close|saveProfile|Cancel<\/button>/.test(appJs.slice(appJs.indexOf('function profileDialogHtml')))) fail('Profile のダイアログに Save / Cancel / × か、Esc で閉じる処理が残っている');
+    // 選ぶとすぐ保存し、見本が変わって "Saved" が出る (#1891 の FB 14)。‹ で閉じても保存した値のまま、次に開くとその値から。どちらでも画面はそのまま
     for (const where of [`${R}.Matchmake`, `${R}.FriendMatch.Room`]) {
       const open = (st) => Engine.fire(st, `${d}.profile`);
       const st = d === 'host' ? at(where, `${O}.MultiModeSelection`) : at(`${O}.MultiModeSelection`, where);
       const pick = (s, e, g) => [`${d}.dialog.pickEmoji.${e}`, `${d}.dialog.pickGreeting.${g}`].reduce((x, ev) => { const r = Engine.fire(x, ev); if (!r) fail(`${ev} の行が無い`); return r ? r.state : x; }, s);
       const before = `${st[d + 'Emoji']} ${say(st[d + 'Greeting'])}`;
       let o = open(st).state;
-      if (`${o[d + 'DraftEmoji']} ${say(o[d + 'DraftGreeting'])}` !== before) fail(`${where}: Profile を開いたときの見本が保存した値でない`);
+      if (`${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== before || o[d + 'ProfileSaved'] !== false) fail(`${where}: Profile を開いたときに値が変わるか、"Saved" が出ている`);
       if (Engine.canFire(o, `${d}.back`) || Engine.canFire(o, `${d}.cancelSearch`) || Engine.canFire(o, `${d}.createMatch`)) fail(`${where}: Profile のダイアログの後ろの画面を操作できる (モーダルでない)`);
       o = pick(o, 'robot', 'goodLuck');
-      if (`${o[d + 'DraftEmoji']} ${say(o[d + 'DraftGreeting'])}` !== '\u{1F916} Good luck!' || `${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== before) fail(`${where}: Profile で選んでも見本が変わらないか、保存前に保存した値が変わる`);
+      if (o[d] !== where || o[d + 'Dialog'] !== 'profile' || `${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== '\u{1F916} Good luck!' || o[d + 'ProfileSaved'] !== true) fail(`${where}: Profile で選んでもすぐ保存されないか、"Saved" が出ない`);
+      const searchingNow = searching.includes(where);
+      if ((`${o[d + 'ShownEmoji']} ${say(o[d + 'ShownGreeting'])}` === '\u{1F916} Good luck!') !== searchingNow) fail(`${where}: 選んだ値を相手に見せる値に${searchingNow ? '写さない (相手を探している間)' : '写す (探していない)'}`);
       const c = Engine.fire(o, `${d}.dialog.closeProfile`).state;
-      if (c[d] !== where || c[d + 'Dialog'] !== null || `${c[d + 'Emoji']} ${say(c[d + 'Greeting'])}` !== before || c[d + 'DraftEmoji'] !== null) fail(`${where}: Profile を閉じても捨てられない`);
-      const saved = Engine.fire(o, `${d}.dialog.saveProfile`).state;
-      if (saved[d] !== where || saved[d + 'Dialog'] !== null || saved[d + 'DraftEmoji'] !== null || `${saved[d + 'Emoji']} ${say(saved[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: Profile の Save で保存されないか、閉じない`);
-      if (`${open(saved).state[d + 'DraftEmoji']}` !== '\u{1F916}') fail(`${where}: Profile をもう一度開くと保存した値から始まらない`);
+      if (c[d] !== where || c[d + 'Dialog'] !== null || c[d + 'ProfileSaved'] !== false || `${c[d + 'Emoji']} ${say(c[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: ‹ で閉じないか、選んだ値が残らない`);
+      const reopenedHere = open(c).state;
+      if (`${reopenedHere[d + 'Emoji']} ${say(reopenedHere[d + 'Greeting'])}` !== '\u{1F916} Good luck!' || reopenedHere[d + 'ProfileSaved'] !== false) fail(`${where}: Profile をもう一度開くと保存した値から始まらないか、"Saved" が残る`);
     }
-    // 画面が変わる (相手が見つかる) とダイアログは閉じ、選んでいたものは捨てる
+    // 画面が変わる (相手が見つかる) とダイアログと "Saved" は消える。選んだものは保存済みで、見つかった相手にも見える
     const both = Engine.fire(pickState(at('Host.Matchmake', 'Client.Matchmake'), d), 'sys.opponentFound');
-    if (!both || both.state[d] !== `${R}.Opponent` || both.state[d + 'Dialog'] !== null || both.state[d + 'DraftEmoji'] !== null || both.state[d + 'Emoji'] === '\u{1F680}') fail(`${R}: 相手が見つかっても Profile のダイアログが閉じないか、選んでいたものが残る`);
+    if (!both || both.state[d] !== `${R}.Opponent` || both.state[d + 'Dialog'] !== null || both.state[d + 'ProfileSaved'] !== false || both.state[d + 'Emoji'] !== '\u{1F680}' || both.state[d + 'ShownEmoji'] !== '\u{1F680}') fail(`${R}: 相手が見つかっても Profile のダイアログが閉じないか、選んだものが保存されていない`);
   }
   function pickState(st, d) {
     return [`${d}.profile`, `${d}.dialog.pickEmoji.rocket`].reduce((x, ev) => Engine.fire(x, ev).state, st);
@@ -1456,15 +1460,16 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   next = run(next, ['client.enterCode', 'client.joinMatch'], '次の部屋');
   if (shown(next, 'client') !== '\u{1F340} Have fun!') fail(`次の部屋に入っても新しい値にならない (${shown(next, 'client')})`);
   // 次の検索から: 探していないとき (Friend Match トップ) に保存しただけでは変わらず、Random Match / Search again / Find Next Opponent で新しい値。
-  // 相手を探している間の Save は、まだ相手がいないので見つかる相手に見える (#1891 の FB 12)
-  let srch = run(Engine.initialState(), ['host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.robot', 'host.dialog.saveProfile', 'host.back'], '検索');
+  // 相手を探している間に選んだものは、まだ相手がいないので見つかる相手に見える (#1891 の FB 12 / FB 14)
+  let srch = run(Engine.initialState(), ['host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.robot', 'host.dialog.closeProfile', 'host.back'], '検索');
   if (srch && srch.hostShownEmoji !== null) fail('検索の前に相手に見せる値が決まっている');
   srch = run(srch, ['host.randomMatch'], '検索');
   if (srch && srch.hostShownEmoji !== '\u{1F916}') fail('Random Match で値が固定されない');
-  srch = run(srch, ['host.leaveApp', 'host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.star', 'host.dialog.saveProfile'], '検索');
+  srch = run(srch, ['host.leaveApp', 'host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.star', 'host.dialog.closeProfile'], '検索');
   if (srch && srch.hostShownEmoji !== '\u{1F916}') fail('探していないときに保存しただけで、相手に見せる値が変わる');
-  srch = run(srch, ['host.back', 'host.randomMatch', 'host.profile', 'host.dialog.pickGreeting.letsGo', 'host.dialog.saveProfile'], '検索');
-  if (shown(srch, 'host') !== '\u{1F31F} Let\u2019s go!' || `${srch.hostEmoji} ${say(srch.hostGreeting)}` !== '\u{1F31F} Let\u2019s go!') fail(`相手を探している間の Save が、見つかる相手に見える値にならない (${shown(srch, 'host')})`);
+  srch = run(srch, ['host.back', 'host.randomMatch', 'host.profile', 'host.dialog.pickGreeting.letsGo'], '検索');
+  if (shown(srch, 'host') !== '\u{1F31F} Let\u2019s go!' || `${srch.hostEmoji} ${say(srch.hostGreeting)}` !== '\u{1F31F} Let\u2019s go!') fail(`相手を探している間に選んだものが、見つかる相手に見える値にならない (${shown(srch, 'host')})`);
+  srch = run(srch, ['host.dialog.closeProfile'], '検索');
   srch = run(srch, ['client.randomMatch', 'sys.opponentFound'], '検索');
   if (shown(srch, 'host') !== '\u{1F31F} Let\u2019s go!') fail(`探している間に保存した値が VS 画面に出ない (${shown(srch, 'host')})`);
   srch = Object.assign({}, run(srch, ['vs.done', 'game.countdownDone', 'host.win'], '検索'), { hostEmoji: '\u{1F9E0}' });
@@ -1475,16 +1480,20 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   const rematch = run(srch, ['client.rematch', 'host.rematch'], '再戦');
   if (rematch && rematch.hostShownEmoji !== '\u{1F31F}') fail('同じ相手との再戦で固定した値が変わる (次の部屋・次の検索ではない)');
   // 固定する行の一覧: イベントが部屋を作る・入る・探し始めるもので、行き先が部屋の画面か相手を探す画面 (失敗や Match Code の誤りの行には無い)。
-  // ほかに、相手を探している間の Profile の Save (保存した値 = 下書きを写す)
+  // ほかに、相手を探している間に Profile で選ぶ行は、選んだ値を相手に見せる値にも書く (set。探していないときの行は書かない)
   for (const r of TRANSITIONS) {
     const d = Engine.deviceOf(r.event);
     const copies = !!(r.copy && r.copy[d + 'ShownEmoji']);
-    const saveWhileSearching = r.event === `${d}.dialog.saveProfile` && states(r.from[d]).every((n) => /\.Matchmake(\.NextOpponent)?$/.test(n));
-    if (saveWhileSearching && (r.copy[d + 'ShownEmoji'] !== d + 'DraftEmoji' || r.copy[d + 'ShownGreeting'] !== d + 'DraftGreeting')) fail(`${r.id}: 相手を探している間の Save が下書きを相手に見せる値へ写さない`);
-    const want = saveWhileSearching || (d !== null && /\.(createMatch|dialog\.createMatch|joinMatch|randomMatch|backToRandomMatch|searchAgain|findNextOpponent)$/.test(r.event) &&
-      /\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/.test(r.to[d]));
+    const want = d !== null && /\.(createMatch|dialog\.createMatch|joinMatch|randomMatch|backToRandomMatch|searchAgain|findNextOpponent)$/.test(r.event) &&
+      /\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/.test(r.to[d]);
     if (copies !== want) fail(`${r.id} (${r.event} → ${r.to[d]}): 相手に見せる値を${copies ? '固定する' : '固定しない'}`);
     if (copies && !r.decided.includes('U56')) fail(`${r.id}: 値を固定する行に決定 U56 が無い`);
+    const m = /\.dialog\.pick(Emoji|Greeting)\./.exec(r.event);
+    if (m) {
+      const whileSearching = states(r.from[d]).every((n) => /\.Matchmake(\.NextOpponent)?$/.test(n));
+      const writes = !!r.set && (d + 'Shown' + m[1]) in r.set;
+      if (writes !== whileSearching || (writes && r.set[d + 'Shown' + m[1]] !== r.set[d + m[1]])) fail(`${r.id}: 相手を探している間${whileSearching ? '' : 'の外'}で選んだ値を相手に見せる値へ${writes ? '書く' : '書かない'}`);
+    }
   }
   // どのシナリオでも、相手と向き合う画面 (VS・ゲーム・結果) では両者の値が決まっている
   for (const sc of SCENARIOS) {
@@ -1494,18 +1503,21 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     }
   }
 
-  // シナリオ 22: 変えて Save → ランダム対戦の VS 画面に出る。再戦の VS 画面にもあいさつは出る
+  // シナリオ 22: 相手を探している間に選ぶ (すぐ保存) → ランダム対戦の VS 画面に出る。再戦の VS 画面にもあいさつは出る
   const sc22 = SCENARIOS.find((x) => x.id === '22');
   const vs22 = sc22 && Engine.replay(sc22, 7).state;
   const search22 = sc22 && Engine.replay(sc22, 4).state;
-  if (!search22 || search22.host !== 'Host.Matchmake' || search22.hostDialog !== 'profile' || search22.hostDraftEmoji !== '\u{1F680}') fail('シナリオ 22 で相手を探している間に Profile のダイアログが開いていない');
+  if (!search22 || search22.host !== 'Host.Matchmake' || search22.hostDialog !== 'profile' || search22.hostEmoji !== '\u{1F680}' || !search22.hostProfileSaved) fail('シナリオ 22 で相手を探している間に Profile のダイアログが開いていないか、選んだものが保存されていない');
   if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Bring it on!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
   const end22 = sc22 && Engine.replay(sc22);
   if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後が再戦の VS 画面 (ホストのあいさつ付き) でない');
   if (STAMPS.map((x) => `${x.emoji} ${x.text}`).join(' / ') !== '\u{1F44F} Good game / \u{1F91D} Thanks for the match / \u{1F44D} Nice') fail('結果画面のスタンプ (U27) が変わった');
   const sc22b = SCENARIOS.find((x) => x.id === '22b');
   const end22b = sc22b && Engine.replay(sc22b).state;
-  if (!end22b || end22b.host !== 'Host.FriendMatch.Room' || end22b.hostDialog !== null || `${end22b.hostEmoji} ${say(end22b.hostGreeting)}` !== `${EMOJIS[0]} Hello!`) fail('シナリオ 22b の Cancel / × で値が変わるか、Friend Match トップに残らない');
+  const mid22b = sc22b && Engine.replay(sc22b, 5).state;
+  if (!mid22b || mid22b.hostDialog !== null || `${mid22b.hostEmoji} ${say(mid22b.hostGreeting)}` !== '\u{1F916} Good luck!') fail('シナリオ 22b で選んだものが ‹ で閉じたあとに残らない');
+  if (!end22b || end22b.host !== 'Host.FriendMatch.Room' || end22b.hostDialog !== null || `${end22b.hostEmoji} ${say(end22b.hostGreeting)}` !== '\u{1F31F} Good luck!') fail('シナリオ 22b の最後で選んだ値が残らないか、Friend Match トップに残らない');
+  if (SCENARIOS.some((sc) => sc.steps.some((ev) => /saveProfile/.test(ev)))) fail('シナリオに Profile の Save が残っている');
 
   // localStorage: モックの名前で区切ったキーに保存し、読み直す (新しく開いたアプリ) と同じ値。壊れた値・候補に無い値は最初の値に戻す
   const mem = new Map();
@@ -1513,12 +1525,12 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   if (!/^qa2-match-mock\./.test(ProfileStore.KEY)) fail(`localStorage のキー ${ProfileStore.KEY} がモックの名前で区切られていない`);
   const fresh = ProfileStore.load(storage);
   if (JSON.stringify(fresh) !== JSON.stringify({ host: { emoji: EMOJIS[0], greeting: 'hello' }, client: { emoji: '\u{1F60E}', greeting: 'letsGo' } })) fail(`何も保存していないときの値が ${JSON.stringify(fresh)}`);
-  const savedState = run(Engine.initialState(ctx.Engine.defaultCtx(), fresh), ['host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.rocket', 'host.dialog.pickGreeting.happyPuzzling', 'host.dialog.saveProfile'], '保存');
+  const savedState = run(Engine.initialState(ctx.Engine.defaultCtx(), fresh), ['host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.rocket', 'host.dialog.pickGreeting.happyPuzzling', 'host.dialog.closeProfile'], '保存');
   ProfileStore.save(storage, { host: { emoji: savedState.hostEmoji, greeting: savedState.hostGreeting }, client: { emoji: savedState.clientEmoji, greeting: savedState.clientGreeting } });
   const reopened = Engine.initialState(Engine.defaultCtx(), ProfileStore.load(storage));
   if (`${reopened.hostEmoji} ${reopened.hostGreeting}` !== '\u{1F680} happyPuzzling' || reopened.clientEmoji !== '\u{1F60E}') fail(`保存して開き直した値が ${reopened.hostEmoji} ${reopened.hostGreeting}`);
   const opened = Engine.fire(Engine.fire(reopened, 'host.randomMatch').state, 'host.profile').state;
-  if (`${opened.hostDraftEmoji} ${opened.hostDraftGreeting}` !== '\u{1F680} happyPuzzling') fail('開き直したあとの Profile の見本が保存した値でない');
+  if (`${opened.hostEmoji} ${opened.hostGreeting}` !== '\u{1F680} happyPuzzling') fail('開き直したあとの Profile の見本が保存した値でない');
   // 前のモック (#1891 FB 13 より前) は英語の文で残していた。読み直すと id になる
   mem.set(ProfileStore.KEY, JSON.stringify({ host: { emoji: EMOJIS[1], greeting: 'Good luck!' }, client: { emoji: '\u{1F60E}', greeting: 'Let\u2019s go!' } }));
   const legacy = ProfileStore.load(storage);
@@ -1530,7 +1542,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   // シナリオは localStorage に関係なく、いつも最初の値から (Engine.replay は保存した値を受け取らない)
   if (Engine.replay(sc22, 0).state.hostEmoji !== EMOJIS[0]) fail('シナリオが最初の値から始まらない');
   if (!/if \(app\.scenario \|\| !storage\) return;/.test(appJs)) fail('app.js がシナリオの再生中にも localStorage に書く');
-  console.log('ok  U56 (2026-10-08、入口は #1891 の FB 12): Profile の候補 10 + 10 (アポストロフィは ’、あいさつは日本語と英語、#1891 FB 13)・既定値 👋 "Hello!"・Random Match と Friend Match トップの上にダイアログで開く (Online Battle と専用の画面は無い)・Save / Cancel / × ・次の部屋と次の検索から相手に見える (探している間の Save は見つかる相手にも)・localStorage・再戦の VS 画面にもあいさつは出る');
+  console.log('ok  U56 (2026-10-08、入口は #1891 の FB 12): Profile の候補 10 + 10 (アポストロフィは ’、あいさつは日本語と英語、#1891 FB 13)・既定値 👋 "Hello!"・Random Match と Friend Match トップの上にダイアログで開く (Online Battle と専用の画面は無い)・選ぶとすぐ保存して "Saved"、閉じるのは左上の ‹ だけ (FB 14)・次の部屋と次の検索から相手に見える (探している間に選んだものは見つかる相手にも)・localStorage・再戦の VS 画面にもあいさつは出る');
 }
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));

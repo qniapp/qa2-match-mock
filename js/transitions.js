@@ -151,15 +151,14 @@ function never() { return false; }
 //   Dialog: ダイアログ (部屋の確認と Profile。画面が変わると閉じる)
 //   Stamp:  自分が送ったスタンプ (U27)。'gg' などは表示中 (3 秒、仮)、'sent' は消えたが次を送れるまでの待ち (送ってから 5 秒、仮)
 //   Emoji / Greeting:           保存した絵文字とあいさつ (U56)。ブラウザの localStorage に残る (読み書きは app.js、自由操作のときだけ)
-//   DraftEmoji / DraftGreeting: Profile のダイアログで選んでいるもの。開いたときに保存した値を写し、Save で保存した値へ写す。Cancel / × で捨てる (画面が変わると捨てる)
+//   ProfileSaved: Profile のダイアログで、開いてから何か選んだ (選ぶとすぐ保存するので "Saved" を出す。#1891 の FB 14)。開く・閉じる・画面が変わると消える
 //   ShownEmoji / ShownGreeting: 相手に見せる値。部屋を作る・部屋に入る・相手を探し始めるときに保存した値を写す (行の copy、遷移表の末尾で付ける)
 var DEVICE_FIELDS = {
   Dialog: { initial: null, keeps: never },
   Stamp: { initial: null, keeps: isResultState },
   Emoji: { initial: function (d) { return PROFILE_INITIAL[d].emoji; }, keeps: always },
   Greeting: { initial: function (d) { return PROFILE_INITIAL[d].greeting; }, keeps: always },
-  DraftEmoji: { initial: null, keeps: never },
-  DraftGreeting: { initial: null, keeps: never },
+  ProfileSaved: { initial: false, keeps: never },
   ShownEmoji: { initial: null, keeps: always },
   ShownGreeting: { initial: null, keeps: always },
 };
@@ -269,7 +268,7 @@ STATE_GROUPS['Host.Profile.Openable'] = profileOpenable('Host');
 STATE_GROUPS['Client.Profile.Openable'] = profileOpenable('Client');
 // 部屋を作る・部屋に入る・相手を探し始める行で、保存した絵文字とあいさつを相手に見せる値として写す (U56)。
 // イベントがこれらで、その端末の行き先が部屋の画面か相手を探す画面の行 (接続失敗や Match Code の誤りの行は写さない)
-// 同じ相手との再戦では写し直さない (2026-10-08 に確認)。相手を探している間に Profile で Save したときも写す (まだ相手がいないので、見つかる相手に新しい値を見せる。遷移表の Profile の行)
+// 同じ相手との再戦では写し直さない (2026-10-08 に確認)。相手を探している間に Profile で選んだときも写す (まだ相手がいないので、見つかる相手に新しい値を見せる。遷移表の Profile の行)
 var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'joinMatch', 'randomMatch', 'backToRandomMatch', 'searchAgain', 'findNextOpponent'];
 var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/;
 
@@ -863,8 +862,9 @@ var TRANSITIONS = (function () {
 
   // === Profile (決定 U56、高宮さん 2026-10-08。入口は #1891 の FB 12 で、画面からダイアログに変更) ===
   // Random Match (相手を探している画面) と Friend Match トップの Profile で、今の画面の上にダイアログで開く。上の VS 画面のカードの見本は選ぶたびに変わる。
-  // Save で保存して閉じ、Cancel と × (Esc) は捨てて閉じる。どちらも画面はそのまま。画面が変わる (相手が見つかるなど) とダイアログは閉じ、選んでいたものは捨てる。
-  // 保存した値が相手に見えるのは、次に部屋を作る・入る・相手を探し始めるときから。相手を探している間の Save は、見つかる相手にも見える
+  // 選ぶとすぐ保存し (Save / Cancel は無い、#1891 の FB 14)、閉じるのは左上の ‹ だけ (Esc や外側を押しても閉じない)。どちらも画面はそのまま。
+  // 画面が変わる (相手が見つかるなど) とダイアログは閉じる。保存した値が相手に見えるのは、次に部屋を作る・入る・相手を探し始めるときから。
+  // 相手を探している間に選んだものは、見つかる相手にも見える
   [['host', 'Host', 'client'], ['client', 'Client', 'host']].forEach(function (p) {
     var d = p[0];
     var R = p[1];
@@ -876,43 +876,41 @@ var TRANSITIONS = (function () {
       if (dialog) r[d + 'Dialog'] = dialog;
       return r;
     };
-    var fields = function (pairs) {
-      var r = {};
-      Object.keys(pairs).forEach(function (k) { r[d + k] = d + pairs[k]; });
-      return r;
-    };
     var dialog = function (v) {
       var r = {};
       r[d] = v;
       return r;
     };
+    // 選んだ値を保存した値へ書き、"Saved" を出す。相手を探している間は、見つかる相手に見せる値にも書く
+    var pick = function (field, value, searching) {
+      var set = {};
+      set[d + field] = value;
+      if (searching) set[d + 'Shown' + field] = value;
+      set[d + 'ProfileSaved'] = true;
+      return set;
+    };
+    var saved = function (v) {
+      var r = {};
+      r[d + 'ProfileSaved'] = v;
+      return r;
+    };
     var openable = profileOpenable(R);
-    var clearDraft = {};
-    clearDraft[d + 'DraftEmoji'] = null;
-    clearDraft[d + 'DraftGreeting'] = null;
-    T({ from: row(openable), event: d + '.profile', to: row('='), dialog: dialog('profile'), copy: fields({ DraftEmoji: 'Emoji', DraftGreeting: 'Greeting' }),
+    T({ from: row(openable), event: d + '.profile', to: row('='), dialog: dialog('profile'), set: saved(false),
       note: '決定 (U56、#1891 の FB 12): Random Match (相手を探している間) と Friend Match トップの Profile で、今の画面の上にダイアログで開く。' +
         '保存した絵文字とあいさつが選ばれた状態で始まる。相手を探すのは続く', decided: ['U56'] });
-    PROFILE_EMOJIS.forEach(function (e) {
-      var set = {};
-      set[d + 'DraftEmoji'] = e.emoji;
-      T({ from: row(openable, 'profile'), event: d + '.dialog.pickEmoji.' + e.id, to: row('='), set: set,
-        note: '決定 (U56): 1 つだけ選べる。上の見本がすぐ変わる (まだ保存しない)', decided: ['U56'] });
+    [[profileSearching[R], true, '相手を探し続ける。まだ相手がいないので、見つかる相手にも新しい値が見える'],
+      [profileFriendTop[R], false, '相手に見えるのは次に部屋を作る・入るときから']].forEach(function (w) {
+      PROFILE_EMOJIS.forEach(function (e) {
+        T({ from: row(w[0], 'profile'), event: d + '.dialog.pickEmoji.' + e.id, to: row('='), set: pick('Emoji', e.emoji, w[1]),
+          note: '決定 (U56、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わって "Saved" が出る。' + w[2], decided: ['U56'] });
+      });
+      PROFILE_GREETINGS.forEach(function (g) {
+        T({ from: row(w[0], 'profile'), event: d + '.dialog.pickGreeting.' + g.id, to: row('='), set: pick('Greeting', g.id, w[1]),
+          note: '決定 (U56、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わって "Saved" が出る。' + w[2], decided: ['U56'] });
+      });
     });
-    PROFILE_GREETINGS.forEach(function (g) {
-      var set = {};
-      set[d + 'DraftGreeting'] = g.id;
-      T({ from: row(openable, 'profile'), event: d + '.dialog.pickGreeting.' + g.id, to: row('='), set: set,
-        note: '決定 (U56): 1 つだけ選べる。上の見本がすぐ変わる (まだ保存しない)', decided: ['U56'] });
-    });
-    T({ from: row(profileSearching[R], 'profile'), event: d + '.dialog.saveProfile', to: row('='), dialog: dialog(null), set: clearDraft,
-      copy: fields({ Emoji: 'DraftEmoji', Greeting: 'DraftGreeting', ShownEmoji: 'DraftEmoji', ShownGreeting: 'DraftGreeting' }),
-      note: '決定 (U56、#1891 の FB 12): Save で保存してダイアログを閉じ、相手を探し続ける。まだ相手がいないので、見つかる相手にも新しい値が見える', decided: ['U56'] });
-    T({ from: row(profileFriendTop[R], 'profile'), event: d + '.dialog.saveProfile', to: row('='), dialog: dialog(null), set: clearDraft,
-      copy: fields({ Emoji: 'DraftEmoji', Greeting: 'DraftGreeting' }),
-      note: '決定 (U56、#1891 の FB 12): Save で保存してダイアログを閉じ、Friend Match トップのまま。相手に見えるのは次に部屋を作る・入るときから', decided: ['U56'] });
-    T({ from: row(openable, 'profile'), event: d + '.dialog.closeProfile', to: row('='), dialog: dialog(null), set: clearDraft,
-      note: '決定 (U56、#1891 の FB 12): Cancel・× ・Esc で選んだものを捨ててダイアログを閉じる (保存した値のまま。確認は出さない)', decided: ['U56'] });
+    T({ from: row(openable, 'profile'), event: d + '.dialog.closeProfile', to: row('='), dialog: dialog(null), set: saved(false),
+      note: '決定 (U56、#1891 の FB 14): 左上の ‹ でダイアログを閉じる (閉じる手段はこれだけ。選んだものは保存済み)', decided: ['U56'] });
   });
 
   rows.forEach(function (r, i) {
@@ -1030,8 +1028,7 @@ var EVENT_LABELS = {
 // Profile (決定 U56) の操作
 [['host', 'ホスト'], ['client', 'クライアント']].forEach(function (p) {
   EVENT_LABELS[p[0] + '.profile'] = p[1] + ': Profile を押す';
-  EVENT_LABELS[p[0] + '.dialog.saveProfile'] = p[1] + ': Profile の Save を押す';
-  EVENT_LABELS[p[0] + '.dialog.closeProfile'] = p[1] + ': Profile を Cancel・× ・Esc で閉じる';
+  EVENT_LABELS[p[0] + '.dialog.closeProfile'] = p[1] + ': Profile を左上の ‹ で閉じる';
   PROFILE_EMOJIS.forEach(function (e) { EVENT_LABELS[p[0] + '.dialog.pickEmoji.' + e.id] = p[1] + ': Profile で絵文字 ' + e.emoji + ' を選ぶ'; });
   PROFILE_GREETINGS.forEach(function (g) { EVENT_LABELS[p[0] + '.dialog.pickGreeting.' + g.id] = p[1] + ': Profile であいさつ "' + g.en + '" を選ぶ'; });
 });
@@ -1301,8 +1298,8 @@ var ROOM_CONTEXT = {
 
 var PROFILE_CONTEXT = 'Profile (決定 U56。入口は #1891 の FB 12 で、専用の画面から今の画面の上のダイアログに変えた)。Random Match (相手を探している間) と Friend Match トップの Profile で開き、待ち時間に今の画面のまま変えられる。' +
   '上の見本は、相手の VS 画面に出る自分のカード。絵文字とあいさつを 1 つずつ選ぶと見本がすぐ変わる。名前は変えられない。' +
-  'Save で保存して閉じ、Cancel・右上の ×・Esc は選んだものを捨てて閉じる。相手が見つかるなど画面が変わるとダイアログは閉じ、選んでいたものは捨てる。' +
-  '保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから。相手を探している間の Save は、まだ相手がいないので見つかる相手にも見える。' +
+  '選ぶとすぐ保存して "Saved" を出し、Save / Cancel は無い (#1891 の FB 14)。閉じるのは左上の ‹ だけで、Esc やダイアログの外を押しても閉じない。相手が見つかるなど画面が変わるとダイアログは閉じる。' +
+  '保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから。相手を探している間に選んだものは、まだ相手がいないので見つかる相手にも見える。' +
   '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。あいさつは日本語と英語の 2 つで、それを見る端末の言語で出す (#1891 FB 13、右パネルの「あいさつの言語」の JA / EN で切り替える)。英語のアポストロフィはどれも \u2019。相手 (ogwssk) も変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
   '値はブラウザの localStorage にだけ残し、モックでは自由操作のときだけ読み書きする (シナリオはいつも最初の値から始まり、読みも書きもしない。2026-10-08 に確認)。' +
   '同じ相手との再戦では値を固定し直さない (2026-10-08 に確認)。';
@@ -1551,8 +1548,8 @@ var DIALOGS = {
   // クライアントの ‹ (決定 U57 / U9)。部屋を抜ける。本文は U34、残るボタンは U11
   leaveRoom: { title: 'Leave this room?', body: ROOM_LEAVE_BODY,
     buttons: [{ label: 'Leave Room', event: 'dialog.leaveRoom', danger: true }, { label: 'Keep Waiting', event: 'dialog.keepWaiting' }] },
-  // Profile (決定 U56、#1891 の FB 12)。Random Match と Friend Match トップの上に開く。中身 (見本・絵文字・あいさつ・Save / Cancel) は app.js が描く。
-  // × と Cancel と Esc は同じ (選んだものを捨てて閉じる)
+  // Profile (決定 U56、#1891 の FB 12)。Random Match と Friend Match トップの上に開く。中身 (‹・見本・絵文字・あいさつ・"Saved") は app.js が描く。
+  // 選ぶとすぐ保存し、閉じるのは左上の ‹ だけ (#1891 の FB 14)
   profile: { title: 'Profile', profile: true, close: 'dialog.closeProfile', context: PROFILE_CONTEXT },
 };
 
@@ -1860,11 +1857,11 @@ var UNDECIDED = [
   { id: 'U56', title: 'Profile: 相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ。次の部屋・次の検索から相手に見える',
     desc: 'Random Match (相手を探している画面) と Friend Match トップの右上に Profile を置き (両端末)、押すと今の画面の上にダイアログで開く (#1891 の YoshiyukiN さんの FB 12 番目で、' +
       'Online Battle の Profile と専用の Profile 画面をやめた。待ち時間に設定でき、画面を戻る必要がない)。ダイアログの上には VS 画面のカードの見本 (名前・絵文字・あいさつ) を出し、選ぶたびにすぐ変える。' +
-      '下に Save / Cancel、右上に × (Cancel と同じ。Esc でも閉じる)。' +
+      '選ぶとすぐ保存して "Saved" を出し、Save / Cancel は無い。閉じるのは左上の ‹ だけで、Esc やダイアログの外を押しても閉じない (#1891 の FB 14)。' +
       '絵文字は ' + PROFILE_EMOJIS.map(function (e) { return e.emoji; }).join(' ') + ' から 1 つ、あいさつは ' +
       PROFILE_GREETINGS.map(function (g) { return '"' + g.en + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
       '全員の既定値は \u{1F44B} "Hello!"。部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
-      '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から (相手を探している間に Save したものは、まだ相手がいないので見つかる相手にも見える)。保存はブラウザ (localStorage) だけ。' +
+      '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から (相手を探している間に選んだものは、まだ相手がいないので見つかる相手にも見える)。保存はブラウザ (localStorage) だけ。' +
       '結果画面のスタンプ (U27) は変わらない。候補と既定値は QA² 側の仮の値 (変わりうる)。' +
       'あいさつは日本語と英語にローカライズし、それを見る端末の言語で出す (#1891 FB 13。ほかの言語は無い)。英語のアポストロフィはどれも \u2019。10-08 に候補を 4 つ同じ位置で入れ替えた (うち 2 つは協力しているように聞こえたため)。' +
       '相手 (ogwssk) も Profile を変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +

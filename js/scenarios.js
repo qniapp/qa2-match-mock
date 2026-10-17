@@ -141,11 +141,12 @@ var SCENARIOS = (function () {
       steps: ['host.randomMatch', 'client.randomMatch', 'sys.opponentFound', 'vs.done', 'host.disconnect', 'timer.disconnectTimeout', 'host.searchAgain', 'client.searchAgain', 'sys.opponentFound'] },
     { id: '21c', title: 'Friend Match の再戦の VS 画面中に切断 → 戻らない → Friend Match トップ', diagram: 'なし (10-08 の決定 U52 / U54)',
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch', 'client.disconnect', 'timer.disconnectTimeout', 'host.closeNotice', 'client.closeNotice']) },
-    // Profile (決定 U56、入口は #1891 の FB 12): Random Match と Friend Match トップの上にダイアログで開く。相手を探している間に保存すると、見つかった相手に見える
-    { id: '22', title: 'Random Match で相手を探している間に Profile を開いて Save → 見つかった相手の VS 画面に出る', diagram: 'なし (10-08 の決定 U56、#1891 の FB 12)',
-      steps: ['host.randomMatch', 'host.profile', 'host.dialog.pickEmoji.rocket', 'host.dialog.pickGreeting.bringItOn', 'host.dialog.saveProfile',
+    // Profile (決定 U56、入口は #1891 の FB 12): Random Match と Friend Match トップの上にダイアログで開く。選ぶとすぐ保存し、左上の ‹ で閉じる (#1891 の FB 14)。
+    // 相手を探している間に選ぶと、見つかった相手に見える
+    { id: '22', title: 'Random Match で相手を探している間に Profile を開いて選ぶ → 見つかった相手の VS 画面に出る', diagram: 'なし (10-08 の決定 U56、#1891 の FB 12 / FB 14)',
+      steps: ['host.randomMatch', 'host.profile', 'host.dialog.pickEmoji.rocket', 'host.dialog.pickGreeting.bringItOn', 'host.dialog.closeProfile',
         'client.randomMatch', 'sys.opponentFound'].concat(toGame, ['client.win', 'host.rematch', 'client.rematch']) },
-    { id: '22b', title: 'Friend Match で Profile を開き、選んだものを Cancel / × で捨てる', diagram: 'なし (10-08 の決定 U56、#1891 の FB 12)', clientNote: hostOnly,
+    { id: '22b', title: 'Friend Match で Profile を開いて選ぶとすぐ保存され、‹ で閉じても開き直しても残る', diagram: 'なし (10-08 の決定 U56、#1891 の FB 12 / FB 14)', clientNote: hostOnly,
       steps: ['host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.robot', 'host.dialog.pickGreeting.goodLuck', 'host.dialog.closeProfile',
         'host.profile', 'host.dialog.pickEmoji.star', 'host.dialog.closeProfile'] },
   ];

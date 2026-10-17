@@ -97,7 +97,7 @@ try {
     for (let i = 0; i < 100 && !events.some((e) => e.method === 'Page.loadEventFired'); i++) await new Promise((r) => setTimeout(r, 50));
   };
   const pageFindings = await evaluate(checkPage);
-  // Profile (決定 U56、#1891 の FB 12): 自由操作でダイアログを開き、Cancel・×・Esc は保存せず、Save したものはページを開き直しても残る (localStorage)
+  // Profile (決定 U56、#1891 の FB 12 / FB 14): 自由操作でダイアログを開き、選ぶとすぐ保存し、‹ だけで閉じる。選んだものはページを開き直しても残る (localStorage)
   await open('');
   pageFindings.push(...await evaluate(profileSave));
   await open('');
@@ -125,7 +125,7 @@ try {
     console.log('ok  タブの名前は「決定」で、モック設定は閉じています');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
     console.log(`ok  あいさつを日本語 (JA) にした端末でも、Profile と VS 画面のあいさつだけが日本語で、収まっています (${ja.frames} 枚)`);
-    console.log(`ok  Profile: Random Match / Friend Match トップの上にダイアログで開き、Cancel・×・Esc は保存せず、Save したものは開き直しても残り、シナリオは localStorage に関係なく最初の値から`);
+    console.log(`ok  Profile: Random Match / Friend Match トップの上にダイアログで開き、選ぶとすぐ保存して "Saved" を出し、Esc・暗幕では閉じず ‹ で閉じ、選んだものは開き直しても残り、シナリオは localStorage に関係なく最初の値から`);
   }
 } finally {
   await cleanup();
@@ -188,7 +188,7 @@ function checkPage() {
 }
 
 // ページの中で実行する。自由操作で Random Match / Friend Match トップの Profile を押すと、画面はそのままダイアログが開き (#1891 の FB 12)、
-// Cancel・×・Esc では保存せずに閉じ、Save で localStorage に保存する (決定 U56)
+// 選ぶとすぐ localStorage に保存して "Saved" を出す。閉じるのは左上の ‹ だけで、Esc や暗幕を押しても閉じない (決定 U56、#1891 の FB 14)
 function profileSave() {
   const findings = [];
   const page = (what) => findings.push(`Profile: ${what}`);
@@ -196,9 +196,11 @@ function profileSave() {
   if (localStorage.getItem(KEY) !== null) page('最初から localStorage に値がある');
   const host = document.querySelector('.device[data-dev="host"]');
   const stateName = () => host.querySelector('.state-name').textContent;
-  const press = (sel) => { const el = host.querySelector(`.screen ${sel}`); if (!el || el.hasAttribute('data-norow')) { page(`${sel} を押せない (${stateName()})`); return; } el.click(); };
+  const press = (sel) => { const el = host.querySelector(`.screen ${sel}`); if (!el || el.hasAttribute('data-norow')) { page(`${sel} を押せない (${stateName()})`); return; } el.focus(); el.click(); }; // 押すボタンにフォーカスしてから押す (指やマウスで押したときと同じ)
   const preview = () => [...host.querySelectorAll('.pf-card .vs-emoji, .pf-card .vs-name, .pf-card .vs-greet')].map((e) => e.textContent).join(' ');
   const dialog = () => host.querySelector('.screen .dim > .pf-dialog[role="dialog"][aria-modal="true"]');
+  const savedNote = () => { const n = host.querySelector('.pf-saved[role="status"]'); return n ? n.textContent : null; };
+  const stored = () => { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); return v && `${v.host.emoji} ${v.host.greeting}`; };
   if (host.querySelector('.screen [data-ev="profile"]')) page('Online Battle に Profile がある');
   press('[data-ev="friendMatch"]');
   if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F44B}') page('Friend Match トップの Profile に既定の 👋 が無い');
@@ -207,34 +209,43 @@ function profileSave() {
   const title = dialog() && document.getElementById(dialog().getAttribute('aria-labelledby'));
   if (!title || title.textContent !== 'Profile') page('ダイアログの aria-labelledby が題名 "Profile" を指していない');
   if (!host.querySelector('.screen .friend-top, .screen .body')) page('ダイアログの後ろに Friend Match トップが無い');
-  if (document.activeElement !== host.querySelector('.pf-close')) page('ダイアログを開いたときにフォーカスが × に無い');
+  if (document.activeElement !== host.querySelector('.pf-back')) page('ダイアログを開いたときにフォーカスが ‹ に無い');
   if (preview() !== '\u{1F44B} Yasuhito \u201cHello!\u201d') page(`開いたときの見本が ${preview()}`);
+  if (savedNote() !== '') page(`何も選ぶ前に "${savedNote()}" が出ている`);
+  if (dialog() && dialog().querySelector('.pf-close, .pf-actions, [data-ev="dialog.saveProfile"]')) page('ダイアログに Save / Cancel / × が残っている');
   press('[data-ev="dialog.pickEmoji.robot"]');
+  if (stored() !== '\u{1F916} hello') page(`絵文字を選んでもすぐ保存されない (${localStorage.getItem(KEY)})`);
   press('[data-ev="dialog.pickGreeting.goodLuck"]');
   if (preview() !== '\u{1F916} Yasuhito \u201cGood luck!\u201d') page(`選んでも見本が変わらない (${preview()})`);
-  press('.pf-actions [data-ev="dialog.closeProfile"]');
-  if (dialog() || localStorage.getItem(KEY) !== null) page(`Cancel で閉じないか、保存された (${localStorage.getItem(KEY)})`);
-  press('[data-ev="profile"]');
-  if (preview() !== '\u{1F44B} Yasuhito \u201cHello!\u201d') page(`Cancel のあと開き直した見本が ${preview()}`);
-  press('[data-ev="dialog.pickEmoji.star"]');
-  press('.pf-close');
-  if (dialog() || localStorage.getItem(KEY) !== null) page('× で閉じないか、保存された');
-  press('[data-ev="profile"]');
-  press('[data-ev="dialog.pickEmoji.clover"]');
+  if (stored() !== '\u{1F916} goodLuck') page(`あいさつを選んでもすぐ保存されない (${localStorage.getItem(KEY)})`);
+  if (savedNote() !== '\u2713 Saved') page(`選んだあとに "Saved" が出ない (${savedNote()})`);
+  if (document.activeElement !== host.querySelector('[data-ev="dialog.pickGreeting.goodLuck"]')) page('選んだあとにフォーカスが選んだボタンに残らない');
+  // Esc と暗幕では閉じない
   document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
-  if (dialog() || localStorage.getItem(KEY) !== null || stateName() !== 'Host.FriendMatch.Room') page(`Esc で閉じないか、保存された (${stateName()})`);
-  // Random Match で相手を探している間に開き、Save すると、相手を探し続けたまま保存する
+  if (!dialog() || stateName() !== 'Host.FriendMatch.Room + 🗨 profile') page(`Esc で閉じた (${stateName()})`);
+  host.querySelector('.screen .dim').click();
+  if (!dialog() || stateName() !== 'Host.FriendMatch.Room + 🗨 profile') page(`ダイアログの外 (暗幕) を押すと閉じた (${stateName()})`);
+  // 左上の ‹ で閉じると、Friend Match トップのまま選んだものが残る
+  press('.pf-back');
+  if (dialog() || stateName() !== 'Host.FriendMatch.Room') page(`‹ で閉じないか、Friend Match トップから移った (${stateName()})`);
+  if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F916}') page('‹ で閉じたあとの Profile のボタンの絵文字が 🤖 でない');
+  press('[data-ev="profile"]');
+  if (preview() !== '\u{1F916} Yasuhito \u201cGood luck!\u201d') page(`開き直した見本が ${preview()}`);
+  if (savedNote() !== '') page('開き直しても "Saved" が残っている');
+  press('.pf-back');
+  // Random Match で相手を探している間に開いて選ぶと、相手を探し続けたまま保存する
   press('.back');
   press('[data-ev="randomMatch"]');
   press('[data-ev="profile"]');
   if (!dialog() || stateName() !== 'Host.Matchmake + 🗨 profile') page(`Random Match で Profile を押しても、画面がそのままダイアログが開かない (${stateName()})`);
   press('[data-ev="dialog.pickEmoji.rocket"]');
   press('[data-ev="dialog.pickGreeting.bringItOn"]');
-  press('[data-ev="dialog.saveProfile"]');
-  if (dialog() || stateName() !== 'Host.Matchmake') page(`Save で閉じないか、Random Match から移った (${stateName()})`);
-  if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F680}') page('Save したあとの Profile のボタンの絵文字が 🚀 でない');
+  if (stateName() !== 'Host.Matchmake + 🗨 profile') page(`選ぶと Random Match から移るか、ダイアログが閉じる (${stateName()})`);
+  press('.pf-back');
+  if (dialog() || stateName() !== 'Host.Matchmake') page(`‹ で閉じないか、Random Match から移った (${stateName()})`);
+  if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F680}') page('閉じたあとの Profile のボタンの絵文字が 🚀 でない');
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-  if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'bringItOn' || saved.client.emoji !== '\u{1F60E}') page(`Save で保存されない (${localStorage.getItem(KEY)})`);
+  if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'bringItOn' || saved.client.emoji !== '\u{1F60E}') page(`選んだものが保存されない (${localStorage.getItem(KEY)})`);
   press('[data-ev="cancelSearch"]');
   return findings;
 }
@@ -381,13 +392,18 @@ function scan(only, wantLang = 'en') {
         if (r.top < sr.top || r.right > sr.right - 8) findings.push(`${at}: Profile のボタンが画面の端からはみ出している`);
         if (tr.right > r.left - 6 && tr.left < r.right) findings.push(`${at}: Profile のボタンが題名と重なっている`);
       }
-      // Profile のダイアログ (決定 U56、#1891 の FB 12): 題名・×・見本・絵文字 10・あいさつ 10・Save / Cancel が画面に収まって重ならず、選んだものが 1 つずつ
+      // Profile のダイアログ (決定 U56、#1891 の FB 12 / FB 14): ‹・題名・見本・絵文字 10・あいさつ 10・"Saved" が画面に収まって重ならず、選んだものが 1 つずつ。Save / Cancel / × は無い
       const pfDialog = screen.querySelector('.dim > .pf-dialog');
       if (/ 🗨 profile/.test(state) !== !!pfDialog) findings.push(`${at}: Profile のダイアログが ${pfDialog ? 'ある' : '無い'}`);
       if (pfDialog) {
         if (pfDialog.getAttribute('role') !== 'dialog' || pfDialog.getAttribute('aria-modal') !== 'true') findings.push(`${at}: Profile のダイアログに role="dialog" / aria-modal が無い`);
-        const close = pfDialog.querySelector('.pf-close');
-        if (!close || close.getAttribute('aria-label') !== 'Close' || close.hasAttribute('data-norow')) findings.push(`${at}: Profile のダイアログの × を押せない`);
+        const back = pfDialog.querySelector('.pf-head > .pf-back');
+        if (!back || back.getAttribute('aria-label') !== 'Back' || back.textContent !== '‹' || back.hasAttribute('data-norow')) findings.push(`${at}: Profile のダイアログの左上の ‹ を押せない`);
+        const ht = pfDialog.querySelector('.pf-head .d-title').getBoundingClientRect();
+        if (back && back.getBoundingClientRect().right > ht.left) findings.push(`${at}: Profile のダイアログの ‹ が題名の左に無い`);
+        if (pfDialog.querySelectorAll('button').length !== 1 + PROFILE_EMOJIS.length + PROFILE_GREETINGS.length || pfDialog.querySelector('.pf-close, .pf-actions, .btn')) findings.push(`${at}: Profile のダイアログに ‹ と候補のほかのボタン (Save / Cancel / ×) がある`);
+        const note = pfDialog.querySelector('.pf-saved[role="status"]');
+        if (!note || note.textContent !== (current[d + 'ProfileSaved'] ? '✓ Saved' : '')) findings.push(`${at}: "Saved" の表示が ${note && note.textContent}`);
         if (screen.querySelector('.hdr .back:not([data-norow])')) findings.push(`${at}: Profile のダイアログの後ろの ‹ を押せる`);
         const emojis = [...screen.querySelectorAll('.pf-emoji')];
         const greets = [...screen.querySelectorAll('.pf-greet')];
@@ -396,16 +412,14 @@ function scan(only, wantLang = 'en') {
         // どのあいさつも 1 行に収まる (折り返すとその行だけボタンが高くなる)
         greets.forEach((g) => { const r = document.createRange(); r.selectNodeContents(g); if (r.getClientRects().length !== 1) findings.push(`${at}: あいさつ ${g.textContent} が 1 行に収まらない`); });
         const sel = [...screen.querySelectorAll('.selected')].map((e) => e.textContent);
-        if (sel.join(' / ') !== `${current[d + 'DraftEmoji']} / ${say(current[d + 'DraftGreeting'])}`) findings.push(`${at}: 選ばれているのが ${sel.join(' / ')}`);
+        if (sel.join(' / ') !== `${current[d + 'Emoji']} / ${say(current[d + 'Greeting'])}`) findings.push(`${at}: 選ばれているのが ${sel.join(' / ')}`);
         if ([...screen.querySelectorAll('[aria-pressed="true"]')].length !== 2) findings.push(`${at}: aria-pressed が 2 つでない`);
         const pv = [...screen.querySelectorAll('.pf-card > div')].map((e) => e.textContent).join(' ');
-        if (pv !== `${current[d + 'DraftEmoji']} ${d === 'host' ? 'Yasuhito' : 'ogwssk'} ${quote[0]}${say(current[d + 'DraftGreeting'])}${quote[1]}`) findings.push(`${at}: 見本が ${pv}`);
+        if (pv !== `${current[d + 'Emoji']} ${d === 'host' ? 'Yasuhito' : 'ogwssk'} ${quote[0]}${say(current[d + 'Greeting'])}${quote[1]}`) findings.push(`${at}: 見本が ${pv}`);
         if (screen.querySelector('input, textarea, [contenteditable]')) findings.push(`${at}: 自由入力の欄がある`);
-        const btns = [...screen.querySelectorAll('.pf-actions .btn')].map((b) => b.textContent);
-        if (btns.join() !== 'Save,Cancel') findings.push(`${at}: ボタンが ${btns.join(' / ')}`);
-        if (pfDialog.querySelector('.pf-emoji[data-norow], .pf-greet[data-norow], .pf-actions [data-norow]')) findings.push(`${at}: Profile のダイアログに押せない部品がある`);
+        if (pfDialog.querySelector('.pf-emoji[data-norow], .pf-greet[data-norow]')) findings.push(`${at}: Profile のダイアログに押せない部品がある`);
         const sr = screen.getBoundingClientRect();
-        const parts = [...screen.querySelectorAll('.pf-head .d-title, .pf-close, .pf-card, .pf-emojis, .pf-greets, .pf-actions .btn')].map((el) => [el, el.getBoundingClientRect()]);
+        const parts = [...screen.querySelectorAll('.pf-head .d-title, .pf-back, .pf-card, .pf-emojis, .pf-greets, .pf-saved')].map((el) => [el, el.getBoundingClientRect()]);
         parts.forEach(([el, r]) => { if (r.top < sr.top || r.bottom > sr.bottom || r.left < sr.left || r.right > sr.right) findings.push(`${at}: ${el.className} が画面からはみ出している`); });
         for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
           const [a, ra] = parts[i]; const [b, rb] = parts[j];

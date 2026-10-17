@@ -1646,12 +1646,12 @@ var UNDECIDED = [
     desc: '部屋 (Ready 画面・読み込み) で切断したら、20 秒まで自動で再接続し、その間は両者の Ready を消す。切れた側には "Connection lost. Reconnecting…"、' +
       '残った側には "Your friend disconnected. Waiting for them to reconnect…"。20 秒で戻れなければ、切れた側に "Could not reconnect." と Retry / Leave Room。' +
       'クライアントは Friend Match トップへ戻り、ホストは空の部屋を残す (同じ Match Code)。図03 の「両者が "Connecting…" → "Connection lost." → Cancel Match だけ」の流れとトグルは削除した。' +
-      '20 秒は QA² 側の仮の値 (変わりうる)。VS 画面・カウントダウン中の切断は U32 (読み込み中の切断は U5、2026-10-08 に確認)。ホストが戻らずに Friend Match トップへ戻るクライアントには "The room was closed." (U52、2026-10-08)。' +
+      '20 秒は QA² 側の仮の値 (変わりうる)。VS 画面・カウントダウン中の切断は U32 (読み込み中の切断は U5、2026-10-08 に確認)。ホストが戻らずに Friend Match トップへ戻るクライアントには "The match was canceled." (U52、2026-10-08。文言は 2026-10-17 の U63 で変えた)。' +
       '待っている間の残りの秒数は U52 で決まった (切れた側)。 ' +
       '2026-10-10 の U57 で Leave Room のボタンは無くなり、"Could not reconnect." の画面は Retry と ‹ だけになった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U6', title: '"Connection failed" は Create / Join がサーバーに届かないときだけ',
-    desc: '"Connection failed" のトーストは、Create Match / Join Match がサーバーに届かないときだけ出す。文言はホストが "Couldn’t create a room. Try again."、クライアントが "Couldn’t join the room. Try again."。' +
+    desc: '"Connection failed" のトーストは、Create Match / Join Match がサーバーに届かないときだけ出す。文言はホストが "Couldn’t create a match. Try again."、クライアントが "Couldn’t join the match. Try again." (2026-10-17 の U63 で "room" をやめた)。' +
       'Match Code の誤り・期限切れ・満員・閉じた部屋の赤字 (図08〜10 など) とは別。モックでは「モック設定」の Create Match / Join Match の結果を「接続失敗」にすると出る。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U7', title: 'Match Code の期限は 30 分 (サーバーが数える)。切れたら両者に "Match code expired."',
@@ -1660,7 +1660,7 @@ var UNDECIDED = [
       '30 分は QA² 側の仮の値 (変わりうる)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U8', title: 'ホストがキャンセルした後のクライアントの出口',
-    desc: 'U34 の決定で解消した。ホストがルームを閉じると、クライアントは "Room closed. The host left." を見て Friend Match トップへ移る (以前の "Host User / cancelled the match." の画面と ‹ は無くなった)。' +
+    desc: 'U34 の決定で解消した。ホストがルームを閉じると、クライアントは "The host canceled the match." (2026-10-17 の U63 で変えた) を見て Friend Match トップへ移る (以前の "Host User / cancelled the match." の画面と ‹ は無くなった)。' +
       'ボタンは Close Room (U14) になり、どの部屋の画面から閉じても同じ。',
     decided: { by: '高宮さん', date: '2026-10-07', reason: 'U34 (ホストがルームを閉じたときのクライアント) の決定に含まれる' } },
   { id: 'U9', title: 'クライアントの ‹ は確認 "Leave this match?" を出す (以前の Leave Room のボタンは無い)',
@@ -1795,7 +1795,7 @@ var UNDECIDED = [
   { id: 'U32', title: 'VS 画面・カウントダウン中の切断: Ready を消して止め、相手は 20 秒待つ。読み込みは 20 秒まで',
     desc: 'Friend Match の VS 画面・カウントダウン中 (試合が始まる、つまり 3-2-1 のあとサーバーが確認するまで) の切断は、両者の Ready を消して止める。勝敗は記録しない。残った側には "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウン、Leave Room を出す。' +
       '戻ってきたら両者とももう一度 Ready を押し、カウントダウンは 3 からやり直す。戻らなければ、切断したのがクライアントならホストに "Match cancelled. Opponent did not reconnect." (結果なし、ホストは同じ Match Code のままルームに残る)、' +
-      'ホストならクライアントに "Room closed. The host disconnected." を出して Friend Match トップへ。読み込み ("Starting match…") は 20 秒までで、終わらなければ "Match could not start. Please try again." で両者とも Ready 画面に戻る。' +
+      'ホストならクライアントに "The host disconnected. The match was canceled." (2026-10-17 の U63 で変えた) を出して Friend Match トップへ。読み込み ("Starting match…") は 20 秒までで、終わらなければ "Match could not start. Please try again." で両者とも Ready 画面に戻る。' +
       '試合が始まったあとは、これまでのルール (20 秒の切断負け U28、降参の負け U38)。20 秒は QA² 側の仮の値 (変わりうる)。切断した側の画面と戻れなかった側の表示は U52、ランダム対戦・再戦の VS 画面中の切断は U54 (どちらも 2026-10-08)。' +
       '部屋 (Ready 画面・読み込み) での切断は U5 で決まった (2026-10-07、SPEC14 のモックでは U32 に含めていた。U32 が VS 画面とカウントダウンだけなのは 2026-10-08 に確認)。 ' +
       '2026-10-10 の U57 で Leave Room のボタンは無くなった (出口は ‹ だけ)。',
@@ -1806,7 +1806,7 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U34', title: '取り消しと退出: Cancel Ready はルームに残る。クライアントが抜けるとホストは同じ Match Code で待つ。ホストが閉じるとクライアントは Friend Match トップへ',
     desc: 'Cancel Ready で Ready を取り消してもルームに残り、相手には "Opponent is no longer ready." を出す。クライアントが抜けると、ホストには "Your friend left. Waiting for another friend…" を出し、Match Code は変えない。' +
-      'ホストがルームを閉じると、クライアントには "Room closed. The host left." を出して Friend Match トップへ移す。抜ける前に確認 "No match has started. No win or loss will be recorded." を出す。' +
+      'ホストがルームを閉じると、クライアントには "The host canceled the match." (2026-10-17 の U63 で変えた) を出して Friend Match トップへ移す。抜ける前に確認 "No match has started. No win or loss will be recorded." を出す。' +
       '出口はどちらも ‹ の確認 (U57)。ホストは "Cancel this match?" と Cancel Match / Keep Waiting、クライアントは "Leave this match?" と Leave / Stay (U63)。確認の本文は "No match has started. No win or loss will be recorded." (2026-10-08 に確認)。 ' +
       '決めたときのボタンはクライアントが Leave Room (U9)、ホストが Close Room (U14)、確認の題名は "Leave this room?" / "Close this room?" (U51) で、2026-10-10 の U57 でボタンが無くなり、2026-10-17 の U63 で今の文言になった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
@@ -1891,8 +1891,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U52', title: '開始前の切断の表示: 切れた側も "Connection lost. Reconnecting…" と残りの秒数。部屋のお知らせは Close で閉じる帯',
     desc: '切断した側には "Connection lost. Reconnecting…" と残りの秒数を出す (VS 画面・カウントダウン中の切断 (U32) も)。' +
-      'U32 で戻れなかった側には "Could not reconnect. The match did not start."。U5 でホストが戻らなかったとき、クライアントには "The room was closed." (「You left the room」とは出さない)。' +
-      '部屋のお知らせ ("Room closed…" など) はモーダルではない帯で、Close で閉じる。以前のモックの「Match Code を入れると消える」はやめた。',
+      'U32 で戻れなかった側には "Could not reconnect. The match did not start."。U5 でホストが戻らなかったとき、クライアントには "The match was canceled." (「You left the room」とは出さない。文言は 2026-10-17 の U63 で変えた)。' +
+      '部屋のお知らせ ("The host canceled the match." など) はモーダルではない帯で、Close で閉じる。以前のモックの「Match Code を入れると消える」はやめた。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U53', title: 'Ready は送っている間と VS 画面から先は取り消せない (今のモックのまま)',
     desc: '今のモックのまま。Ready を送っている間 ("Confirming…") と、読み込み ("Starting match…")・VS 画面から先は Ready を取り消せない (「VS 画面までは取り消せる」案は採らない)。' +
@@ -1932,7 +1932,7 @@ var UNDECIDED = [
       '‹ でも下部のボタンと同じく確認を出し、部屋を閉じる・抜けることを示す: ホストは "Cancel this match?" (Cancel Match / Keep Waiting)、クライアントは "Leave this match?" (Leave / Stay) ' +
       '(本文は U34 の "No match has started. No win or loss will be recorded.")。Keep Waiting / Stay で部屋に残る。' +
       '文言は 2026-10-17 の U63 で変えた (決めたときは "Close this room?" / "Leave this room?" と Close Room / Leave Room・Keep Waiting)。' +
-      'ホストが閉じると、相手 (クライアント) は "Room closed. The host left." で Friend Match トップへ (U34)。"Could not reconnect." の画面も Retry と ‹ だけ。' +
+      'ホストが閉じると、相手 (クライアント) は "The host canceled the match." (U63) で Friend Match トップへ (U34)。"Could not reconnect." の画面も Retry と ‹ だけ。' +
       '部屋を作ったまま他のモードを遊べるのは便利だが、バグの原因になり今は仕様として重いので、部屋を残したまま別の画面へ移ることはできない (以前の U14 の離席と帯 (U1 / U16 / U19 / U55)、U12 の確認は無くなった)。',
     decided: { by: 'YoshiyukiN さんの FB (#1891、1・2 番目)', date: '2026-10-10' } },
   { id: 'U58', title: 'Match Code の期限は画面に出さない。ホストにだけ "Share this code with your friend!"',
@@ -1959,11 +1959,11 @@ var UNDECIDED = [
   { id: 'U61', title: 'Back to Friend Match は両者を同じ部屋 (同じ Match Code) へ戻す。部屋を閉じるのはホストの ‹ だけ',
     desc: '#1891 の FB の 11 番目。Friend Match の結果画面の Back to Friend Match は、Friend Match トップではなく、対戦した部屋へ同じ Match Code のまま戻す (U24 を変更)。' +
       '先に押した側は部屋で相手を待ち (ホスト "Waiting for your friend to return…"、クライアント "Waiting for the host to return…")、' +
-      '結果画面に残った相手には "Your friend went back to the room. Rematch is not available." (U25 の一行の Friend Match 版)。' +
+      '結果画面に残った相手には "Your friend went back to Friend Match. Rematch is not available." (U25 の一行の Friend Match 版)。' +
       '相手も押すと、入室と同じく "Friend joined!" / "Connecting…" のあと Ready 画面 (U4)。相手に見せる絵文字とあいさつは同じ部屋なので固定し直さない (U56、再戦と同じ)。' +
       '部屋が閉じるのはホストが ‹ を押して "Cancel this match?" で閉じたときだけ (U57)。クライアントの ‹ は "Leave this match?" のあとクライアントだけが抜け、部屋は残る (U9 / U34)。' +
-      'ホストが先に部屋を閉じていたら、あとから押したクライアントは Friend Match トップに "Room closed. The host left." (U34 / U52)。 ' +
-      '2026-10-17 の U63 で、確認は今の文言 (以前は "Close this room?" / "Leave this room?")、帯は "The host canceled the match."、一行は "Your friend went back to Friend Match. Rematch is not available." になった。',
+      'ホストが先に部屋を閉じていたら、あとから押したクライアントは Friend Match トップに "The host canceled the match." (U34 / U52)。 ' +
+      '確認・帯・一行の文言は 2026-10-17 の U63 で変えた (以前は "Close this room?" / "Leave this room?"、"Room closed. The host left."、"Your friend went back to the room. Rematch is not available.")。',
     decided: { by: '#1891 の FB (11 番目)', date: '2026-10-17' } },
   { id: 'U62', title: 'Random Match の画面は開いただけでは探さない。Ready で探し始め、探している間は同じボタンが Cancel になる',
     desc: '#1891 の FB の 16・17 番目。Random Match の画面を開くと、相手を探さずに大きな Ready を出して待つ。Ready を押すと "Searching for an opponent…" で相手を探し始め、' +

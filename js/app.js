@@ -263,7 +263,7 @@
         (s.status ? '<div class="status">' + esc(s.status) + '</div><div class="dots"><i></i><i></i><i></i></div>' : '') + '</div>' +
         buttonsHtml(dev, s.buttons);
     },
-    // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56。スタンプのミュート U49 とは関係なく出す)
+    // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56)
     vs: function (dev, s) {
       var me = dev;
       var card = function (who) {
@@ -300,12 +300,11 @@
       var score = s.outcome === 'NoContest' ? null : DEMO_SCORES[s.outcome];
       var rating = ratingText(s.outcome, app.state);
       var status = REMATCH_STATUS[s.status];
-      // 相手が送ったスタンプは、ミュートしていなければ相手の名前の上に出す。自分が送ったものは自分の名前の上
+      // 送ったスタンプは、両者の画面で送った人の名前の上に出す
       var player = function (who, isMe) {
         var stamp = stampById(app.state[who + 'Stamp']);
-        var shown = stamp && (isMe || !app.state[dev + 'Mute']);
         return '<div class="r-player' + (isMe ? ' me' : '') + '">' +
-          (shown ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
+          (stamp ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
           (isMe ? '<span class="you">YOU</span>' : '') + '<b>' + esc(PLAYERS[who].name) + '</b></div>';
       };
       var stats = (score ? '<div class="r-row"><span>Score</span><b>' + fmt(score[0]) + ' \u2013 ' + fmt(score[1]) + '</b></div>' : '') +
@@ -353,16 +352,13 @@
     return STAMPS.filter(function (st) { return st.id === id; })[0] || null;
   }
 
-  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。
-  // その下に相手のスタンプのミュート "Mute opponent emotes" / "Unmute opponent emotes" (決定 U49)
+  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。ミュートのボタンは無い (#1891 の FB 8)
   function stampsHtml(dev) {
     var waiting = app.state[dev + 'Stamp'] !== null;
-    var muted = app.state[dev + 'Mute'];
     return '<div class="r-stamps">' + STAMPS.map(function (st) {
       if (waiting) return '<button type="button" class="r-stamp is-disabled" disabled aria-label="' + esc(st.text) + '">' + st.emoji + '</button>';
       return '<button type="button" class="r-stamp" aria-label="' + esc(st.text) + '"' + attrs(dev, 'stamp.' + st.id) + '>' + st.emoji + '</button>';
-    }).join('') + '</div><button type="button" class="r-mute' + (muted ? ' muted' : '') + '"' + attrs(dev, muted ? 'unmuteStamps' : 'muteStamps') + '>' +
-      '<span class="r-mute-icon" aria-hidden="true">' + (muted ? '\u{1F515}' : '\u{1F514}') + '</span>' + (muted ? 'Unmute opponent emotes' : 'Mute opponent emotes') + '</button>';
+    }).join('') + '</div>';
   }
 
   // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Rematch / Decline) は横に並べる

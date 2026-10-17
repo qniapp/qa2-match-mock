@@ -445,21 +445,13 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .r-status.wait { color: var(--h); }
 .r-status.asked { color: var(--y); }
 .r-status.info { color: #C9CED8; }
-.r-stamps { display: flex; justify-content: center; gap: 10px; padding-bottom: 8px; }
+.r-stamps { display: flex; justify-content: center; gap: 10px; padding-bottom: 16px; }
 .r-stamp {
   width: 44px; height: 40px; padding: 0; border-radius: 10px; cursor: pointer; font-size: 20px; line-height: 1;
   background: rgba(255, 255, 255, 0.05); border: 1px solid #56607E;
 }
 .r-stamp:hover:not(:disabled) { border-color: var(--h); }
 .r-stamp.is-disabled { cursor: default; opacity: 0.4; }
-/* 相手のスタンプのミュート (決定 U49)。スタンプの下の小さな文字のボタン */
-.r-mute {
-  display: inline-flex; align-items: center; gap: 6px; margin: 0 auto 12px; padding: 4px 12px; border-radius: 999px; cursor: pointer;
-  font: inherit; font-size: 12.5px; color: #C9CED8; background: none; border: 1px solid transparent;
-}
-.r-mute:hover:not([data-norow]) { border-color: #56607E; }
-.r-mute-icon { font-size: 14px; }
-.r-mute.muted { color: #F8B4B4; border-color: rgba(248, 138, 138, 0.45); background: rgba(248, 138, 138, 0.1); }
 .view-result .actions { padding-bottom: 28px; gap: 8px; }
 .btn-row { display: flex; gap: 8px; }
 .btn-row .btn { flex: 1; }

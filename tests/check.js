@@ -750,7 +750,7 @@ for (const o of ['Win', 'Lose', 'Draw']) {
 // U26: 結果画面から自動では次へ進まない
 for (const r of TRANSITIONS) if (r.auto && Engine.DEVICES.some((d) => [].concat(r.from[d]).some((s) => isResultState(s)))) fail(`${r.id}: 結果画面から自動で進む`);
 
-// U27: スタンプ。3 種類、送ってから 5 秒は送れない、3 秒で消える、ミュートで相手のスタンプを出さない。結果画面を抜けると消え、ミュートは同じ相手といる間だけ続く
+// U27: スタンプ。3 種類、送ってから 5 秒は送れない、3 秒で消える。結果画面を抜けると消える。ミュートは無い (U49、#1891 の FB 8)
 const stampWant = [['gg', '\u{1F44F}', 'Good game'], ['thanks', '\u{1F91D}', 'Thanks for the match'], ['nice', '\u{1F44D}', 'Nice']];
 if (JSON.stringify(STAMPS.map((s) => [s.id, s.emoji, s.text])) !== JSON.stringify(stampWant)) fail('スタンプが 👏 Good game / 🤝 Thanks for the match / 👍 Nice でない');
 for (const [dev, R, other, O] of eachSide) {
@@ -764,20 +764,17 @@ for (const [dev, R, other, O] of eachSide) {
   if (hidden[`${dev}Stamp`] !== 'sent' || Engine.canFire(hidden, `${dev}.stamp.nice`)) fail('3 秒で消えたあと、5 秒たつ前に送れる');
   const ready = Engine.fire(hidden, `${dev}.stampInterval`).state;
   if (ready[`${dev}Stamp`] !== null || !Engine.canFire(ready, `${dev}.stamp.nice`)) fail('5 秒たっても送れない');
-  const muted = Engine.fire(st, `${other}.muteStamps`);
-  if (!muted || muted.state[`${other}Mute`] !== true || !Engine.canFire(muted.state, `${other}.unmuteStamps`)) fail(`${other} がミュートできない`);
-  // ミュートは再戦 (VS → 試合 → 結果) の間は続き、結果画面を抜けると戻る。送ったスタンプは結果画面を抜けると消える
-  let m = muted.state;
-  m = Engine.fire(m, `${dev}.rematch`).state;
+  if (Engine.canFire(st, `${other}.muteStamps`) || `${other}Mute` in st) fail(`${other} がまだミュートできる (U49、#1891 の FB 8)`);
+  // 送ったスタンプは結果画面を抜けると消える (再戦の VS 画面へ進んだときも)
+  let m = Engine.fire(st, `${dev}.rematch`).state;
   m = Engine.fire(m, `${other}.rematch`).state;
-  if (m[`${other}Mute`] !== true || m[`${dev}Stamp`] !== null) fail(`再戦の VS 画面でミュート ${m[`${other}Mute`]} / スタンプ ${m[`${dev}Stamp`]}`);
-  const left = Engine.fire(Object.assign({}, muted.state), `${other}.backToFriendMatch`);
-  if (!left || left.state[`${other}Mute`] !== false) fail('結果画面を抜けてもミュートが続く');
+  if (m[`${dev}Stamp`] !== null) fail(`再戦の VS 画面でスタンプ ${m[`${dev}Stamp`]}`);
   for (const name of [`${R}.WinResult.OpponentLeft`, `${R}.WinResult.OpponentDisconnected`, `${R}.LoseResult.Disconnected`, `${R}.NoContestResult`]) {
     if (SCREENS[name].stamps || Engine.canFire(at(...sides(dev, name, `${O}.MultiModeSelection`), friend), `${dev}.stamp.gg`)) fail(`${name} でスタンプを送れる`);
   }
 }
-if (!/stampsHtml/.test(appJs) || !/r-bubble/.test(appJs) || !/Mute opponent emotes/.test(appJs)) fail('app.js にスタンプ・吹き出し・ミュートの描画が無い');
+if (!/stampsHtml/.test(appJs) || !/r-bubble/.test(appJs)) fail('app.js にスタンプ・吹き出しの描画が無い');
+if (/muteStamps|Mute/.test(appJs + JSON.stringify(TRANSITIONS.map((r) => r.event)))) fail('ミュートの描画か遷移が残っている (U49、#1891 の FB 8)');
 
 // U28: 対戦中の切断。片方なら 20 秒待って切断した側の負け (戻れば続ける)。両者・サービス障害は No contest。降参した側は再戦を申し込めない
 for (const [dev, R, , O] of eachSide) {
@@ -857,10 +854,10 @@ for (const [id, checks] of Object.entries(flows)) {
     if (got !== want) fail(`シナリオ ${id} の手順 ${n}: ${got} (期待: ${want})`);
   }
 }
-// 15h: スタンプとミュート (手順ごとの hostStamp / clientStamp / clientMute)
+// 15h: スタンプ (手順ごとの hostStamp / clientStamp)
 const sc15h = SCENARIOS.find((x) => x.id === '15h');
-const stampFlow = [14, 15, 16, 17, 18, 19, 20, 21].map((n) => { const st = Engine.replay(sc15h, n).state; return `${st.hostStamp},${st.clientStamp},${st.clientMute}`; }).join(' → ');
-const stampWantFlow = 'null,null,false → gg,null,false → gg,thanks,false → sent,thanks,false → sent,thanks,true → null,thanks,true → nice,thanks,true → nice,thanks,false';
+const stampFlow = [14, 15, 16, 17, 18, 19].map((n) => { const st = Engine.replay(sc15h, n).state; return `${st.hostStamp},${st.clientStamp}`; }).join(' → ');
+const stampWantFlow = 'null,null → gg,null → gg,thanks → sent,thanks → null,thanks → nice,thanks';
 if (stampFlow !== stampWantFlow) fail(`シナリオ 15h のスタンプ ${stampFlow} (期待: ${stampWantFlow})`);
 console.log('ok  対戦後 (U20〜U30): 結果画面の中身・レート・ボタン・戻り先・再戦・スタンプ・切断・次の相手 (両端末)');
 
@@ -1124,9 +1121,8 @@ if (!/m-dim paused/.test(appJs) || !/\.m-dim\.paused \{ background: rgba\(0, 0, 
 if (/class="m-dim paused[^"]*"[^;]*matchMenu|function matchMenuHtml[^}]*paused/.test(appJs)) fail('MATCH MENU の暗幕が止まった表示になっている (U37)');
 // U48: VS 画面は "Rating {n}" (Friend Match でも)。架空の Rank は無い
 if (/Rank|rank/.test(appJs + JSON.stringify(ctx.PLAYERS)) || !/Rating ' \+ ELO\.initial/.test(appJs)) fail('VS 画面が "Rating {n}" になっていない / Rank が残っている (U48)');
-// U49: ミュートのボタンの文言。ミュートは同じ相手と続けて対戦している間だけ (VS 画面の切断待ちを含む)
-if (!/Mute opponent emotes/.test(appJs) || !/Unmute opponent emotes/.test(appJs) || /Mute stamps/.test(appJs)) fail('ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" でない (U49)');
-for (const name of ['Host.Opponent.Disconnected', 'Client.Opponent.OpponentDisconnected', 'Host.Game.Countdown']) if (!ctx.isWithOpponent(name)) fail(`${name} でミュートが解ける (U49)`);
+// U49: スタンプのミュートは無い (#1891 の FB 8)。結果画面にミュートのボタンを出さない
+if (/opponent emotes|r-mute/.test(appJs + read('css', 'style.css'))) fail('結果画面にミュートのボタンが残っている (U49、#1891 の FB 8)');
 // U51: Close Room の確認の題名は "Close this room?"。U12 のクライアント向けの本文は保留 (README に書く)
 if (DIALOGS.closeRoom.title !== 'Close this room?') fail('Close Room の確認の題名が "Close this room?" でない (U51)');
 if (!/保留/.test(UNDECIDED.find((u) => u.id === 'U51').desc) || !/U12[^\n]*保留|保留[^\n]*U12/.test(read('README.md'))) fail('U12 のクライアント向けの本文が保留だと書かれていない (U51)');
@@ -1199,7 +1195,7 @@ expectFire(at(L('Host', 'ConnectionLost'), L('Client', 'CodeExpired')), 'net.rec
 // pi の仮定 1 (ホストの ‹ は確認を出さない) は 2026-10-10 の U57 で変わった (ホストの ‹ は "Close this room?"。上の U57 の確認)。
 // 仮定 5: Online Battle へ戻るボタンは降参のあとも "Back to Online"
 if (/Back to Online Battle/.test(shownText + appJs)) fail('"Back to Online Battle" が残っている (すべて "Back to Online")');
-console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、切断で止める 20 秒、次の相手の検索停止、Rating、ミュート、再戦の一行、部屋のお知らせ、開始前の切断の取りやめ');
+console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、切断で止める 20 秒、次の相手の検索停止、Rating、ミュートなし、再戦の一行、部屋のお知らせ、開始前の切断の取りやめ');
 
 // 決定 U56 (高宮さん 2026-10-08): Profile。相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ
 {
@@ -1336,13 +1332,12 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     }
   }
 
-  // シナリオ 22: 変えて Save → ランダム対戦の VS 画面に出る。スタンプをミュートして再戦しても VS 画面のあいさつは出る (U49 はスタンプだけ)
+  // シナリオ 22: 変えて Save → ランダム対戦の VS 画面に出る。再戦の VS 画面にもあいさつは出る
   const sc22 = SCENARIOS.find((x) => x.id === '22');
   const vs22 = sc22 && Engine.replay(sc22, 7).state;
   if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Bring it on!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
   const end22 = sc22 && Engine.replay(sc22);
-  if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || !end22.state.clientMute || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後がミュートしたままの再戦の VS 画面 (ホストのあいさつ付き) でない');
-  if (/Mute/.test(appJs.slice(appJs.indexOf('    vs: function'), appJs.indexOf('    // ゲーム画面のプレースホルダー')))) fail('VS 画面の描画がミュートを見ている (あいさつはミュートで隠さない)');
+  if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後が再戦の VS 画面 (ホストのあいさつ付き) でない');
   if (STAMPS.map((x) => `${x.emoji} ${x.text}`).join(' / ') !== '\u{1F44F} Good game / \u{1F91D} Thanks for the match / \u{1F44D} Nice') fail('結果画面のスタンプ (U27) が変わった');
   const sc22b = SCENARIOS.find((x) => x.id === '22b');
   const end22b = sc22b && Engine.replay(sc22b).state;
@@ -1367,7 +1362,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   // シナリオは localStorage に関係なく、いつも最初の値から (Engine.replay は保存した値を受け取らない)
   if (Engine.replay(sc22, 0).state.hostEmoji !== EMOJIS[0]) fail('シナリオが最初の値から始まらない');
   if (!/if \(app\.scenario \|\| !storage\) return;/.test(appJs)) fail('app.js がシナリオの再生中にも localStorage に書く');
-  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10 (アポストロフィは ’)・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・ミュートでもあいさつは出る');
+  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10 (アポストロフィは ’)・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・再戦の VS 画面にもあいさつは出る');
 }
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));

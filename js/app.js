@@ -361,7 +361,7 @@
     }).join('') + '</div>';
   }
 
-  // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Rematch / Decline) は横に並べる
+  // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Accept / Decline) は横に並べる
   function resultActionsHtml(dev, buttons) {
     var btn = function (b) {
       if (b.disabled) return '<button type="button" class="btn is-disabled" disabled>' + esc(b.label) + '</button>';
@@ -426,7 +426,7 @@
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
   // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29 / U47)、ロビー (Ready 画面) では「アプリを離れる」と「切断する」(決定 U5 / U35)、
-  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。右パネルの環境イベントと同じ)、
+  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、再戦を申し込んで待っている間は相手の応答の「相手が応じる」「相手が断る」「20 秒たつ」(決定 U30 / U60。相手の端末の Accept / Decline と同じ)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。右パネルの環境イベントと同じ)、
   // それ以外は時間切れの決着 (勝ち / 負け / 同点、決定 U44) と、この端末の接続が切れる「切断する」(決定 U28 / U32 / U54)
   function mockControlsHtml(dev) {
     var btn = function (ev, text, cls) { return '<button type="button" class="mc-btn' + (cls ? ' ' + cls : '') + '"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
@@ -445,6 +445,11 @@
     }
     if (/\.FriendMatch\.Lobby\./.test(state)) {
       return '<span class="mc-label">モック操作 (ルーム):</span>' + btn('leaveApp', 'アプリを離れる') + btn('disconnect', '切断する');
+    }
+    if (/\.RematchRequested$/.test(state)) {
+      var other = dev === 'host' ? 'client' : 'host';
+      return '<span class="mc-label">モック操作 (再戦):</span>' + envBtn(other + '.rematch', '相手が応じる') + envBtn(other + '.declineRematch', '相手が断る') +
+        envBtn('timer.rematchTimeout', '20 秒たつ');
     }
     if (isResultState(app.state[dev])) {
       return '<span class="mc-label">モック操作 (スタンプ):</span>' + btn('stampShown', '3 秒たつ') + btn('stampInterval', '5 秒たつ');

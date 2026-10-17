@@ -676,7 +676,7 @@ var TRANSITIONS = (function () {
       to: { host: resultState('Host', p[1]), client: resultState('Client', OPPOSITE[p[1]]) },
       note: 'モック操作: 時間切れ。押した側が' + mine + '、相手は自動で' + (p[1] === 'Draw' ? '同じく引き分け' : '逆の結果') + '。' +
         '決定 (U44): 終わった理由は ' + (p[1] === 'Draw' ? '"Same score when time ran out"' : '"Time is up"') + '。' +
-        '決定 (U20): 結果画面に勝敗・両者の名前・スコア・終わった理由。MATCH MENU や降参の確認を開いていても試合は続いているので、そのまま結果画面へ (U37)',
+        '決定 (U20): 結果画面に勝敗・両者の名前・終わった理由 (スコアは出さない、FB 7)。MATCH MENU や降参の確認を開いていても試合は続いているので、そのまま結果画面へ (U37)',
       decided: ['U44', 'U20', 'U37'] });
   });
   // 決定 (U28): 片方が切断したら 20 秒 (仮) 待ち、戻らなければ切断した側の負け。両者の切断・サービス障害は No contest
@@ -1034,10 +1034,8 @@ function ratingText(outcome, session) {
   if (outcome === 'NoContest') return 'No rating change (no contest)';
   if (!session.rated) return 'No rating change (rematch)';
   var delta = eloDelta(ELO.initial, ELO.initial, OUTCOME_SCORE[outcome]);
-  return ELO.initial + ' \u2192 ' + (ELO.initial + delta) + ' (' + (delta > 0 ? '+' + delta : delta < 0 ? '-' + -delta : '\u00B10') + ')';
+  return ELO.initial + ' \u2192 ' + (ELO.initial + delta) + ' (' + (delta > 0 ? '+' + delta : delta < 0 ? '\u2212' + -delta : '\u00B10') + ')';
 }
-// 試合のスコア (モックのデモ値。自分 - 相手)。決まっていないとき (No contest) は行ごと出さない (U20)
-var DEMO_SCORES = { Win: [3200, 2750], Lose: [2750, 3200], Draw: [2900, 2900] };
 // 結果画面のボタン (決定 U22 / U24 / U41)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める
 function resultButtons(spec, match) {
   if (spec.reason === 'surrendered') return [{ label: 'Back to Online', event: 'backToOnlineBattle', primary: true }];
@@ -1081,7 +1079,7 @@ var VS_CONTEXT = 'VS 画面 (10-01 の合意)。両者の名前・レーティ�
 var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のメニューボタン (☰) で MATCH MENU を開く (U37、試合は止まらない)。' +
   '決着は時間切れで、得点の高いほうが勝ち・同点なら引き分け (U44)。端末の下のモック操作「時間切れ」の勝ち / 負け / 同点で決着させ、「切断する」でこの端末の接続が切れる (U28 / U46)。';
 // 結果画面の説明。端末の画面には出さず、右パネルに出す。秒数・Elo の値が QA² 側の仮の値であることもここと README にだけ書く
-var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両者の名前・スコア・終わった理由を出す (スコアはモックのデモ値。No contest のように決まっていないときは行ごと出さない)。' +
+var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両者の名前・終わった理由とレーティングの変化を出す。スコアは出さない (qniapp/qa2#1891 FB 7)。' +
   '時間切れで終わったときの理由は "Time is up"、同点の引き分けは "Same score when time ran out" (U44)。' +
   'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
   'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら Find Next Opponent / Rematch / Back to Online。自動では次へ進まない (U26)。';
@@ -1123,7 +1121,7 @@ var SPECIAL_RESULT_CONTEXT = {
   OpponentSurrendered: '相手が降参したので勝ち。"Your opponent surrendered" を出す (決定 U38)。降参で終わった試合のあとは、どちらからも再戦できない (U45)。',
   Disconnected: '自分の接続が切れ、20 秒 (仮) のうちに戻れなかったので負け (決定 U28)。ランダム対戦ではレートも変わる。切断で終わった試合のあとは再戦できない (U45)。',
   OpponentDisconnected: '相手の接続が切れ、20 秒 (仮) のうちに戻らなかったので勝ち (決定 U28)。切断で終わった試合のあとは再戦できない (U45)。',
-  NoContest: '両者の切断かサービス障害で、勝敗なし (決定 U28)。"No contest due to a connection error"、レートは変わらない。スコアは決まっていないので行ごと出さない (U20)。再戦はできない (U45)。',
+  NoContest: '両者の切断かサービス障害で、勝敗なし (決定 U28)。"No contest due to a connection error"、レートは変わらない。再戦はできない (U45)。',
 };
 var DISCONNECT_CONTEXT = {
   self: 'この端末の接続が切れた (決定 U28)。20 秒 (仮) のうちに戻れば試合を続け、戻れなければ負け。待っている間はサーバーが両者のゲームと得点を止め、' +
@@ -1599,7 +1597,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U20', title: '結果画面: 勝敗・両者の名前・スコア・終わった理由を出す',
     desc: '結果画面には、勝敗 (Win / Lose / Draw / No contest。画面は "WIN!" / "LOSE" / "DRAW" / "NO CONTEST")、両者の名前、スコア、終わった理由を出す。' +
-      'スコアが決まっていないときは、"----" などを出さずに行ごと出さない (モックでは No contest のとき)。モックのスコアはデモ値。' +
+      'スコアが決まっていないときは、"----" などを出さずに行ごと出さない。' +
+      '2026-10-17 の qniapp/qa2#1891 FB 7 で、スコアはどの結果画面にも出さず、勝敗とレーティングの変化だけにした。' +
       '通常の決着のときの終わった理由の文言と引き分けになる条件は U44 で決まった (2026-10-08: 時間切れで "Time is up"、同点なら "Same score when time ran out")。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U21', title: 'レーティング: Friend Match は変わらない。ランダム対戦は Elo (初期値 1000、K=24)。同じ相手との再戦は変わらない',
@@ -1714,7 +1713,7 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U44', title: '時間切れで得点の高いほうが勝ち、同点なら引き分け ("Time is up" / "Same score when time ran out")',
     desc: '試合は時間切れで終わり、得点の高いほうが勝ち。同点なら引き分け (DRAW)。結果画面の終わった理由は、時間切れなら "Time is up"、同点の引き分けなら "Same score when time ran out" ' +
-      '(以前のモックの仮の "Match finished" を置き換えた)。モックでは端末の下のモック操作「時間切れ」の勝ち / 負け / 同点で決着させる (得点の計算は対象外。スコアはデモ値)。',
+      '(以前のモックの仮の "Match finished" を置き換えた)。モックでは端末の下のモック操作「時間切れ」の勝ち / 負け / 同点で決着させる (得点の計算は対象外。結果画面にスコアは出さない、FB 7)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U45', title: '降参・切断・No contest で終わった試合のあとは、どちらからも再戦できない',
     desc: '降参・切断で勝敗が決まった試合と、No contest の試合のあとは、どちらの側にも Rematch を出さない (降参で勝った側からも申し込めない)。これまでのモックのとおり。' +

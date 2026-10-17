@@ -292,12 +292,12 @@
         fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
         (s.menu ? matchMenuHtml(dev, s.menu) : '') + (s.overlay ? overlayHtml(s) : '');
     },
-    // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・スコア・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
+    // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
+    // スコアは出さない (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ)
     // ボタンと Rating の行は Friend Match かランダム対戦か (セッションの match / rated) で変わる
     result: function (dev, s) {
       var other = dev === 'host' ? 'client' : 'host';
       var head = RESULT_HEADLINES[s.outcome];
-      var score = s.outcome === 'NoContest' ? null : DEMO_SCORES[s.outcome];
       var rating = ratingText(s.outcome, app.state);
       var status = REMATCH_STATUS[s.status];
       // 相手が送ったスタンプは、ミュートしていなければ相手の名前の上に出す。自分が送ったものは自分の名前の上
@@ -308,8 +308,7 @@
           (shown ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
           (isMe ? '<span class="you">YOU</span>' : '') + '<b>' + esc(PLAYERS[who].name) + '</b></div>';
       };
-      var stats = (score ? '<div class="r-row"><span>Score</span><b>' + fmt(score[0]) + ' \u2013 ' + fmt(score[1]) + '</b></div>' : '') +
-        (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
+      var stats = (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
         (rating && !/^No /.test(rating) ? '<div class="r-row"><span>Rating</span><b>' + esc(rating) + '</b></div>' : '');
       return header(dev, s, s.title) + '<div class="result">' +
         '<div class="r-outcome ' + head[1] + '">' + head[0] + '</div>' +
@@ -321,8 +320,6 @@
         '</div>' + resultActionsHtml(dev, resultButtons(s, app.state.match));
     },
   };
-
-  function fmt(n) { return n.toLocaleString('en-US'); }
 
   // VS 画面のカードの中身。Profile の見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)
   function vsCardBody(name, emoji, greeting, rating) {

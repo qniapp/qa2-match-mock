@@ -4,7 +4,7 @@
 // ランダム対戦の画面に 60 秒 (仮の長さ) が出ないこと、検索中のモック操作が端末の外にあることも確かめる (決定 U13)。
 // アプリを離れて検索が止まった通知がモーダルではなく、メニューをさまたげないことも確かめる (決定 U43)。
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
-// No contest にスコアの行が無いこと (値が決まっていないスコアは "----" ではなく行ごと出さない) も確かめる (決定 U20 / U27 / U28 / U30)。
+// 結果画面にスコアの行が無いこと (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ) も確かめる (決定 U20 / U27 / U28 / U30)。
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
 // 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
@@ -294,7 +294,7 @@ function scan() {
         });
         scroller.scrollTo(sx, sy);
       }
-      // 結果画面とゲーム画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアが決まっていなければ行ごと出さない。
+      // 結果画面とゲーム画面 (決定 U20〜U30 / U28): 仮の秒数を出さない。スタンプのタイマーは端末の下だけ。スコアは出さない (FB 7)。
       // 切断を待つ間 (決定 U46 / U54) だけは、残りの秒数 "20s" を濃い暗幕の上のパネルに出す
       const waitingTimer = screen.querySelector('.m-dim.paused .m-timer');
       const isWaiting = /\.(Game|Opponent)\.(Disconnected|OpponentDisconnected)\b/.test(state);
@@ -465,7 +465,7 @@ function scan() {
       }
       if (/----/.test(text)) findings.push(`${at}: 値の決まっていない ---- がある`);
       if (screen.querySelector('[data-ev="stampShown"], [data-ev="stampInterval"], [data-ev="disconnect"], [data-ev="win"], [data-ev="draw"]')) findings.push(`${at}: モック操作が端末の画面の中にある`);
-      if (/NoContestResult/.test(state) && /Score/.test(text)) findings.push(`${at}: No contest にスコアの行がある`);
+      if (screen.querySelector('.result') && /Score/.test(text)) findings.push(`${at}: 結果画面にスコアの行がある`);
       if (/💬 (gg|thanks|nice)/.test(state)) {
         ['stampShown', 'stampInterval'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]:not([data-norow])`)) findings.push(`${at}: 端末の下のモック操作で ${ev} を押せない`);

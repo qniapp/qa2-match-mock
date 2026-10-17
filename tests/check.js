@@ -258,13 +258,13 @@ for (const [k, text] of Object.entries(READY_NOTICES_WANT)) {
   }
   expectFire(at(L('Host', `Ready.${k}`), L('Client', `Ready.${k}`)), 'host.ready', L('Host', 'Ready.Confirming'), L('Client', `Ready.${k}`));
 }
-// U36 / U4 / U5 / U57: 部屋の画面の表示 (カード、状況の一行、カウントダウン、ボタン、‹)。部屋を出るボタン (Close Room / Leave Room) は無く、出口は ‹ だけ。
+// U36 / U4 / U5 / U57: 部屋の画面の表示 (カード、状況の一行、再接続のカウントダウン、ボタン、‹)。部屋を出るボタン (Close Room / Leave Room) は無く、出口は ‹ だけ。
 // ‹ を押せないのは、送っている間・読み込み・自分の再接続中 (U53)
 const btns = (s) => s.buttons.map((b) => b.label + (b.disabled ? '(無効)' : '')).join(' / ');
 const roomWant = (R) => ({
   Ready: [false, false, null, null, 'Ready', 'back'],
   'Ready.Confirming': [false, false, null, null, 'Confirming…(無効)', 'disabled'],
-  'Ready.WaitingForOpponent': [true, false, 'Waiting for opponent…', 60, 'Cancel Ready', 'back'],
+  'Ready.WaitingForOpponent': [true, false, 'Waiting for opponent…', null, 'Cancel Ready', 'back'],
   'Ready.OpponentReady': [false, true, 'Opponent is ready. Are you?', null, 'Ready', 'back'],
   'Ready.OpponentReady.Confirming': [false, true, 'Opponent is ready. Are you?', null, 'Confirming…(無効)', 'disabled'],
   Starting: [true, true, 'Starting match…', null, '', 'disabled'],
@@ -280,6 +280,8 @@ for (const R of ['Host', 'Client']) {
     if (!s || !s.cards) { fail(`${L(R, k)} が Ready 画面 (カード付き) でない`); continue; }
     const got = [s.cards.me, s.cards.them, s.status || null, s.timer || null, btns(s), s.back];
     if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${L(R, k)} の表示 ${JSON.stringify(got)} (期待: ${JSON.stringify(want)})`);
+    // #1891 の FB 6: 自分だけ Ready で待つ間は秒数を出さず、待っている印 (点の動き) だけを出す
+    if (!!s.dots !== (k === 'Ready.WaitingForOpponent')) fail(`${L(R, k)} の待っている印が ${s.dots ? 'ある' : '無い'} (FB 6: Waiting for opponent… にだけ出す)`);
     if (s.codeHint !== (R === 'Host')) fail(`${L(R, k)} の "${ctx.CODE_HINT}" が ${s.codeHint ? 'ある' : '無い'} (U58: ホストにだけ出す)`);
   }
   const cnr = SCREENS[L(R, 'CouldNotReconnect')];
@@ -296,7 +298,7 @@ for (const [name, s] of Object.entries(SCREENS)) {
   const labels = (s.buttons || []).map((b) => b.label);
   if (labels.some((l) => /^(Close|Leave) Room$/.test(l))) fail(`${name} に ${labels.join(' / ')} のボタンがある (U57: 出口は ‹ だけ)`);
 }
-if (!/\\u2713 Ready/.test(appJs) || !/Not ready/.test(appJs) || !/rd-card/.test(appJs) || !/rd-timer/.test(appJs)) fail('app.js に Ready 画面のカード ("✓ Ready" / "Not ready") とカウントダウンの描画が無い');
+if (!/\\u2713 Ready/.test(appJs) || !/Not ready/.test(appJs) || !/rd-card/.test(appJs) || !/rd-timer/.test(appJs) || !/s\.dots/.test(appJs)) fail('app.js に Ready 画面のカード ("✓ Ready" / "Not ready")・再接続のカウントダウン・待っている印の描画が無い');
 // U58: Match Code の期限は画面に出さず、ホストにだけ "Share this code with your friend!"。クライアントの画面には出さない
 if (!/CODE_HINT/.test(appJs) || ctx.CODE_HINT !== 'Share this code with your friend!') fail('部屋の画面に "Share this code with your friend!" (U58) が無い');
 if ('CODE_EXPIRY' in ctx || /expires in/i.test(appJs) || Object.values(SCREENS).some((s) => 'expiry' in s)) fail('部屋の画面に Match Code の期限の表示が残っている (U58)');
@@ -317,8 +319,16 @@ for (const [k, want] of Object.entries(dlgWant)) {
 }
 if (Object.keys(DIALOGS).join() !== 'closeRoom,leaveRoom') fail(`使わないダイアログが残っている (${Object.keys(DIALOGS)})`);
 if ('ROOM_SWITCH_BODY' in ctx) fail('U12 の作り直しの確認の本文が残っている (U57 で無くなった)');
-console.log('ok  U31 / U33〜U36 / U4 / U9 / U11 / U57: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト、‹ の確認 (Close this room? / Leave this room?) (両端末)');
+// #1891 の FB 5: Match Code のコピーのボタンはホストの部屋の画面にだけ。期限切れの画面には出さない。文字ではなくアイコンで、"Copy room code" の名前がある
+for (const [name, s] of Object.entries(SCREENS)) {
+  if (s.view !== 'lobby') continue;
+  const want = name.startsWith('Host.') && !/\.CodeExpired$/.test(name);
+  if (!!s.copyCode !== want) fail(`${name} の Match Code のコピーのボタンが ${s.copyCode ? 'ある' : '無い'} (#1891 FB 5: ホストにだけ。期限切れには無い)`);
+}
+if (!/class="copy" aria-label="Copy room code" title="Copy room code">' \+\s*'<svg/.test(appJs) || />Copy</.test(appJs)) fail('Match Code のコピーのボタンが "Copy room code" の名前付きのアイコンでない (#1891 FB 5)');
+console.log('ok  U31 / U33〜U36 / U4 / U9 / U11 / U57: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト (秒数は出さず待っている印だけ、FB 6)、‹ の確認 (Close this room? / Leave this room?) (両端末)');
 console.log('ok  U58: 部屋の画面に Match Code の期限を出さず、ホストにだけ "Share this code with your friend!" (クライアント・期限切れ・Could not reconnect. には無い)');
+console.log('ok  #1891 FB 5: Match Code のコピーのボタンはホストにだけ (アイコン、"Copy room code")。クライアントと期限切れの画面には無い');
 
 // 決定 (U4): Ready を押せるのは参加の確認・両者が部屋の画面・同期の 3 つがそろってから。決まった待ち時間は置かない
 {
@@ -592,8 +602,8 @@ for (const ev of ['host.win', 'host.lose', 'host.draw', 'client.win', 'client.lo
   if (Engine.canFire(at('Host.Game.Countdown', 'Client.Game.Countdown'), ev)) fail(`カウントダウン中に ${ev} の行がある`);
 }
 
-// U20: 結果画面の中身 (勝敗・両者の名前・スコア・終わった理由)。スコアが決まっていない No contest は行ごと出さない (---- は出さない)
-const { END_REASONS, REMATCH_STATUS, DEMO_SCORES, ELO, STAMPS, DISCONNECT_OVERLAYS, ratingText, resultButtons, isResultState } = ctx;
+// U20: 結果画面の中身 (勝敗・両者の名前・終わった理由)。スコアはどの結果画面にも出さない (qniapp/qa2#1891 FB 7)
+const { END_REASONS, REMATCH_STATUS, ELO, STAMPS, DISCONNECT_OVERLAYS, ratingText, resultButtons, isResultState } = ctx;
 const resultNames = Object.keys(SCREENS).filter((k) => SCREENS[k].view === 'result');
 if (resultNames.some((k) => !isResultState(k)) || Object.keys(SCREENS).some((k) => isResultState(k) && SCREENS[k].view !== 'result')) fail('isResultState と結果画面の一覧が合わない');
 if (resultNames.length !== 106) fail(`結果画面が ${resultNames.length} 状態 (期待: 106 = 2 端末 × (Win / Lose / Draw × 16 段階 + 降参・切断 4 + No contest))`);
@@ -601,10 +611,10 @@ for (const name of resultNames) {
   const s = SCREENS[name];
   if (!['Win', 'Lose', 'Draw', 'NoContest'].includes(s.outcome)) fail(`${name}: 勝敗 ${s.outcome}`);
   if (!END_REASONS[s.reason]) fail(`${name}: 終わった理由 ${s.reason} が無い`);
-  if (s.outcome !== 'NoContest' && !DEMO_SCORES[s.outcome]) fail(`${name}: スコアが無い`);
   if (!s.decided.includes('U20')) fail(`${name}: 決定 U20 が無い`);
 }
 if (/'----'|dim-value/.test(appJs)) fail('app.js に値の決まっていないスコアの ---- が残っている');
+if ('DEMO_SCORES' in ctx || /DEMO_SCORES|r-row"><span>Score/.test(appJs)) fail('結果画面にスコアの行が残っている (FB 7)');
 const reasons = { timeUp: 'Time is up', timeUpTie: 'Same score when time ran out', surrendered: 'You surrendered', opponentSurrendered: 'Your opponent surrendered',
   disconnected: 'You were disconnected', opponentDisconnected: 'Your opponent disconnected', connectionError: 'No contest due to a connection error' };
 if (JSON.stringify(END_REASONS) !== JSON.stringify(reasons)) fail('終わった理由の文言が違う');
@@ -619,7 +629,7 @@ if (!/r-outcome/.test(appJs) || !/NO CONTEST/.test(appJs) || !/DRAW/.test(appJs)
 if (ELO.initial !== 1000 || ELO.k !== 24) fail('Elo が初期値 1000・K=24 でない');
 const ratings = [
   ['Win', friend, 'No rating change (friend match)'], ['Lose', friend, 'No rating change (friend match)'], ['NoContest', friend, 'No rating change (friend match)'],
-  ['Win', random, '1000 \u2192 1012 (+12)'], ['Lose', random, '1000 \u2192 988 (-12)'], ['Draw', random, '1000 \u2192 1000 (\u00B10)'],
+  ['Win', random, '1000 \u2192 1012 (+12)'], ['Lose', random, '1000 \u2192 988 (\u221212)'], ['Draw', random, '1000 \u2192 1000 (\u00B10)'],
   ['NoContest', random, 'No rating change (no contest)'], ['Win', { match: 'random', rated: false }, 'No rating change (rematch)'],
 ];
 for (const [o, session, want] of ratings) if (ratingText(o, session) !== want) fail(`レート ${o} ${JSON.stringify(session)}: ${ratingText(o, session)} (期待: ${want})`);
@@ -819,7 +829,7 @@ for (const o of ['Win', 'Lose', 'Draw']) {
 // U26: 結果画面から自動では次へ進まない
 for (const r of TRANSITIONS) if (r.auto && Engine.DEVICES.some((d) => [].concat(r.from[d]).some((s) => isResultState(s)))) fail(`${r.id}: 結果画面から自動で進む`);
 
-// U27: スタンプ。3 種類、送ってから 5 秒は送れない、3 秒で消える、ミュートで相手のスタンプを出さない。結果画面を抜けると消え、ミュートは同じ相手といる間だけ続く
+// U27: スタンプ。3 種類、送ってから 5 秒は送れない、3 秒で消える。結果画面を抜けると消える。ミュートは無い (U49、#1891 の FB 8)
 const stampWant = [['gg', '\u{1F44F}', 'Good game'], ['thanks', '\u{1F91D}', 'Thanks for the match'], ['nice', '\u{1F44D}', 'Nice']];
 if (JSON.stringify(STAMPS.map((s) => [s.id, s.emoji, s.text])) !== JSON.stringify(stampWant)) fail('スタンプが 👏 Good game / 🤝 Thanks for the match / 👍 Nice でない');
 for (const [dev, R, other, O] of eachSide) {
@@ -833,20 +843,17 @@ for (const [dev, R, other, O] of eachSide) {
   if (hidden[`${dev}Stamp`] !== 'sent' || Engine.canFire(hidden, `${dev}.stamp.nice`)) fail('3 秒で消えたあと、5 秒たつ前に送れる');
   const ready = Engine.fire(hidden, `${dev}.stampInterval`).state;
   if (ready[`${dev}Stamp`] !== null || !Engine.canFire(ready, `${dev}.stamp.nice`)) fail('5 秒たっても送れない');
-  const muted = Engine.fire(st, `${other}.muteStamps`);
-  if (!muted || muted.state[`${other}Mute`] !== true || !Engine.canFire(muted.state, `${other}.unmuteStamps`)) fail(`${other} がミュートできない`);
-  // ミュートは再戦 (VS → 試合 → 結果) の間は続き、結果画面を抜けると戻る。送ったスタンプは結果画面を抜けると消える
-  let m = muted.state;
-  m = Engine.fire(m, `${dev}.rematch`).state;
+  if (Engine.canFire(st, `${other}.muteStamps`) || `${other}Mute` in st) fail(`${other} がまだミュートできる (U49、#1891 の FB 8)`);
+  // 送ったスタンプは結果画面を抜けると消える (再戦の VS 画面へ進んだときも)
+  let m = Engine.fire(st, `${dev}.rematch`).state;
   m = Engine.fire(m, `${other}.rematch`).state;
-  if (m[`${other}Mute`] !== true || m[`${dev}Stamp`] !== null) fail(`再戦の VS 画面でミュート ${m[`${other}Mute`]} / スタンプ ${m[`${dev}Stamp`]}`);
-  const left = Engine.fire(Object.assign({}, muted.state), `${other}.backToFriendMatch`);
-  if (!left || left.state[`${other}Mute`] !== false) fail('結果画面を抜けてもミュートが続く');
+  if (m[`${dev}Stamp`] !== null) fail(`再戦の VS 画面でスタンプ ${m[`${dev}Stamp`]}`);
   for (const name of [`${R}.WinResult.OpponentLeft`, `${R}.WinResult.OpponentDisconnected`, `${R}.LoseResult.Disconnected`, `${R}.NoContestResult`]) {
     if (SCREENS[name].stamps || Engine.canFire(at(...sides(dev, name, `${O}.MultiModeSelection`), friend), `${dev}.stamp.gg`)) fail(`${name} でスタンプを送れる`);
   }
 }
-if (!/stampsHtml/.test(appJs) || !/r-bubble/.test(appJs) || !/Mute opponent emotes/.test(appJs)) fail('app.js にスタンプ・吹き出し・ミュートの描画が無い');
+if (!/stampsHtml/.test(appJs) || !/r-bubble/.test(appJs)) fail('app.js にスタンプ・吹き出しの描画が無い');
+if (/muteStamps|Mute/.test(appJs + JSON.stringify(TRANSITIONS.map((r) => r.event)))) fail('ミュートの描画か遷移が残っている (U49、#1891 の FB 8)');
 
 // U28: 対戦中の切断。片方なら 20 秒待って切断した側の負け (戻れば続ける)。両者・サービス障害は No contest。降参した側は再戦を申し込めない
 for (const [dev, R, , O] of eachSide) {
@@ -930,10 +937,10 @@ for (const [id, checks] of Object.entries(flows)) {
     if (got !== want) fail(`シナリオ ${id} の手順 ${n}: ${got} (期待: ${want})`);
   }
 }
-// 15h: スタンプとミュート (手順ごとの hostStamp / clientStamp / clientMute)
+// 15h: スタンプ (手順ごとの hostStamp / clientStamp)
 const sc15h = SCENARIOS.find((x) => x.id === '15h');
-const stampFlow = [14, 15, 16, 17, 18, 19, 20, 21].map((n) => { const st = Engine.replay(sc15h, n).state; return `${st.hostStamp},${st.clientStamp},${st.clientMute}`; }).join(' → ');
-const stampWantFlow = 'null,null,false → gg,null,false → gg,thanks,false → sent,thanks,false → sent,thanks,true → null,thanks,true → nice,thanks,true → nice,thanks,false';
+const stampFlow = [14, 15, 16, 17, 18, 19].map((n) => { const st = Engine.replay(sc15h, n).state; return `${st.hostStamp},${st.clientStamp}`; }).join(' → ');
+const stampWantFlow = 'null,null → gg,null → gg,thanks → sent,thanks → null,thanks → nice,thanks';
 if (stampFlow !== stampWantFlow) fail(`シナリオ 15h のスタンプ ${stampFlow} (期待: ${stampWantFlow})`);
 console.log('ok  対戦後 (U20〜U30): 結果画面の中身・レート・ボタン・戻り先・再戦・スタンプ・切断・次の相手 (両端末)');
 
@@ -1188,7 +1195,6 @@ for (const R of ['Host', 'Client']) {
   }
 }
 if (/Match finished/.test(shownText + appJs)) fail('仮の "Match finished" が残っている');
-if (ctx.DEMO_SCORES.Draw[0] !== ctx.DEMO_SCORES.Draw[1] || ctx.DEMO_SCORES.Win[0] <= ctx.DEMO_SCORES.Win[1]) fail('デモのスコアが U44 (高いほうが勝ち・同点は引き分け) と合わない');
 if (!/'時間切れ'|時間切れ\)/.test(appJs) || !/btn\('draw', '同点'/.test(appJs)) fail('端末の下のモック操作が時間切れの勝ち / 負け / 同点になっていない');
 // U45: 降参・切断・No contest のあとは、どちらからも再戦できない
 for (const name of resultNames.filter((k) => /\.(Surrendered|OpponentSurrendered|Disconnected|OpponentDisconnected)$|NoContest/.test(k))) {
@@ -1199,9 +1205,8 @@ if (!/m-dim paused/.test(appJs) || !/\.m-dim\.paused \{ background: rgba\(0, 0, 
 if (/class="m-dim paused[^"]*"[^;]*matchMenu|function matchMenuHtml[^}]*paused/.test(appJs)) fail('MATCH MENU の暗幕が止まった表示になっている (U37)');
 // U48: VS 画面は "Rating {n}" (Friend Match でも)。架空の Rank は無い
 if (/Rank|rank/.test(appJs + JSON.stringify(ctx.PLAYERS)) || !/Rating ' \+ ELO\.initial/.test(appJs)) fail('VS 画面が "Rating {n}" になっていない / Rank が残っている (U48)');
-// U49: ミュートのボタンの文言。ミュートは同じ相手と続けて対戦している間だけ (VS 画面の切断待ちを含む)
-if (!/Mute opponent emotes/.test(appJs) || !/Unmute opponent emotes/.test(appJs) || /Mute stamps/.test(appJs)) fail('ミュートのボタンが "Mute opponent emotes" / "Unmute opponent emotes" でない (U49)');
-for (const name of ['Host.Opponent.Disconnected', 'Client.Opponent.OpponentDisconnected', 'Host.Game.Countdown']) if (!ctx.isWithOpponent(name)) fail(`${name} でミュートが解ける (U49)`);
+// U49: スタンプのミュートは無い (#1891 の FB 8)。結果画面にミュートのボタンを出さない
+if (/opponent emotes|r-mute/.test(appJs + read('css', 'style.css'))) fail('結果画面にミュートのボタンが残っている (U49、#1891 の FB 8)');
 // U51: Close Room の確認の題名は "Close this room?"。U12 のクライアント向けの本文は保留 (README に書く)
 if (DIALOGS.closeRoom.title !== 'Close this room?') fail('Close Room の確認の題名が "Close this room?" でない (U51)');
 if (!/保留/.test(UNDECIDED.find((u) => u.id === 'U51').desc) || !/U12[^\n]*保留|保留[^\n]*U12/.test(read('README.md'))) fail('U12 のクライアント向けの本文が保留だと書かれていない (U51)');
@@ -1274,7 +1279,7 @@ expectFire(at(L('Host', 'ConnectionLost'), L('Client', 'CodeExpired')), 'net.rec
 // pi の仮定 1 (ホストの ‹ は確認を出さない) は 2026-10-10 の U57 で変わった (ホストの ‹ は "Close this room?"。上の U57 の確認)。
 // 仮定 5: Online Battle へ戻るボタンは降参のあとも "Back to Online"
 if (/Back to Online Battle/.test(shownText + appJs)) fail('"Back to Online Battle" が残っている (すべて "Back to Online")');
-console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、切断で止める 20 秒、次の相手の検索停止、Rating、ミュート、再戦の一行、部屋のお知らせ、開始前の切断の取りやめ');
+console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、切断で止める 20 秒、次の相手の検索停止、Rating、ミュートなし、再戦の一行、部屋のお知らせ、開始前の切断の取りやめ');
 
 // 決定 U56 (高宮さん 2026-10-08): Profile。相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ
 {
@@ -1413,13 +1418,12 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     }
   }
 
-  // シナリオ 22: 変えて Save → ランダム対戦の VS 画面に出る。スタンプをミュートして再戦しても VS 画面のあいさつは出る (U49 はスタンプだけ)
+  // シナリオ 22: 変えて Save → ランダム対戦の VS 画面に出る。再戦の VS 画面にもあいさつは出る
   const sc22 = SCENARIOS.find((x) => x.id === '22');
   const vs22 = sc22 && Engine.replay(sc22, 7).state;
   if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Bring it on!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
   const end22 = sc22 && Engine.replay(sc22);
-  if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || !end22.state.clientMute || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後がミュートしたままの再戦の VS 画面 (ホストのあいさつ付き) でない');
-  if (/Mute/.test(appJs.slice(appJs.indexOf('    vs: function'), appJs.indexOf('    // ゲーム画面のプレースホルダー')))) fail('VS 画面の描画がミュートを見ている (あいさつはミュートで隠さない)');
+  if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後が再戦の VS 画面 (ホストのあいさつ付き) でない');
   if (STAMPS.map((x) => `${x.emoji} ${x.text}`).join(' / ') !== '\u{1F44F} Good game / \u{1F91D} Thanks for the match / \u{1F44D} Nice') fail('結果画面のスタンプ (U27) が変わった');
   const sc22b = SCENARIOS.find((x) => x.id === '22b');
   const end22b = sc22b && Engine.replay(sc22b).state;
@@ -1444,7 +1448,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   // シナリオは localStorage に関係なく、いつも最初の値から (Engine.replay は保存した値を受け取らない)
   if (Engine.replay(sc22, 0).state.hostEmoji !== EMOJIS[0]) fail('シナリオが最初の値から始まらない');
   if (!/if \(app\.scenario \|\| !storage\) return;/.test(appJs)) fail('app.js がシナリオの再生中にも localStorage に書く');
-  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10 (アポストロフィは ’)・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・ミュートでもあいさつは出る');
+  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10 (アポストロフィは ’)・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・再戦の VS 画面にもあいさつは出る');
 }
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));

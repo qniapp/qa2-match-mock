@@ -80,7 +80,7 @@ var Engine = (function () {
       Object.keys(DEVICE_FIELDS).forEach(function (f) {
         var key = d + f;
         if (has(row.set, key)) next[key] = row.set[key];
-        // copy: { 写す先: 写す元 } は、発火する前の付属状態の値を写す (U56 の Profile の下書き・保存・相手に見せる値)
+        // copy: { 写す先: 写す元 } は、発火する前の付属状態の値を写す (U56 の相手に見せる値)
         else if (has(row.copy, key)) next[key] = state[row.copy[key]];
         else if (f === 'Dialog' && has(row.dialog, d)) next[key] = row.dialog[d];
         // 画面が変わったら、その画面で続かない付属状態は初期値に戻す (ダイアログは必ず閉じる)

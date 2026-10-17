@@ -237,20 +237,28 @@ var PROFILE_EMOJIS = [
   { id: 'clover', emoji: '\u{1F340}', name: 'Four leaf clover' },
   { id: 'rocket', emoji: '\u{1F680}', name: 'Rocket' },
 ];
-// アポストロフィはどれも \u2019 (’、決定 U56)。まっすぐな ' は使わない
+// あいさつは決まった文から選ぶので、ローカライズできる (#1891 FB 13)。言語は日本語 (ja) と英語 (en) だけ。
+// 状態には id を持ち、文はそれを見る端末の言語で出す (相手のあいさつも自分の言語で読める)。
+// 英語のアポストロフィはどれも \u2019 (’、決定 U56)。まっすぐな ' は使わない。日本語の ! と ? は全角
+var GREETING_LANGS = ['en', 'ja'];
 var PROFILE_GREETINGS = [
-  { id: 'hello', text: 'Hello!' },
-  { id: 'letsGo', text: 'Let\u2019s go!' },
-  { id: 'haveFun', text: 'Have fun!' },
-  { id: 'goodLuck', text: 'Good luck!' },
-  { id: 'letsDoThis', text: 'Let\u2019s do this!' },
-  { id: 'bringItOn', text: 'Bring it on!' },
-  { id: 'ready', text: 'Ready?' },
-  { id: 'hereWeGo', text: 'Here we go!' },
-  { id: 'happyPuzzling', text: 'Happy puzzling!' },
-  { id: 'mayTheBestPlayerWin', text: 'May the best player win!' },
+  { id: 'hello', en: 'Hello!', ja: 'こんにちは！' },
+  { id: 'letsGo', en: 'Let\u2019s go!', ja: 'いくよ！' },
+  { id: 'haveFun', en: 'Have fun!', ja: '楽しもう！' },
+  { id: 'goodLuck', en: 'Good luck!', ja: 'がんばってね！' },
+  { id: 'letsDoThis', en: 'Let\u2019s do this!', ja: 'がんばろう！' },
+  { id: 'bringItOn', en: 'Bring it on!', ja: 'かかってこい！' },
+  { id: 'ready', en: 'Ready?', ja: '準備はいい？' },
+  { id: 'hereWeGo', en: 'Here we go!', ja: 'さあ、始めよう！' },
+  { id: 'happyPuzzling', en: 'Happy puzzling!', ja: 'パズルを楽しもう！' },
+  { id: 'mayTheBestPlayerWin', en: 'May the best player win!', ja: 'いい勝負をしよう！' },
 ];
-var PROFILE_DEFAULT = { emoji: PROFILE_EMOJIS[0].emoji, greeting: PROFILE_GREETINGS[0].text };
+// id のあいさつを lang (GREETING_LANGS のどれか) の文で返す
+function greetingText(id, lang) {
+  var g = PROFILE_GREETINGS.filter(function (x) { return x.id === id; })[0];
+  return g ? g[lang] : '';
+}
+var PROFILE_DEFAULT = { emoji: PROFILE_EMOJIS[0].emoji, greeting: PROFILE_GREETINGS[0].id };
 // Profile のダイアログを開ける画面 (決定 U56、入口は #1891 の FB 12 で変更): Random Match (相手を探している画面。Find Next Opponent から探しているときも) と
 // Friend Match トップ (部屋のお知らせ・Match Code の赤字・トーストを出している間も)。待ち時間に、今の画面のまま変えられる。
 // Online Battle・部屋・対戦中には無く、"No opponent found." (U13) はモーダルなので開けない
@@ -893,7 +901,7 @@ var TRANSITIONS = (function () {
     });
     PROFILE_GREETINGS.forEach(function (g) {
       var set = {};
-      set[d + 'DraftGreeting'] = g.text;
+      set[d + 'DraftGreeting'] = g.id;
       T({ from: row(openable, 'profile'), event: d + '.dialog.pickGreeting.' + g.id, to: row('='), set: set,
         note: '決定 (U56): 1 つだけ選べる。上の見本がすぐ変わる (まだ保存しない)', decided: ['U56'] });
     });
@@ -1025,7 +1033,7 @@ var EVENT_LABELS = {
   EVENT_LABELS[p[0] + '.dialog.saveProfile'] = p[1] + ': Profile の Save を押す';
   EVENT_LABELS[p[0] + '.dialog.closeProfile'] = p[1] + ': Profile を Cancel・× ・Esc で閉じる';
   PROFILE_EMOJIS.forEach(function (e) { EVENT_LABELS[p[0] + '.dialog.pickEmoji.' + e.id] = p[1] + ': Profile で絵文字 ' + e.emoji + ' を選ぶ'; });
-  PROFILE_GREETINGS.forEach(function (g) { EVENT_LABELS[p[0] + '.dialog.pickGreeting.' + g.id] = p[1] + ': Profile であいさつ "' + g.text + '" を選ぶ'; });
+  PROFILE_GREETINGS.forEach(function (g) { EVENT_LABELS[p[0] + '.dialog.pickGreeting.' + g.id] = p[1] + ': Profile であいさつ "' + g.en + '" を選ぶ'; });
 });
 
 // ---- 画面の描画仕様 ---------------------------------------------------------
@@ -1295,7 +1303,7 @@ var PROFILE_CONTEXT = 'Profile (決定 U56。入口は #1891 の FB 12 で、専
   '上の見本は、相手の VS 画面に出る自分のカード。絵文字とあいさつを 1 つずつ選ぶと見本がすぐ変わる。名前は変えられない。' +
   'Save で保存して閉じ、Cancel・右上の ×・Esc は選んだものを捨てて閉じる。相手が見つかるなど画面が変わるとダイアログは閉じ、選んでいたものは捨てる。' +
   '保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから。相手を探している間の Save は、まだ相手がいないので見つかる相手にも見える。' +
-  '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。あいさつのアポストロフィはどれも \u2019。相手 (ogwssk) も変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
+  '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。あいさつは日本語と英語の 2 つで、それを見る端末の言語で出す (#1891 FB 13、右パネルの「あいさつの言語」の JA / EN で切り替える)。英語のアポストロフィはどれも \u2019。相手 (ogwssk) も変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
   '値はブラウザの localStorage にだけ残し、モックでは自由操作のときだけ読み書きする (シナリオはいつも最初の値から始まり、読みも書きもしない。2026-10-08 に確認)。' +
   '同じ相手との再戦では値を固定し直さない (2026-10-08 に確認)。';
 
@@ -1554,7 +1562,7 @@ var DIALOGS = {
 // ホストの絵文字とあいさつは Profile で保存した値 (決定 U56、付属状態の Emoji / Greeting)。相手 (クライアント) の役は前からの値のまま始まる
 var PLAYERS = {
   host: { name: 'Yasuhito' },
-  client: { name: 'ogwssk', emoji: '😎', greeting: 'Let\u2019s go!' },
+  client: { name: 'ogwssk', emoji: '😎', greeting: 'letsGo' },
 };
 // 保存した値が無いときの最初の値。ホストは全員の既定値 (👋 "Hello!")、クライアントは ogwssk が前から選んでいる値
 var PROFILE_INITIAL = {
@@ -1854,11 +1862,11 @@ var UNDECIDED = [
       'Online Battle の Profile と専用の Profile 画面をやめた。待ち時間に設定でき、画面を戻る必要がない)。ダイアログの上には VS 画面のカードの見本 (名前・絵文字・あいさつ) を出し、選ぶたびにすぐ変える。' +
       '下に Save / Cancel、右上に × (Cancel と同じ。Esc でも閉じる)。' +
       '絵文字は ' + PROFILE_EMOJIS.map(function (e) { return e.emoji; }).join(' ') + ' から 1 つ、あいさつは ' +
-      PROFILE_GREETINGS.map(function (g) { return '"' + g.text + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
+      PROFILE_GREETINGS.map(function (g) { return '"' + g.en + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
       '全員の既定値は \u{1F44B} "Hello!"。部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
       '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から (相手を探している間に Save したものは、まだ相手がいないので見つかる相手にも見える)。保存はブラウザ (localStorage) だけ。' +
       '結果画面のスタンプ (U27) は変わらない。候補と既定値は QA² 側の仮の値 (変わりうる)。' +
-      'あいさつのアポストロフィはどれも \u2019。10-08 に候補を 4 つ同じ位置で入れ替えた (うち 2 つは協力しているように聞こえたため)。' +
+      'あいさつは日本語と英語にローカライズし、それを見る端末の言語で出す (#1891 FB 13。ほかの言語は無い)。英語のアポストロフィはどれも \u2019。10-08 に候補を 4 つ同じ位置で入れ替えた (うち 2 つは協力しているように聞こえたため)。' +
       '相手 (ogwssk) も Profile を変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
       '次のことも 2026-10-08 に確認: 閉じるときに確認を出さない。"No opponent found." を出している間は開けない。' +
       'モックの localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。' +

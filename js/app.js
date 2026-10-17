@@ -266,14 +266,15 @@
         buttonsHtml(dev, s.buttons);
     },
     // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56)
+    // ゲーム画面と同じく、どちらの端末でも相手のカードが上、自分のカードが下 (qniapp/qa2#1891 FB 15)
     vs: function (dev, s) {
-      var me = dev;
+      var other = dev === 'host' ? 'client' : 'host';
       var card = function (who) {
-        return '<div class="vs-card ' + who + (who === me ? ' me' : '') + '">' +
-          (who === me ? '<span class="you">YOU</span>' : '') +
+        return '<div class="vs-card ' + who + (who === dev ? ' me' : '') + '">' +
+          (who === dev ? '<span class="you">YOU</span>' : '') +
           vsCardBody(PLAYERS[who].name, app.state[who + 'ShownEmoji'], app.state[who + 'ShownGreeting'], 'Rating ' + ELO.initial) + '</div>';
       };
-      return '<div class="vs">' + card('host') + '<div class="vs-mark">VS</div>' + card('client') +
+      return '<div class="vs">' + card(other) + '<div class="vs-mark">VS</div>' + card(dev) +
         '<div class="vs-bar"><i></i></div></div>' + (s.overlay ? overlayHtml(s) : '');
     },
     // ゲーム画面のプレースホルダー。HUD・カウントダウンは実機 (VsAI) の画面にならう。

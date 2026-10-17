@@ -14,7 +14,7 @@
 // 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
 // 部屋の画面の出口は左上の ‹ だけ (決定 U57): Close Room / Leave Room のボタンが無く、‹ はホストで "Close this room?"、クライアントで "Leave this room?" の確認を開き、
 // 確認が画面に収まって Close Room / Leave Room と Keep Waiting を押せることも確かめる。
-// 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
+// 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、VS 画面でどちらの端末でも相手のカードが上・自分のカードが下であること (#1891 の FB 15)、
 // 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、結果画面にスタンプのミュートのボタンが無いこと (U49、#1891 の FB 8)、
 // 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
 // 最初に、hash なしで開くと自由操作 (両端末が最初の画面で、ボタンを押せ、自動遷移が実時間で進む) で、ページに消した部品 (左のシナリオのパネル、
@@ -318,6 +318,12 @@ function scan() {
       if (screen.querySelector('.vs')) {
         const ratings = [...screen.querySelectorAll('.vs-card .vs-rating')].map((e) => e.textContent);
         if (ratings.join() !== `Rating ${ELO.initial},Rating ${ELO.initial}`) findings.push(`${at}: VS 画面のレーティングが ${ratings.join(' / ')}`);
+        // ゲーム画面と同じく、どちらの端末でも相手のカードが上、自分のカード (YOU) が下 (qniapp/qa2#1891 FB 15)
+        const cards = [...screen.querySelectorAll('.vs-card')];
+        const order = cards.map((c) => (c.classList.contains('host') ? 'host' : 'client') + (c.querySelector('.you') ? '(YOU)' : ''));
+        const want = dev.dataset.dev === 'host' ? 'client,host(YOU)' : 'host,client(YOU)';
+        const [top, bottom] = cards.map((c) => c.getBoundingClientRect().top);
+        if (order.join() !== want || !(top < bottom)) findings.push(`${at}: VS 画面で相手のカードが上、自分のカードが下になっていない (上から ${order.join(' / ')})`);
       }
       if (/\bRank\b/.test(text)) findings.push(`${at}: "Rank" が残っている`);
       // VS 画面の絵文字とあいさつ (決定 U56): 部屋を作った・入った・探し始めたときに固定した値

@@ -112,7 +112,7 @@ function isResultState(name) { return /^(Host|Client)\.(Win|Lose|Draw|NoContest)
 function isWithOpponent(name) { return isResultState(name) || /^(Host|Client)\.(Opponent(\.|$)|Game\.)/.test(name); }
 var hostResultAny = resultAny('Host');
 var clientResultAny = resultAny('Client');
-// 降参した側 (U41) 以外の結果画面: Back to Friend Match / Find Next Opponent / Back to Online がある
+// 降参した側 (U41) 以外の結果画面: Find Next Opponent がある (戻るボタンは降参した側も同じ、U59)
 var hostResultLeavable = hostResultAny.filter(function (s) { return s !== 'Host.LoseResult.Surrendered'; });
 var clientResultLeavable = clientResultAny.filter(function (s) { return s !== 'Client.LoseResult.Surrendered'; });
 // スタンプを送れる結果画面 (U27): 相手がまだ結果画面にいるもの。相手が抜けた・切断した・接続エラーのときは送れない
@@ -254,7 +254,7 @@ STATE_GROUPS['Client.MultiModeSelection.Any'] = profileOpenable('Client');
 // 部屋を作る・部屋に入る・相手を探し始める行で、保存した絵文字とあいさつを相手に見せる値として写す (U56)。
 // イベントがこれらで、その端末の行き先が部屋の画面か相手を探す画面の行 (接続失敗や Match Code の誤りの行は写さない)
 // 同じ相手との再戦では写し直さない (2026-10-08 に確認)
-var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'joinMatch', 'randomMatch', 'searchAgain', 'findNextOpponent'];
+var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'joinMatch', 'randomMatch', 'backToRandomMatch', 'searchAgain', 'findNextOpponent'];
 var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/;
 
 // ---- 遷移表 ---------------------------------------------------------------
@@ -746,8 +746,9 @@ var TRANSITIONS = (function () {
     });
   });
 
-  // === 結果画面から抜ける (決定 U22 / U24 / U25 / U26) ===
-  // 自動では次へ進まない (U26)。Friend Match は Back to Friend Match、ランダム対戦は Find Next Opponent / Back to Online。
+  // === 結果画面から抜ける (決定 U22 / U24 / U25 / U26 / U59) ===
+  // 自動では次へ進まない (U26)。戻るボタンはホストもクライアントも、降参した側も同じ 1 つ (U59): Friend Match は Back to Friend Match、
+  // ランダム対戦は Back to Random Match (メニューから Random Match を開いたのと同じ)。ランダム対戦にはほかに Find Next Opponent (降参した側以外)。
   // 相手がまだ再戦できる結果画面にいれば、相手には "Your opponent left. Rematch is not available." (U25、勝敗とレートは変わらない)
   [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']].forEach(function (p) {
     var d = p[0];
@@ -760,23 +761,21 @@ var TRANSITIONS = (function () {
       r[other] = theirs;
       return r;
     };
+    var any = d === 'host' ? hostResultAny : clientResultAny;
     var leavable = d === 'host' ? hostResultLeavable : clientResultLeavable;
     [
-      ['backToFriendMatch', R + '.FriendMatch.Room', 'friend', '決定 (U24): Friend Match トップ (Match Code を作る・入れる画面) へ。前の Match Code は使えなくなる'],
-      ['findNextOpponent', R + '.Matchmake.NextOpponent', 'random', '決定 (U22 / U29): 次の相手を探す (60 秒、仮)'],
-      ['backToOnlineBattle', R + '.MultiModeSelection', 'random', '決定 (U22 / U24): Online Battle へ'],
+      ['backToFriendMatch', any, R + '.FriendMatch.Room', 'friend', '決定 (U24 / U59): Friend Match トップ (Match Code を作る・入れる画面) へ。前の Match Code は使えなくなる', ['U22', 'U24', 'U59']],
+      ['findNextOpponent', leavable, R + '.Matchmake.NextOpponent', 'random', '決定 (U22 / U29): 次の相手を探す (60 秒、仮)', ['U22', 'U29']],
+      ['backToRandomMatch', any, R + '.Matchmake', 'random', '決定 (U59): Random Match の画面へ。メニューから Random Match を開いたのと同じ (相手を探し始める、U13a)', ['U22', 'U59', 'U13a']],
     ].forEach(function (b) {
       OUTCOMES.forEach(function (oo) {
-        T({ from: pair(leavable, resultStates(O, oo, REMATCH_PHASES)), event: d + '.' + b[0], when: { match: b[2] },
-          to: pair(b[1], resultState(O, oo, '.OpponentLeft')),
-          note: b[3] + '。決定 (U25): 相手に "Your opponent left. Rematch is not available."', decided: ['U22', 'U24', 'U25'] });
+        T({ from: pair(b[1], resultStates(O, oo, REMATCH_PHASES)), event: d + '.' + b[0], when: { match: b[3] },
+          to: pair(b[2], resultState(O, oo, '.OpponentLeft')),
+          note: b[4] + '。決定 (U25): 相手に "Your opponent left. Rematch is not available."', decided: b[5].concat(['U25']) });
       });
-      T({ from: pair(leavable, '*'), event: d + '.' + b[0], when: { match: b[2] }, to: pair(b[1], '*'),
-        note: b[3] + '。相手はすでに結果画面を抜けているか、再戦の無い結果画面 (降参・切断・No contest、U45) にいる', decided: ['U22', 'U24', 'U45'] });
+      T({ from: pair(b[1], '*'), event: d + '.' + b[0], when: { match: b[3] }, to: pair(b[2], '*'),
+        note: b[4] + '。相手はすでに結果画面を抜けているか、再戦の無い結果画面 (降参・切断・No contest、U45) にいる', decided: b[5].concat(['U45']) });
     });
-    // 降参した側 (決定 U41 / U24): Friend Match でもランダム対戦でも Online Battle へ
-    T({ from: pair(resultState(R, 'Lose', '.Surrendered'), '*'), event: d + '.backToOnlineBattle', to: pair(R + '.MultiModeSelection', '*'),
-      note: '決定 (U41 / U24): 降参して負けたあとは、Friend Match でもランダム対戦でも Back to Online で Online Battle へ', decided: ['U41', 'U24', 'U22'] });
   });
 
   // === 結果画面のスタンプ (決定 U27、高宮さん 2026-10-07) ===
@@ -903,6 +902,7 @@ var EVENT_LABELS = {
   'host.cancelRematch': 'ホスト: Cancel Request を押す (再戦の申し込みを取り消す)',
   'host.declineRematch': 'ホスト: Decline を押す (再戦を断る)',
   'host.backToFriendMatch': 'ホスト: Back to Friend Match を押す',
+  'host.backToRandomMatch': 'ホスト: Back to Random Match を押す',
   'host.stamp.gg': 'ホスト: スタンプ 👏 Good game を送る',
   'host.stamp.thanks': 'ホスト: スタンプ 🤝 Thanks for the match を送る',
   'host.stamp.nice': 'ホスト: スタンプ 👍 Nice を送る',
@@ -941,6 +941,7 @@ var EVENT_LABELS = {
   'client.cancelRematch': 'クライアント: Cancel Request を押す (再戦の申し込みを取り消す)',
   'client.declineRematch': 'クライアント: Decline を押す (再戦を断る)',
   'client.backToFriendMatch': 'クライアント: Back to Friend Match を押す',
+  'client.backToRandomMatch': 'クライアント: Back to Random Match を押す',
   'client.stamp.gg': 'クライアント: スタンプ 👏 Good game を送る',
   'client.stamp.thanks': 'クライアント: スタンプ 🤝 Thanks for the match を送る',
   'client.stamp.nice': 'クライアント: スタンプ 👍 Nice を送る',
@@ -1038,10 +1039,12 @@ function ratingText(outcome, session) {
 }
 // 試合のスコア (モックのデモ値。自分 - 相手)。決まっていないとき (No contest) は行ごと出さない (U20)
 var DEMO_SCORES = { Win: [3200, 2750], Lose: [2750, 3200], Draw: [2900, 2900] };
-// 結果画面のボタン (決定 U22 / U24 / U41)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める
+// 結果画面のボタン (決定 U22 / U24 / U41 / U59)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める。
+// 戻るボタンはどちらの対戦でも 1 つだけで、ホストとクライアント、降参した側と勝った側で同じ (U59)
 function resultButtons(spec, match) {
-  if (spec.reason === 'surrendered') return [{ label: 'Back to Online', event: 'backToOnlineBattle', primary: true }];
   var random = match === 'random';
+  var back = random ? { label: 'Back to Random Match', event: 'backToRandomMatch' } : { label: 'Back to Friend Match', event: 'backToFriendMatch' };
+  if (spec.reason === 'surrendered') return [Object.assign(back, { primary: true })];
   var ph = spec.phase;
   var rematch = [];
   if (spec.rematch && ph === 'RematchRequested') rematch = [{ label: 'Cancel Request', event: 'cancelRematch' }];
@@ -1050,8 +1053,8 @@ function resultButtons(spec, match) {
   } else if (spec.rematch && /\.Cooldown$/.test(ph)) rematch = [{ label: 'Rematch', disabled: true }];
   else if (spec.rematch && ph !== 'OpponentLeft') rematch = [{ label: 'Rematch', event: 'rematch', primary: !random }];
   var invited = rematch.some(function (b) { return b.primary; }) || ph === 'RematchRequested';
-  if (!random) return rematch.concat([{ label: 'Back to Friend Match', event: 'backToFriendMatch', primary: !rematch.length }]);
-  return [{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: !invited }].concat(rematch, [{ label: 'Back to Online', event: 'backToOnlineBattle' }]);
+  if (!random) return rematch.concat([Object.assign(back, { primary: !rematch.length })]);
+  return [{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: !invited }].concat(rematch, [back]);
 }
 // 片方が切断して 20 秒 (仮) 待っている間の表示 (決定 U46)。対戦中 (U28) と、ランダム対戦・再戦の開始前 (U54) で同じ。残りの秒数は timer で別に出す
 var DISCONNECT_OVERLAYS = {
@@ -1084,7 +1087,8 @@ var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。
 var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両者の名前・スコア・終わった理由を出す (スコアはモックのデモ値。No contest のように決まっていないときは行ごと出さない)。' +
   '時間切れで終わったときの理由は "Time is up"、同点の引き分けは "Same score when time ran out" (U44)。' +
   'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
-  'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら Find Next Opponent / Rematch / Back to Online。自動では次へ進まない (U26)。';
+  'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら Find Next Opponent / Rematch / Back to Random Match。' +
+  '戻るボタンはホストとクライアントで同じ 1 つだけ (U59)。自動では次へ進まない (U26)。';
 var RESULT_COOLDOWN_CONTEXT = '3 秒 (仮) は Rematch を押せない (右パネルの環境イベント「3 秒たつ」で進める)。3 秒たっても一行は残り、どちらかがまた申し込むか結果画面を抜けるまで出しておく (U50)。';
 var RESULT_PHASE_CONTEXT = {
   RematchRequested: '自分が再戦を申し込んで待っている (U23 / U30)。Cancel Request で取り消せる。応答の期限 20 秒 (仮) は右パネルの環境イベントで進める (秒数は端末の画面に出さない)。',
@@ -1119,7 +1123,7 @@ var MATCH_MENU_CONTEXT = 'MATCH MENU (決定 U37)。試合は止まらない: Ti
   '試合が止まるのは片方の切断を待つ 20 秒 (仮) の間だけ (U46)。';
 var SURRENDER_CONFIRM_CONTEXT = '降参の確認 (決定 U40)。確認中も試合は続く。CONTINUE でプレイに戻り、SURRENDER で負けが決まって相手は勝ちの結果画面に "Your opponent surrendered" (U38)。ボタンは QUIT ではなく SURRENDER (U41)。';
 var SPECIAL_RESULT_CONTEXT = {
-  Surrendered: '降参した側の負けの結果画面 (決定 U38)。Friend Match でもランダム対戦でも Back to Online で Online Battle へ戻る (決定 U41 / U24)。再戦は無い (U28 / U45)。',
+  Surrendered: '降参した側の負けの結果画面 (決定 U38)。戻るボタンは勝った側と同じで、Friend Match なら Back to Friend Match、ランダム対戦なら Back to Random Match (決定 U59)。再戦と Find Next Opponent は無い (U28 / U45)。',
   OpponentSurrendered: '相手が降参したので勝ち。"Your opponent surrendered" を出す (決定 U38)。降参で終わった試合のあとは、どちらからも再戦できない (U45)。',
   Disconnected: '自分の接続が切れ、20 秒 (仮) のうちに戻れなかったので負け (決定 U28)。ランダム対戦ではレートも変わる。切断で終わった試合のあとは再戦できない (U45)。',
   OpponentDisconnected: '相手の接続が切れ、20 秒 (仮) のうちに戻らなかったので勝ち (決定 U28)。切断で終わった試合のあとは再戦できない (U45)。',
@@ -1610,7 +1614,8 @@ var UNDECIDED = [
   { id: 'U22', title: '結果画面のボタン: Friend Match は Rematch / Back to Friend Match、ランダム対戦は Find Next Opponent / Rematch / Back to Online',
     desc: 'Friend Match: Rematch (同じ相手と再戦) と Back to Friend Match。ランダム対戦: Find Next Opponent (次の相手を探す)、Rematch (同じ相手と再戦)、Back to Online。' +
       '再戦を申し込んだ側には Cancel Request、申し込まれた側には Rematch と Decline を出す (U30)。降参した側は Back to Online だけ (U41)。' +
-      'Online Battle へ戻るボタンは、降参後のものも含めてすべて "Back to Online" にそろえた。',
+      'Online Battle へ戻るボタンは、降参後のものも含めてすべて "Back to Online" にそろえた。' +
+      '2026-10-17 の U59 で、ランダム対戦の Back to Online は Back to Random Match に、降参した側のボタンは勝った側と同じ戻るボタン (Back to Friend Match / Back to Random Match) になった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U23', title: '再戦: どちらからでも申し込め、相手が応じたらそのまま VS 画面へ。同時に申し込んだら成立',
     desc: '結果画面の Rematch で、どちらのプレイヤーからでも再戦を申し込める。相手が応じたら (Rematch を押したら)、ロビーの Ready を挟まずにそのまま VS 画面へ進む。' +
@@ -1618,7 +1623,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U24', title: '戻り先: Friend Match は Friend Match トップ (前の Match Code は無効)、ランダム対戦は Online Battle',
     desc: 'Friend Match の Back to Friend Match は、Match Code を作る・入れる画面 (Friend Match トップ) に戻る。前の Match Code は使えなくなる。' +
-      'ランダム対戦の Back to Online は Online Battle (MultiModeSelection) に戻る。降参した側は Friend Match でも Online Battle に戻る (U41 で決定済み)。',
+      'ランダム対戦の Back to Online は Online Battle (MultiModeSelection) に戻る。降参した側は Friend Match でも Online Battle に戻る (U41 で決定済み)。' +
+      '2026-10-17 の U59 で、ランダム対戦は Back to Random Match で Random Match の画面へ、降参した側も勝った側と同じ戻り先になった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U25', title: '相手が結果画面を抜けたら "Your opponent left. Rematch is not available."',
     desc: '相手が結果画面を抜けても、自分の結果画面はそのまま残し、"Your opponent left. Rematch is not available." を出す (Rematch のボタンは消える)。勝敗とレートは変わらない。' +
@@ -1701,7 +1707,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U41', title: 'ボタンは SURRENDER (QUIT ではない)。負けの結果画面のあと Online Battle へ',
     desc: 'MATCH MENU のボタンの文言は QUIT ではなく SURRENDER。降参して負けの結果画面を見たあとは、Online Battle (Host.MultiModeSelection / Client.MultiModeSelection) に戻る。' +
-      'モックでは負けの結果画面の Back to Online で戻る (ボタンの文言は U22 で決定、2026-10-07)。',
+      'モックでは負けの結果画面の Back to Online で戻る (ボタンの文言は U22 で決定、2026-10-07)。' +
+      '2026-10-17 の U59 で、負けの結果画面の戻るボタンは勝った側と同じ (Back to Friend Match / Back to Random Match) になった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U42', title: 'MATCH MENU 中も BGM を下げない',
     desc: '実ゲームのポーズは BGM を -5dB 下げる (ダッキング) が、オンライン対戦の MATCH MENU では試合が続くので BGM を下げない。モックには音が無いので、決定の記録だけ。',
@@ -1797,4 +1804,10 @@ var UNDECIDED = [
       '出すのは以前に期限を出していた部屋の画面 (友だちを待っている間・Ready 画面・切断待ちなど) で、期限切れと "Could not reconnect." の画面には出さない。' +
       '期限そのもの (30 分、切れたら "Match code expired.") は U7 のまま。',
     decided: { by: 'YoshiyukiN さんの FB (#1891、3 番目)', date: '2026-10-10' } },
+  { id: 'U59', title: '結果画面の戻るボタンはホストとクライアントで同じ 1 つ: Back to Friend Match / Back to Random Match',
+    desc: '#1891 の FB の 9 番目。結果画面の下のボタンをホストとクライアントで同じにし、戻るボタンはどちらの対戦でも 1 つだけにする。' +
+      'Friend Match は Back to Friend Match で Friend Match トップへ (U24)。ランダム対戦は Back to Online をやめて Back to Random Match にし、Random Match の画面へ直接戻る。' +
+      '戻った Random Match の画面は、メニューから Random Match を開いたときと同じ最初の状態 (相手を探し始める、U13a。相手に見せる絵文字とあいさつもこのとき固定する、U56) (#1891 の FB の 17 番目)。' +
+      '降参した側 (以前は Back to Online だけ、U41) も勝った側と同じ戻るボタンにする。Find Next Opponent (U22 / U29) と、次の相手が見つからないときの Back to Online は変えない。',
+    decided: { by: '#1891 の FB (9・17 番目)', date: '2026-10-17' } },
 ];

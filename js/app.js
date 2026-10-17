@@ -301,7 +301,8 @@
       var other = dev === 'host' ? 'client' : 'host';
       var head = RESULT_HEADLINES[s.outcome];
       var rating = ratingText(s.outcome, app.state);
-      var status = REMATCH_STATUS[s.status];
+      // Friend Match で相手が抜けたときは、相手は同じ部屋に戻っている (決定 U61)
+      var status = REMATCH_STATUS[s.status === 'OpponentLeft' && app.state.match === 'friend' ? 'FriendReturned' : s.status];
       // 送ったスタンプは、両者の画面で送った人の名前の上に出す
       var player = function (who, isMe) {
         var stamp = stampById(app.state[who + 'Stamp']);

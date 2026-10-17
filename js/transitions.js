@@ -28,7 +28,7 @@
 //   .Ready                     どちらも Ready していない
 //   .Ready.TimedOut など        どちらも Ready していない + お知らせ (タイムアウト U33 / 相手が取り消した U34 / 読み込みが 20 秒で終わらない U32 / 同期の失敗 U15)
 //   .Ready.Confirming          自分が Ready を押して送っている ("Confirming…")
-//   .Ready.WaitingForOpponent  自分だけ Ready ("Waiting for opponent…"、60 秒のカウントダウン、Cancel Ready)
+//   .Ready.WaitingForOpponent  自分だけ Ready ("Waiting for opponent…" と待っている印 (秒数は出さない)、Cancel Ready)
 //   .Ready.OpponentReady       相手だけ Ready ("Opponent is ready. Are you?")。.Confirming は自分も押して送っている
 function lobbyState(R, s) { return R + '.FriendMatch.Lobby.' + s; }
 var READY_NOTICES = ['TimedOut', 'OpponentNotReady', 'StartFailed', 'SyncFailed'];
@@ -1170,7 +1170,7 @@ var READY_NOTICE_TEXT = {
   StartFailed: 'Match could not start. Please try again.',
   SyncFailed: 'Couldn\u2019t start the match. Please ready up again.',
 };
-var READY_TIMERS = { ready: 60, reconnect: 20 }; // 秒。どちらも QA² 側の仮の値 (U33 / U5 / U32 / U46 / U54)
+var READY_TIMERS = { reconnect: 20 }; // 秒。QA² 側の仮の値 (U5 / U32 / U46 / U54)。Ready の 60 秒 (U33) は画面に出さない (#1891 の FB 6)
 var ROOM_RULES_CONTEXT = 'Match Code の期限は 30 分 (QA² 側の仮の値) で、サーバーが数え、画面には出さない (決定 U7 / U58)。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は時計が止まり、部屋での切断 (U5) の再接続待ちの間は止まらない (U7)。' +
   'ホストにだけ、Match Code の下に "Share this code with your friend!" を出す (U58)。' +
   '部屋の画面の出口は左上の \u2039 だけで、Close Room / Leave Room のボタンは無い (決定 U57、#1891 の FB 1・2)。ホストの \u2039 は確認 "Close this room?" のあと部屋を閉じ (U51)、' +
@@ -1181,7 +1181,8 @@ var READY_CONTEXT = 'Ready 画面 (決定 U31 変更 / U36)。プレイヤーご
 var RECONNECT_TIMER_CONTEXT = '20 秒は QA² 側の仮の値で、モックは "20s" のまま描く。';
 var READY_PHASE_CONTEXT = {
   Confirming: 'Ready を送っている間 (決定 U36)。ボタンが "Confirming\u2026" になり、届くと自動で次へ進む (モックは 0.8 秒)。送っている間は Ready を取り消せず、\u2039 も押せない (U53)。',
-  WaitingForOpponent: '自分だけ Ready (決定 U36)。"Waiting for opponent\u2026" と 60 秒のカウントダウン、Cancel Ready。60 秒は QA² 側の仮の値で、モックは押した直後の "60s" のまま描く。' +
+  WaitingForOpponent: '自分だけ Ready (決定 U36)。"Waiting for opponent\u2026" と待っている印 (Searching for an opponent… と同じ点の動き)、Cancel Ready。' +
+    '残りの秒数は急かされている印象を与えるので出さない (#1891 の FB 6)。60 秒は QA² 側の仮の値。' +
     '相手が押さないまま 60 秒たつと (右パネルの環境イベント) 両者の Ready が消えて "Ready check timed out…" (U33)。Cancel Ready で取り消しても、部屋には残る (U34)。',
   OpponentReady: '相手だけ Ready (決定 U36)。"Opponent is ready. Are you?"。Ready を押せば開始する。',
   TimedOut: '片方が Ready のまま 60 秒 (仮) たったので、両者の Ready を消した (決定 U33)。罰はなく、どちらも部屋に残る。',
@@ -1324,7 +1325,7 @@ var SCREENS = (function () {
     notice('StartFailed', ['U32']);
     notice('SyncFailed', ['U15', 'U33']);
     S[L('Ready.Confirming')] = readyLobby(R, false, false, 'Confirming', { back: 'disabled', buttons: [B.confirming], decided: ['U53'] });
-    S[L('Ready.WaitingForOpponent')] = readyLobby(R, true, false, 'WaitingForOpponent', { status: READY_TEXT.waiting, timer: READY_TIMERS.ready,
+    S[L('Ready.WaitingForOpponent')] = readyLobby(R, true, false, 'WaitingForOpponent', { status: READY_TEXT.waiting, dots: true,
       buttons: [B.cancelReady], decided: ['U33', 'U34'] });
     S[L('Ready.OpponentReady')] = readyLobby(R, false, true, 'OpponentReady', { status: READY_TEXT.opponentReady });
     S[L('Ready.OpponentReady.Confirming')] = readyLobby(R, false, true, 'Confirming', { status: READY_TEXT.opponentReady, back: 'disabled',
@@ -1677,11 +1678,12 @@ var UNDECIDED = [
       'そのため、図07 の「クライアントが別画面へ移ってもマッチを残し、赤い "Ready to start" トーストで戻る」流れは無くなった (U10 / U18 も解消)。アプリを離れたときに相手に出す表示は U53 ("Opponent is no longer ready.")。ホストの ‹ は U14 (2026-10-07) で変わった: 部屋を残して帯で示し、ホストの Ready は消える。確認を出すのはクライアントだけ (U9)。 ' +
       '2026-10-10 の U57 で、ホストの ‹ も確認 ("Close this room?") を出すようになった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
-  { id: 'U36', title: 'Ready 画面: プレイヤーごとのカード ("✓ Ready" / "Not ready")。押した側に "Waiting for opponent…"・60 秒のカウントダウン・Cancel Ready',
-    desc: 'Ready 画面にはプレイヤーごとにカードを出し (ホストが離れている間、クライアントのカードのホストは "Away")、"✓ Ready" か "Not ready" を表示する。Ready を押した側には "Waiting for opponent…"、60 秒のカウントダウン、Cancel Ready を出す。' +
+  { id: 'U36', title: 'Ready 画面: プレイヤーごとのカード ("✓ Ready" / "Not ready")。押した側に "Waiting for opponent…"・Cancel Ready',
+    desc: 'Ready 画面にはプレイヤーごとにカードを出し (ホストが離れている間、クライアントのカードのホストは "Away")、"✓ Ready" か "Not ready" を表示する。Ready を押した側には "Waiting for opponent…"、待っている印、Cancel Ready を出す。' +
       '押していない側には "Opponent is ready. Are you?" を出す。押して送っている間は "Confirming…" を出す。' +
-      'モックではカードの順は自分が左 (YOU 付き)、"Confirming…" は Ready ボタンの場所に無効表示で出す。カウントダウンは押した直後の "60s" のまま描く (実時間では減らさない)。 ' +
-      '2026-10-10 の U57 でホストは部屋を離れられなくなったので、カードの "Away" は無い。',
+      'モックではカードの順は自分が左 (YOU 付き)、"Confirming…" は Ready ボタンの場所に無効表示で出す。待っている印は "Searching for an opponent…" と同じ点の動き。 ' +
+      '2026-10-10 の U57 でホストは部屋を離れられなくなったので、カードの "Away" は無い。' +
+      '決めたときは 60 秒のカウントダウンも出していたが、急かされている印象を与えるので秒数は出さないことにした (#1891 の FB 6)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U37', title: 'オンライン対戦は ☰ MATCH MENU。開いても試合は止まらない',
     desc: '案A。オンライン対戦では VsAI のポーズポップアップの代わりに MATCH MENU (☰) を出す。VsAI やソロのポーズのように Time.timeScale = 0 でゲームを止めることはせず、メニューを開いている間も試合は続く。' +

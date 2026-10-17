@@ -258,13 +258,13 @@ for (const [k, text] of Object.entries(READY_NOTICES_WANT)) {
   }
   expectFire(at(L('Host', `Ready.${k}`), L('Client', `Ready.${k}`)), 'host.ready', L('Host', 'Ready.Confirming'), L('Client', `Ready.${k}`));
 }
-// U36 / U4 / U5 / U57: 部屋の画面の表示 (カード、状況の一行、カウントダウン、ボタン、‹)。部屋を出るボタン (Close Room / Leave Room) は無く、出口は ‹ だけ。
+// U36 / U4 / U5 / U57: 部屋の画面の表示 (カード、状況の一行、再接続のカウントダウン、ボタン、‹)。部屋を出るボタン (Close Room / Leave Room) は無く、出口は ‹ だけ。
 // ‹ を押せないのは、送っている間・読み込み・自分の再接続中 (U53)
 const btns = (s) => s.buttons.map((b) => b.label + (b.disabled ? '(無効)' : '')).join(' / ');
 const roomWant = (R) => ({
   Ready: [false, false, null, null, 'Ready', 'back'],
   'Ready.Confirming': [false, false, null, null, 'Confirming…(無効)', 'disabled'],
-  'Ready.WaitingForOpponent': [true, false, 'Waiting for opponent…', 60, 'Cancel Ready', 'back'],
+  'Ready.WaitingForOpponent': [true, false, 'Waiting for opponent…', null, 'Cancel Ready', 'back'],
   'Ready.OpponentReady': [false, true, 'Opponent is ready. Are you?', null, 'Ready', 'back'],
   'Ready.OpponentReady.Confirming': [false, true, 'Opponent is ready. Are you?', null, 'Confirming…(無効)', 'disabled'],
   Starting: [true, true, 'Starting match…', null, '', 'disabled'],
@@ -280,6 +280,8 @@ for (const R of ['Host', 'Client']) {
     if (!s || !s.cards) { fail(`${L(R, k)} が Ready 画面 (カード付き) でない`); continue; }
     const got = [s.cards.me, s.cards.them, s.status || null, s.timer || null, btns(s), s.back];
     if (JSON.stringify(got) !== JSON.stringify(want)) fail(`${L(R, k)} の表示 ${JSON.stringify(got)} (期待: ${JSON.stringify(want)})`);
+    // #1891 の FB 6: 自分だけ Ready で待つ間は秒数を出さず、待っている印 (点の動き) だけを出す
+    if (!!s.dots !== (k === 'Ready.WaitingForOpponent')) fail(`${L(R, k)} の待っている印が ${s.dots ? 'ある' : '無い'} (FB 6: Waiting for opponent… にだけ出す)`);
     if (s.codeHint !== (R === 'Host')) fail(`${L(R, k)} の "${ctx.CODE_HINT}" が ${s.codeHint ? 'ある' : '無い'} (U58: ホストにだけ出す)`);
   }
   const cnr = SCREENS[L(R, 'CouldNotReconnect')];
@@ -296,7 +298,7 @@ for (const [name, s] of Object.entries(SCREENS)) {
   const labels = (s.buttons || []).map((b) => b.label);
   if (labels.some((l) => /^(Close|Leave) Room$/.test(l))) fail(`${name} に ${labels.join(' / ')} のボタンがある (U57: 出口は ‹ だけ)`);
 }
-if (!/\\u2713 Ready/.test(appJs) || !/Not ready/.test(appJs) || !/rd-card/.test(appJs) || !/rd-timer/.test(appJs)) fail('app.js に Ready 画面のカード ("✓ Ready" / "Not ready") とカウントダウンの描画が無い');
+if (!/\\u2713 Ready/.test(appJs) || !/Not ready/.test(appJs) || !/rd-card/.test(appJs) || !/rd-timer/.test(appJs) || !/s\.dots/.test(appJs)) fail('app.js に Ready 画面のカード ("✓ Ready" / "Not ready")・再接続のカウントダウン・待っている印の描画が無い');
 // U58: Match Code の期限は画面に出さず、ホストにだけ "Share this code with your friend!"。クライアントの画面には出さない
 if (!/CODE_HINT/.test(appJs) || ctx.CODE_HINT !== 'Share this code with your friend!') fail('部屋の画面に "Share this code with your friend!" (U58) が無い');
 if ('CODE_EXPIRY' in ctx || /expires in/i.test(appJs) || Object.values(SCREENS).some((s) => 'expiry' in s)) fail('部屋の画面に Match Code の期限の表示が残っている (U58)');
@@ -317,7 +319,7 @@ for (const [k, want] of Object.entries(dlgWant)) {
 }
 if (Object.keys(DIALOGS).join() !== 'closeRoom,leaveRoom') fail(`使わないダイアログが残っている (${Object.keys(DIALOGS)})`);
 if ('ROOM_SWITCH_BODY' in ctx) fail('U12 の作り直しの確認の本文が残っている (U57 で無くなった)');
-console.log('ok  U31 / U33〜U36 / U4 / U9 / U11 / U57: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト、‹ の確認 (Close this room? / Leave this room?) (両端末)');
+console.log('ok  U31 / U33〜U36 / U4 / U9 / U11 / U57: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト (秒数は出さず待っている印だけ、FB 6)、‹ の確認 (Close this room? / Leave this room?) (両端末)');
 console.log('ok  U58: 部屋の画面に Match Code の期限を出さず、ホストにだけ "Share this code with your friend!" (クライアント・期限切れ・Could not reconnect. には無い)');
 
 // 決定 (U4): Ready を押せるのは参加の確認・両者が部屋の画面・同期の 3 つがそろってから。決まった待ち時間は置かない

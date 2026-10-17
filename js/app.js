@@ -6,9 +6,11 @@
   'use strict';
 
   var MATCH_CODE = 'QWERTY123';
+  // Match Code のコピーのボタン。ふつうのコピーのアイコン (重なった 2 枚の紙) で、ホストにだけ出す (#1891 の FB 5)
+  var COPY_BUTTON = '<button type="button" class="copy" aria-label="Copy room code" title="Copy room code">' +
+    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>';
   var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
-  // Ready 画面のカードの名前 (ロビーの "Client User" / "Host User" と同じ架空の名前)
-  var LOBBY_NAMES = { host: 'Host User', client: 'Client User' };
   var RESULT_HEADLINES = { Win: ['WIN!', 'win'], Lose: ['LOSE', 'lose'], Draw: ['DRAW', 'draw'], NoContest: ['NO CONTEST', 'nocontest'] };
   // ゲーム画面のプレースホルダー: 列ごとに下から積んだブロック ('+' は丸いブロック)
   var FIELD = [['S', 'H', 'Z', 'S'], ['Z', 'S', 'Y'], ['T', 'S', '+'], ['Z', 'T', 'S'], ['S', 'T', 'H', '+'], ['H', 'Z', '+', 'Z']];
@@ -250,7 +252,7 @@
     lobby: function (dev, s) {
       return header(dev, s, s.title) +
         '<div class="body">' +
-        '<div class="code-head"><span>Match Code</span><span class="copy">Copy</span></div>' +
+        '<div class="code-head"><span>Match Code</span>' + (s.copyCode ? COPY_BUTTON : '') + '</div>' +
         '<div class="code">' + MATCH_CODE + '</div>' +
         (s.codeHint ? '<div class="code-hint">' + esc(CODE_HINT) + '</div>' : '') +
         (s.cards ? readyHtml(dev, s) : '<div class="status-block">' +
@@ -263,7 +265,7 @@
         (s.status ? '<div class="status">' + esc(s.status) + '</div><div class="dots"><i></i><i></i><i></i></div>' : '') + '</div>' +
         buttonsHtml(dev, s.buttons);
     },
-    // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56。スタンプのミュート U49 とは関係なく出す)
+    // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56)
     vs: function (dev, s) {
       var me = dev;
       var card = function (who) {
@@ -292,24 +294,22 @@
         fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
         (s.menu ? matchMenuHtml(dev, s.menu) : '') + (s.overlay ? overlayHtml(s) : '');
     },
-    // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・スコア・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
+    // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
+    // スコアは出さない (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ)
     // ボタンと Rating の行は Friend Match かランダム対戦か (セッションの match / rated) で変わる
     result: function (dev, s) {
       var other = dev === 'host' ? 'client' : 'host';
       var head = RESULT_HEADLINES[s.outcome];
-      var score = s.outcome === 'NoContest' ? null : DEMO_SCORES[s.outcome];
       var rating = ratingText(s.outcome, app.state);
       var status = REMATCH_STATUS[s.status];
-      // 相手が送ったスタンプは、ミュートしていなければ相手の名前の上に出す。自分が送ったものは自分の名前の上
+      // 送ったスタンプは、両者の画面で送った人の名前の上に出す
       var player = function (who, isMe) {
         var stamp = stampById(app.state[who + 'Stamp']);
-        var shown = stamp && (isMe || !app.state[dev + 'Mute']);
         return '<div class="r-player' + (isMe ? ' me' : '') + '">' +
-          (shown ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
+          (stamp ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
           (isMe ? '<span class="you">YOU</span>' : '') + '<b>' + esc(PLAYERS[who].name) + '</b></div>';
       };
-      var stats = (score ? '<div class="r-row"><span>Score</span><b>' + fmt(score[0]) + ' \u2013 ' + fmt(score[1]) + '</b></div>' : '') +
-        (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
+      var stats = (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
         (rating && !/^No /.test(rating) ? '<div class="r-row"><span>Rating</span><b>' + esc(rating) + '</b></div>' : '');
       return header(dev, s, s.title) + '<div class="result">' +
         '<div class="r-outcome ' + head[1] + '">' + head[0] + '</div>' +
@@ -322,8 +322,6 @@
     },
   };
 
-  function fmt(n) { return n.toLocaleString('en-US'); }
-
   // VS 画面のカードの中身。Profile の見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)
   function vsCardBody(name, emoji, greeting, rating) {
     return '<div class="vs-emoji">' + esc(emoji) + '</div>' +
@@ -332,19 +330,20 @@
       '<div class="vs-greet">“' + esc(greeting) + '”</div>';
   }
 
-  // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に "✓ Ready" / "Not ready"。
-  // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、カウントダウン (秒)
+  // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に名前とレーティング (#1891 FB 4、VS 画面と同じ値) と "✓ Ready" / "Not ready"。
+  // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、待っている印 (点の動き) か再接続のカウントダウン (秒)
   function readyHtml(dev, s) {
     var other = dev === 'host' ? 'client' : 'host';
     var card = function (who, ready, isMe) {
       return '<div class="rd-card' + (ready ? ' ready' : '') + (isMe ? ' me' : '') + '">' + (isMe ? '<span class="you">YOU</span>' : '') +
-        '<div class="rd-name">' + esc(LOBBY_NAMES[who]) + '</div>' +
+        '<div class="rd-name">' + esc(PLAYERS[who].name) + '<span class="rd-rating">' + ELO.initial + '</span></div>' +
         '<div class="rd-state">' + (ready ? '\u2713 Ready' : 'Not ready') + '</div></div>';
     };
     return '<div class="ready-block"><div class="rd-cards">' + card(dev, s.cards.me, true) + card(other, s.cards.them, false) + '</div>' +
       '<div class="rd-info">' +
       (s.readyNotice ? '<p class="rd-notice" role="status">' + esc(s.readyNotice) + '</p>' : '') +
       (s.status ? '<div class="status">' + esc(s.status).replace(/\n/g, '<br>') + '</div>' : '') +
+      (s.dots ? '<div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>' : '') +
       (s.timer ? '<div class="rd-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div>' : '') +
       '</div></div>';
   }
@@ -353,16 +352,13 @@
     return STAMPS.filter(function (st) { return st.id === id; })[0] || null;
   }
 
-  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。
-  // その下に相手のスタンプのミュート "Mute opponent emotes" / "Unmute opponent emotes" (決定 U49)
+  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。ミュートのボタンは無い (#1891 の FB 8)
   function stampsHtml(dev) {
     var waiting = app.state[dev + 'Stamp'] !== null;
-    var muted = app.state[dev + 'Mute'];
     return '<div class="r-stamps">' + STAMPS.map(function (st) {
       if (waiting) return '<button type="button" class="r-stamp is-disabled" disabled aria-label="' + esc(st.text) + '">' + st.emoji + '</button>';
       return '<button type="button" class="r-stamp" aria-label="' + esc(st.text) + '"' + attrs(dev, 'stamp.' + st.id) + '>' + st.emoji + '</button>';
-    }).join('') + '</div><button type="button" class="r-mute' + (muted ? ' muted' : '') + '"' + attrs(dev, muted ? 'unmuteStamps' : 'muteStamps') + '>' +
-      '<span class="r-mute-icon" aria-hidden="true">' + (muted ? '\u{1F515}' : '\u{1F514}') + '</span>' + (muted ? 'Unmute opponent emotes' : 'Mute opponent emotes') + '</button>';
+    }).join('') + '</div>';
   }
 
   // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Rematch / Decline) は横に並べる
@@ -739,6 +735,11 @@
       showTab('table');
       renderTable();
       flash($('#row-' + rowLink.dataset.row));
+      return;
+    }
+    var copy = t.closest('.device .copy');
+    if (copy) {
+      if (navigator.clipboard) navigator.clipboard.writeText(MATCH_CODE).catch(function () {});
       return;
     }
     var evEl = t.closest('.device [data-ev]');

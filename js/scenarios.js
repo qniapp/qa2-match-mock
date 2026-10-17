@@ -91,8 +91,8 @@ var SCENARIOS = (function () {
       steps: toMatchEnd.concat(['host.win', 'host.rematch', 'timer.rematchTimeout', 'timer.rematchCooldown', 'host.rematch', 'client.rematch']) },
     { id: '15g', title: '引き分け → 両者が同時に Rematch', diagram: 'なし (10-07 の決定 U20 / U23)',
       steps: toMatchEnd.concat(['client.draw', 'sys.rematchSimultaneous'], toGame) },
-    { id: '15h', title: '結果画面のスタンプとミュート', diagram: 'なし (10-07 の決定 U27)',
-      steps: toMatchEnd.concat(['host.win', 'host.stamp.gg', 'client.stamp.thanks', 'host.stampShown', 'client.muteStamps', 'host.stampInterval', 'host.stamp.nice', 'client.unmuteStamps']) },
+    { id: '15h', title: '結果画面のスタンプ', diagram: 'なし (10-07 の決定 U27)',
+      steps: toMatchEnd.concat(['host.win', 'host.stamp.gg', 'client.stamp.thanks', 'host.stampShown', 'host.stampInterval', 'host.stamp.nice']) },
     { id: '16', title: '対戦中に MATCH MENU → CONTINUE (試合は続く)', diagram: 'なし (10-07 の決定、案A)',
       steps: toMatchEnd.concat(['host.matchMenu', 'client.matchMenu', 'host.matchMenu.continue', 'client.matchMenu.continue']) },
     { id: '16b', title: '対戦中に降参 (SURRENDER → 確認 → 負け)', diagram: 'なし (10-07 の決定、案A)',
@@ -140,7 +140,7 @@ var SCENARIOS = (function () {
     // Profile (決定 U56): 変えて保存すると、次に相手を探し始めたときから相手に見える
     { id: '22', title: 'Profile で絵文字とあいさつを変えて Save → ランダム対戦の VS 画面に出る', diagram: 'なし (10-08 の決定 U56)',
       steps: ['host.profile', 'host.pickEmoji.rocket', 'host.pickGreeting.bringItOn', 'host.saveProfile'].concat(toRandomGame,
-        ['client.win', 'client.muteStamps', 'host.rematch', 'client.rematch']) },
+        ['client.win', 'host.rematch', 'client.rematch']) },
     { id: '22b', title: 'Profile で選んだものを Cancel / ‹ で捨てる', diagram: 'なし (10-08 の決定 U56)', clientNote: hostOnly,
       steps: ['host.profile', 'host.pickEmoji.robot', 'host.pickGreeting.goodLuck', 'host.cancelProfile', 'host.profile', 'host.pickEmoji.star', 'host.back'] },
   ];

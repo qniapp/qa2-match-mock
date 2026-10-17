@@ -602,8 +602,8 @@ for (const ev of ['host.win', 'host.lose', 'host.draw', 'client.win', 'client.lo
   if (Engine.canFire(at('Host.Game.Countdown', 'Client.Game.Countdown'), ev)) fail(`カウントダウン中に ${ev} の行がある`);
 }
 
-// U20: 結果画面の中身 (勝敗・両者の名前・スコア・終わった理由)。スコアが決まっていない No contest は行ごと出さない (---- は出さない)
-const { END_REASONS, REMATCH_STATUS, DEMO_SCORES, ELO, STAMPS, DISCONNECT_OVERLAYS, ratingText, resultButtons, isResultState } = ctx;
+// U20: 結果画面の中身 (勝敗・両者の名前・終わった理由)。スコアはどの結果画面にも出さない (qniapp/qa2#1891 FB 7)
+const { END_REASONS, REMATCH_STATUS, ELO, STAMPS, DISCONNECT_OVERLAYS, ratingText, resultButtons, isResultState } = ctx;
 const resultNames = Object.keys(SCREENS).filter((k) => SCREENS[k].view === 'result');
 if (resultNames.some((k) => !isResultState(k)) || Object.keys(SCREENS).some((k) => isResultState(k) && SCREENS[k].view !== 'result')) fail('isResultState と結果画面の一覧が合わない');
 if (resultNames.length !== 106) fail(`結果画面が ${resultNames.length} 状態 (期待: 106 = 2 端末 × (Win / Lose / Draw × 16 段階 + 降参・切断 4 + No contest))`);
@@ -611,10 +611,10 @@ for (const name of resultNames) {
   const s = SCREENS[name];
   if (!['Win', 'Lose', 'Draw', 'NoContest'].includes(s.outcome)) fail(`${name}: 勝敗 ${s.outcome}`);
   if (!END_REASONS[s.reason]) fail(`${name}: 終わった理由 ${s.reason} が無い`);
-  if (s.outcome !== 'NoContest' && !DEMO_SCORES[s.outcome]) fail(`${name}: スコアが無い`);
   if (!s.decided.includes('U20')) fail(`${name}: 決定 U20 が無い`);
 }
 if (/'----'|dim-value/.test(appJs)) fail('app.js に値の決まっていないスコアの ---- が残っている');
+if ('DEMO_SCORES' in ctx || /DEMO_SCORES|r-row"><span>Score/.test(appJs)) fail('結果画面にスコアの行が残っている (FB 7)');
 const reasons = { timeUp: 'Time is up', timeUpTie: 'Same score when time ran out', surrendered: 'You surrendered', opponentSurrendered: 'Your opponent surrendered',
   disconnected: 'You were disconnected', opponentDisconnected: 'Your opponent disconnected', connectionError: 'No contest due to a connection error' };
 if (JSON.stringify(END_REASONS) !== JSON.stringify(reasons)) fail('終わった理由の文言が違う');
@@ -629,7 +629,7 @@ if (!/r-outcome/.test(appJs) || !/NO CONTEST/.test(appJs) || !/DRAW/.test(appJs)
 if (ELO.initial !== 1000 || ELO.k !== 24) fail('Elo が初期値 1000・K=24 でない');
 const ratings = [
   ['Win', friend, 'No rating change (friend match)'], ['Lose', friend, 'No rating change (friend match)'], ['NoContest', friend, 'No rating change (friend match)'],
-  ['Win', random, '1000 \u2192 1012 (+12)'], ['Lose', random, '1000 \u2192 988 (-12)'], ['Draw', random, '1000 \u2192 1000 (\u00B10)'],
+  ['Win', random, '1000 \u2192 1012 (+12)'], ['Lose', random, '1000 \u2192 988 (\u221212)'], ['Draw', random, '1000 \u2192 1000 (\u00B10)'],
   ['NoContest', random, 'No rating change (no contest)'], ['Win', { match: 'random', rated: false }, 'No rating change (rematch)'],
 ];
 for (const [o, session, want] of ratings) if (ratingText(o, session) !== want) fail(`レート ${o} ${JSON.stringify(session)}: ${ratingText(o, session)} (期待: ${want})`);
@@ -1123,7 +1123,6 @@ for (const R of ['Host', 'Client']) {
   }
 }
 if (/Match finished/.test(shownText + appJs)) fail('仮の "Match finished" が残っている');
-if (ctx.DEMO_SCORES.Draw[0] !== ctx.DEMO_SCORES.Draw[1] || ctx.DEMO_SCORES.Win[0] <= ctx.DEMO_SCORES.Win[1]) fail('デモのスコアが U44 (高いほうが勝ち・同点は引き分け) と合わない');
 if (!/'時間切れ'|時間切れ\)/.test(appJs) || !/btn\('draw', '同点'/.test(appJs)) fail('端末の下のモック操作が時間切れの勝ち / 負け / 同点になっていない');
 // U45: 降参・切断・No contest のあとは、どちらからも再戦できない
 for (const name of resultNames.filter((k) => /\.(Surrendered|OpponentSurrendered|Disconnected|OpponentDisconnected)$|NoContest/.test(k))) {

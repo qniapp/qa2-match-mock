@@ -6,9 +6,11 @@
   'use strict';
 
   var MATCH_CODE = 'QWERTY123';
+  // Match Code のコピーのボタン。ふつうのコピーのアイコン (重なった 2 枚の紙) で、ホストにだけ出す (#1891 の FB 5)
+  var COPY_BUTTON = '<button type="button" class="copy" aria-label="Copy room code" title="Copy room code">' +
+    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>';
   var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
-  // Ready 画面のカードの名前 (ロビーの "Client User" / "Host User" と同じ架空の名前)
-  var LOBBY_NAMES = { host: 'Host User', client: 'Client User' };
   var RESULT_HEADLINES = { Win: ['WIN!', 'win'], Lose: ['LOSE', 'lose'], Draw: ['DRAW', 'draw'], NoContest: ['NO CONTEST', 'nocontest'] };
   // ゲーム画面のプレースホルダー: 列ごとに下から積んだブロック ('+' は丸いブロック)
   var FIELD = [['S', 'H', 'Z', 'S'], ['Z', 'S', 'Y'], ['T', 'S', '+'], ['Z', 'T', 'S'], ['S', 'T', 'H', '+'], ['H', 'Z', '+', 'Z']];
@@ -250,7 +252,7 @@
     lobby: function (dev, s) {
       return header(dev, s, s.title) +
         '<div class="body">' +
-        '<div class="code-head"><span>Match Code</span><span class="copy">Copy</span></div>' +
+        '<div class="code-head"><span>Match Code</span>' + (s.copyCode ? COPY_BUTTON : '') + '</div>' +
         '<div class="code">' + MATCH_CODE + '</div>' +
         (s.codeHint ? '<div class="code-hint">' + esc(CODE_HINT) + '</div>' : '') +
         (s.cards ? readyHtml(dev, s) : '<div class="status-block">' +
@@ -332,13 +334,13 @@
       '<div class="vs-greet">“' + esc(greeting) + '”</div>';
   }
 
-  // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に "✓ Ready" / "Not ready"。
+  // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に名前とレーティング (#1891 FB 4、VS 画面と同じ値) と "✓ Ready" / "Not ready"。
   // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、待っている印 (点の動き) か再接続のカウントダウン (秒)
   function readyHtml(dev, s) {
     var other = dev === 'host' ? 'client' : 'host';
     var card = function (who, ready, isMe) {
       return '<div class="rd-card' + (ready ? ' ready' : '') + (isMe ? ' me' : '') + '">' + (isMe ? '<span class="you">YOU</span>' : '') +
-        '<div class="rd-name">' + esc(LOBBY_NAMES[who]) + '</div>' +
+        '<div class="rd-name">' + esc(PLAYERS[who].name) + '<span class="rd-rating">' + ELO.initial + '</span></div>' +
         '<div class="rd-state">' + (ready ? '\u2713 Ready' : 'Not ready') + '</div></div>';
     };
     return '<div class="ready-block"><div class="rd-cards">' + card(dev, s.cards.me, true) + card(other, s.cards.them, false) + '</div>' +
@@ -740,6 +742,11 @@
       showTab('table');
       renderTable();
       flash($('#row-' + rowLink.dataset.row));
+      return;
+    }
+    var copy = t.closest('.device .copy');
+    if (copy) {
+      if (navigator.clipboard) navigator.clipboard.writeText(MATCH_CODE).catch(function () {});
       return;
     }
     var evEl = t.closest('.device [data-ev]');

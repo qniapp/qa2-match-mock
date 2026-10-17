@@ -319,8 +319,16 @@ for (const [k, want] of Object.entries(dlgWant)) {
 }
 if (Object.keys(DIALOGS).join() !== 'closeRoom,leaveRoom') fail(`使わないダイアログが残っている (${Object.keys(DIALOGS)})`);
 if ('ROOM_SWITCH_BODY' in ctx) fail('U12 の作り直しの確認の本文が残っている (U57 で無くなった)');
+// #1891 の FB 5: Match Code のコピーのボタンはホストの部屋の画面にだけ。期限切れの画面には出さない。文字ではなくアイコンで、"Copy room code" の名前がある
+for (const [name, s] of Object.entries(SCREENS)) {
+  if (s.view !== 'lobby') continue;
+  const want = name.startsWith('Host.') && !/\.CodeExpired$/.test(name);
+  if (!!s.copyCode !== want) fail(`${name} の Match Code のコピーのボタンが ${s.copyCode ? 'ある' : '無い'} (#1891 FB 5: ホストにだけ。期限切れには無い)`);
+}
+if (!/class="copy" aria-label="Copy room code" title="Copy room code">' \+\s*'<svg/.test(appJs) || />Copy</.test(appJs)) fail('Match Code のコピーのボタンが "Copy room code" の名前付きのアイコンでない (#1891 FB 5)');
 console.log('ok  U31 / U33〜U36 / U4 / U9 / U11 / U57: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト (秒数は出さず待っている印だけ、FB 6)、‹ の確認 (Close this room? / Leave this room?) (両端末)');
 console.log('ok  U58: 部屋の画面に Match Code の期限を出さず、ホストにだけ "Share this code with your friend!" (クライアント・期限切れ・Could not reconnect. には無い)');
+console.log('ok  #1891 FB 5: Match Code のコピーのボタンはホストにだけ (アイコン、"Copy room code")。クライアントと期限切れの画面には無い');
 
 // 決定 (U4): Ready を押せるのは参加の確認・両者が部屋の画面・同期の 3 つがそろってから。決まった待ち時間は置かない
 {

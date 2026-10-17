@@ -92,7 +92,7 @@ VS 画面のあとは両端末ともゲーム画面のカウントダウン (`Ho
 (Ready していない側が離れても変わらないこと)、60 秒で両者の Ready が消えて "Ready check timed out…" になること、
 部屋の画面の出口が左上の ‹ だけで Close Room / Leave Room のボタンが無いこと (U57)、クライアントの ‹ が確認 "Leave this room?" を出し、Keep Waiting で Ready のまま残り、Leave Room でホストに "Your friend left. Waiting for another friend…" が出ること、
 ホストの ‹ が確認 "Close this room?" を出し、Keep Waiting で残り、閉じるとクライアントに "Room closed. The host left." が出ること、お知らせ付きの Ready 画面 (同期の失敗を含む 4 種類) からも Ready を押せること、
-部屋の画面のカード・文言・カウントダウン (60 / 20)・ボタン、Match Code の下の一行がホストにだけあること (U58)、期限切れと "Could not reconnect." の画面、2 つの確認の題名・本文・ボタンを確かめます。
+部屋の画面のカード・文言・カウントダウン (60 / 20)・ボタン、Match Code の下の一行がホストにだけあること (U58)、Match Code のコピーのボタンがホストにだけあり期限切れの画面には無いこと (#1891 の FB 5)、期限切れと "Could not reconnect." の画面、2 つの確認の題名・本文・ボタンを確かめます。
 フレンド対戦の部屋 (U1〜U19 で決定) については、参加のあとホスト "Friend joined!" / クライアント "Connecting…" で Ready を押せず、同期 (`sys.roomSynced`、1.5 秒の固定ではない) のあと Ready 画面になること、
 部屋での切断のすべての組み合わせで "Connection lost. Reconnecting…" / "Your friend disconnected…" になり、回復・20 秒で "Could not reconnect."・Retry・‹・残った側の ‹ の行き先 (U5)、
 部屋を残したまま離れる状態 (以前の U14 の離席) と帯が無いこと (U57)、"Friend joined!" になるのは本当に入った・入り直したときだけであること (U17)、
@@ -163,10 +163,10 @@ No contest にスコアの行が無いこと、モック操作 (時間切れの�
 スタンプを送った端末では端末の下の「3 秒たつ」「5 秒たつ」を押せて、自分の名前の上に吹き出しがあることも確かめます。
 アプリを離れて検索が止まった画面 (`*.Matchmake.Stopped`) では、通知のボックスが Online Battle のメニューの中にあって暗幕 (`.dim`) が無いこと、
 ボックスが端末の画面に収まっていること、Random Match / Friend Match / Profile と通知のボタンの真ん中を押すとそのボタン自身に当たる (上に何も重なっていない) ことも確かめます (U43)。
-Ready 画面 (U31 / U32 / U36) では、カードが 2 枚 ("✓ Ready" / "Not ready"、自分のカードに `YOU`) あること、数字は再接続を待つ両者のカウントダウン "20s" (U5 / U32 / U52) だけで、自分だけ Ready で待つ間は秒数ではなく待っている印 (点の動き) が出ること (#1891 の FB 6)、
+Ready 画面 (U31 / U32 / U36) では、カードが 2 枚 ("✓ Ready" / "Not ready"、自分のカードに `YOU`、名前の横に VS 画面と同じレーティング "1000"、#1891 FB 4) あること、数字はレーティングのほかは再接続を待つ両者のカウントダウン "20s" (U5 / U32 / U52) だけで、自分だけ Ready で待つ間は秒数ではなく待っている印 (点の動き) が出ること (#1891 の FB 6)、
 カード・お知らせ・文言・ボタンが画面に収まって重ならないこと、‹ の確認 (Close this room? / Leave this room?) を開いても後ろのボタンが消えないこと、
 「アプリを離れる」「切断する」が端末の画面の中には無く、端末の下にあることも確かめます。
-部屋の画面 (U1〜U19) では、Match Code の期限の表示がどこにも無く、ホストにだけ Match Code の下に "Share this code with your friend!" があること (クライアントと、期限切れ・"Could not reconnect." の画面には無い、U58)、数字が Match Code・カウントダウンだけであること、
+部屋の画面 (U1〜U19) では、Match Code の期限の表示がどこにも無く、ホストにだけ Match Code の下に "Share this code with your friend!" があること (クライアントと、期限切れ・"Could not reconnect." の画面には無い、U58)、Match Code のコピーのボタンがホストにだけ "Copy room code" の名前 (aria-label と title) 付きのアイコン (重なった 2 枚の紙) であること (クライアントと期限切れの画面には無い、#1891 の FB 5)、数字が Match Code・カードのレーティング・カウントダウンだけであること、
 クライアントのカードに "Away" が無いこと、古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まり、ボタン・入力欄・お知らせと重ならず、文字と › がはみ出さないことも確かめます。
 部屋の画面 (U57) では、Close Room / Leave Room のボタンがどこにも無く、‹ を押すとホストは "Close this room?"、クライアントは "Leave this room?" の確認が画面に収まって開き、Close Room / Leave Room と Keep Waiting を押せることも確かめます。
@@ -930,7 +930,7 @@ Ready の 60 秒は、急かされている印象を与えるので電話の画�
 部屋 (Ready 画面・読み込み) での切断の画面 (U5) は「フレンド対戦の部屋」にあります。
 2026-10-10 の U57 で、どの段階にも Close Room / Leave Room のボタンは無く、部屋の出口は左上の ‹ だけです (上の表のボタンの列は今の動き)。
 
-- カードは自分が左 (`YOU` 付き)、相手が右です。名前はロビーの "Host User" / "Client User" (架空) のままです。
+- カードは自分が左 (`YOU` 付き)、相手が右です。名前の横にレーティングを出します (例: "Yasuhito 1000"、#1891 FB 4)。名前とレーティングは VS 画面と同じ架空の値です (以前はロビーの "Host User" / "Client User")。
 - クライアントの ‹ は確認 "Leave this room?" / "No match has started. No win or loss will be recorded." / [Leave Room] [Keep Waiting] を出します (U9 / U11 / U34 / U57)。
   ホストの ‹ は "Close this room?" / 同じ本文 / [Close Room] [Keep Waiting] (U57。題名は 2026-10-08 に U51 で決定)。確認を開いても Ready はそのままで、Keep Waiting で閉じるとそのまま待てます。
 - 部屋を出るボタンは、SPEC14 では Ready 画面でホスト・クライアントとも Leave Room (仮) にしていましたが、2026-10-07 の決定でホストは Close Room (U14)、クライアントは Leave Room (U9) になり、2026-10-10 の U57 でどちらのボタンも無くなりました (出口は ‹ だけ)。

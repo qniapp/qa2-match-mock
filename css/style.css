@@ -188,8 +188,12 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .input .placeholder { color: #4D566F; font-size: 14px; }
 .error { color: #FF6B6B; font-size: 13px; margin: 10px 2px 0; }
 
-.code-head { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; color: #B9C0D0; margin-bottom: 6px; }
-.code-head .copy { font-size: 11px; color: var(--h); }
+.code-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #B9C0D0; margin-bottom: 6px; }
+.code-head .copy {
+  display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; margin: -6px -6px -6px 0; padding: 0;
+  border: 0; border-radius: 6px; background: none; color: var(--h); cursor: pointer;
+}
+.code-head .copy:hover { background: rgba(95, 201, 250, 0.12); }
 .code {
   text-align: center; padding: 12px 0; border-radius: 8px; font-size: 24px; letter-spacing: 0.08em;
   background: rgba(95, 201, 250, 0.07); border: 1px solid rgba(95, 201, 250, 0.3);
@@ -213,6 +217,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   font-size: 10px; font-weight: 700; line-height: 16px; background: var(--text); color: var(--navy);
 }
 .rd-name { font-size: 16px; font-weight: 700; margin-bottom: 10px; white-space: nowrap; }
+.rd-rating { margin-left: 6px; font-size: 13px; font-weight: 400; color: var(--muted); }
 .rd-state {
   display: inline-block; padding: 3px 12px; border-radius: 999px; font-size: 13px; font-weight: 600;
   color: #9AA3B8; background: rgba(255, 255, 255, 0.05); border: 1px solid #3A4466;

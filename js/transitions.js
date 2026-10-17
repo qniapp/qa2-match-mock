@@ -1302,9 +1302,10 @@ var SCREENS = (function () {
     return { roomNotice: { text: ROOM_NOTICES[key], buttons: [{ label: 'Close', event: 'closeNotice' }] }, decided: decided,
       context: ROOM_CONTEXT[key === 'MatchCancelled' ? 'RoomMatchCancelled' : key] };
   }
-  // 部屋の画面。ホストにだけ Match Code の下に "Share this code with your friend!" (決定 U58)。期限が切れた画面と再接続できなかった画面では出さない
+  // 部屋の画面。ホストにだけ Match Code の下に "Share this code with your friend!" (決定 U58)。期限が切れた画面と再接続できなかった画面では出さない。
+  // Match Code のコピーのボタン (アイコン) もホストにだけ出す (#1891 の FB 5)。期限が切れた画面では出さない
   function lobby(R, extra) {
-    return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [], codeHint: R === 'Host' }, extra);
+    return Object.assign({ view: 'lobby', title: 'Friend Match', back: 'back', buttons: [], codeHint: R === 'Host', copyCode: R === 'Host' }, extra);
   }
   // Ready 画面: プレイヤーごとのカード (自分・相手の Ready)、状況の一行、カウントダウン (秒)、お知らせ、ボタン。
   // 部屋を出るボタンは無く、‹ で確認を出す (決定 U57。ホストは "Close this room?"、クライアントは "Leave this room?")
@@ -1346,7 +1347,7 @@ var SCREENS = (function () {
     S[L('OpponentDisconnected')] = readyLobby(R, false, false, 'OpponentDisconnected', { status: READY_TEXT.opponentDisconnected, timer: READY_TIMERS.reconnect,
       buttons: [], decided: ['U32', 'U34'] });
     // 期限切れ (決定 U7 / U10 / U18): Ready は出さず、ホストは Create Match、クライアントは Join Match
-    S[L('CodeExpired')] = lobby(R, { status: ROOM_TEXT.codeExpired, codeHint: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
+    S[L('CodeExpired')] = lobby(R, { status: ROOM_TEXT.codeExpired, codeHint: false, copyCode: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
       decided: ['U7', 'U10'].concat(R === 'Client' ? ['U18'] : []), context: ROOM_CONTEXT.CodeExpired });
   }
   var errMsg = {

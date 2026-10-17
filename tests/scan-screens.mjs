@@ -8,7 +8,8 @@
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
 // 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
-// 部屋の画面 (決定 U1〜U19) は、Match Code の下にホストにだけ "Share this code with your friend!" があり期限の表示が無いこと (U58)、クライアントのカードに "Away" が無いこと、
+// 部屋の画面 (決定 U1〜U19) は、Match Code の下にホストにだけ "Share this code with your friend!" があり期限の表示が無いこと (U58)、
+// Match Code のコピーのボタンがホストにだけ ("Copy room code" の名前付きのアイコン。期限切れには無い、#1891 FB 5) あること、クライアントのカードに "Away" が無いこと、
 // 古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
 // 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
 // 部屋の画面の出口は左上の ‹ だけ (決定 U57): Close Room / Leave Room のボタンが無く、‹ はホストで "Close this room?"、クライアントで "Leave this room?" の確認を開き、
@@ -391,6 +392,13 @@ function scan() {
       const hint = screen.querySelector('.code-hint');
       const wantHint = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.(CodeExpired|CouldNotReconnect)\b/.test(state);
       if (!!hint !== wantHint || (hint && hint.textContent !== CODE_HINT)) findings.push(`${at}: Match Code の下の一行が ${hint ? hint.textContent : 'なし'} (期待: ${wantHint ? CODE_HINT : 'なし'})`);
+      // Match Code のコピーのボタン (#1891 FB 5): ホストの部屋の画面にだけ、文字の無いアイコンで "Copy room code" の名前と title がある。期限切れには無い
+      const copy = screen.querySelector('.copy');
+      const wantCopy = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.CodeExpired\b/.test(state);
+      if (!!copy !== wantCopy) findings.push(`${at}: Match Code のコピーのボタンが ${copy ? 'ある' : '無い'} (期待: ${wantCopy ? 'ある' : '無い'})`);
+      if (copy && (copy.tagName !== 'BUTTON' || copy.getAttribute('aria-label') !== 'Copy room code' || copy.title !== 'Copy room code' || !copy.querySelector('svg') || copy.textContent.trim())) {
+        findings.push(`${at}: Match Code のコピーのボタンが "Copy room code" の名前付きのアイコンでない`);
+      }
       if (/\.FriendMatch\.Lobby\./.test(state)) {
         const timerText = (screen.querySelector('.rd-timer') || { textContent: '\u0000' }).textContent;
         const rest = [...screen.querySelectorAll('.rd-rating')].reduce((t, r) => t.replace(r.textContent, ''), text.replace(MATCH_CODE_TEXT, '').replace(timerText, ''));

@@ -335,7 +335,7 @@
   }
 
   // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に名前とレーティング (#1891 FB 4、VS 画面と同じ値) と "✓ Ready" / "Not ready"。
-  // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、カウントダウン (秒)
+  // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、待っている印 (点の動き) か再接続のカウントダウン (秒)
   function readyHtml(dev, s) {
     var other = dev === 'host' ? 'client' : 'host';
     var card = function (who, ready, isMe) {
@@ -347,6 +347,7 @@
       '<div class="rd-info">' +
       (s.readyNotice ? '<p class="rd-notice" role="status">' + esc(s.readyNotice) + '</p>' : '') +
       (s.status ? '<div class="status">' + esc(s.status).replace(/\n/g, '<br>') + '</div>' : '') +
+      (s.dots ? '<div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>' : '') +
       (s.timer ? '<div class="rd-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div>' : '') +
       '</div></div>';
   }

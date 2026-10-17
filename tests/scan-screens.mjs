@@ -6,7 +6,7 @@
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
 // No contest にスコアの行が無いこと (値が決まっていないスコアは "----" ではなく行ごと出さない) も確かめる (決定 U20 / U27 / U28 / U30)。
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
-// 決定どおりのカウントダウン (Ready の 60s、再接続を待つ 20s) だけが数字として出ること、"Start Match" がどこにも無いこと、
+// 再接続を待つ 20s のカウントダウンだけが数字として出ること (自分だけ Ready で待つ間は秒数ではなく待っている印 (点の動き) を出す、#1891 の FB 6)、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
 // 部屋の画面 (決定 U1〜U19) は、Match Code の下にホストにだけ "Share this code with your friend!" があり期限の表示が無いこと (U58)、
 // Match Code のコピーのボタンがホストにだけ ("Copy room code" の名前付きのアイコン。期限切れには無い、#1891 FB 5) あること、クライアントのカードに "Away" が無いこと、
@@ -26,7 +26,7 @@ import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, extname, normalize } from 'node:path';
+import { join, extname, normalize, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
@@ -41,9 +41,12 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const url = `http://127.0.0.1:${server.address().port}/index.html`;
 
-const profile = mkdtempSync(join(tmpdir(), 'qa2-scan-'));
+// Chromium は TMPDIR の下に Unix ソケット (SingletonSocket) を作り、パスが約 108 バイトを超えると起動できない。
+// TMPDIR に .. が含まれるとそのまま長くなるので、正規化してから渡す
+const tmp = resolve(tmpdir());
+const profile = mkdtempSync(join(tmp, 'qa2-scan-'));
 const chrome = spawn(process.env.CHROMIUM || 'chromium', ['--headless=new', '--disable-gpu', `--user-data-dir=${profile}`,
-  '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore' });
+  '--remote-debugging-port=0', 'about:blank'], { stdio: 'ignore', env: { ...process.env, TMPDIR: tmp } });
 const exited = new Promise((r) => chrome.once('exit', r));
 let send = null;
 // Browser.close で子プロセス (ネットワークなど) ごと閉じ、終わってからプロファイルを消す
@@ -430,8 +433,10 @@ function scan() {
         if (names.join() !== wantNames.join() || cards.some((c) => !c.querySelector('.rd-name .rd-rating'))) findings.push(`${at}: カードの名前とレーティングが ${names.join(', ')}`);
         cards.forEach((c) => { const n = c.querySelector('.rd-name'); if (n.scrollWidth > c.clientWidth) findings.push(`${at}: カードの名前がはみ出している (${n.textContent})`); });
         const timer = screen.querySelector('.rd-timer');
-        const wantTimer = /WaitingForOpponent/.test(state) ? '60s' : /\.(OpponentDisconnected|Reconnecting|ConnectionLost|FriendDisconnected)\b/.test(state) ? '20s' : null;
+        const wantTimer = /\.(OpponentDisconnected|Reconnecting|ConnectionLost|FriendDisconnected)\b/.test(state) ? '20s' : null;
         if ((timer ? timer.textContent : null) !== wantTimer) findings.push(`${at}: カウントダウンが ${timer ? timer.textContent : 'なし'} (期待: ${wantTimer || 'なし'})`);
+        const dots = screen.querySelector('.rd-info .dots');
+        if (!!dots !== /WaitingForOpponent/.test(state)) findings.push(`${at}: 待っている印 (点の動き) が ${dots ? 'ある' : '無い'} (FB 6: Waiting for opponent… にだけ出す)`);
         ['leaveApp', 'disconnect'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]`)) findings.push(`${at}: 端末の下のモック操作に ${ev} が無い`);
         });

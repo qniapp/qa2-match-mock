@@ -239,7 +239,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
   color: var(--text); background: rgba(255, 255, 255, 0.06); border: 1px solid #56607E;
 }
 .rn-close:hover:not([data-norow]) { border-color: var(--h); }
-/* カウントダウン (Ready の 60 秒・再接続の 20 秒)。モックは始まった直後の秒数のまま描く */
+/* 再接続のカウントダウン (20 秒)。モックは始まった直後の秒数のまま描く */
 .rd-timer {
   display: flex; align-items: baseline; justify-content: center; width: 64px; height: 64px; box-sizing: border-box; padding-top: 15px;
   border-radius: 50%; border: 2px solid rgba(95, 201, 250, 0.6); box-shadow: 0 0 12px rgba(95, 201, 250, 0.2);
@@ -294,6 +294,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .dots i:nth-child(2) { animation-delay: 0.2s; }
 .dots i:nth-child(3) { animation-delay: 0.4s; }
 @keyframes pulse { 0%, 100% { opacity: 0.25; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } }
+/* Ready 画面の待っている印 (#1891 の FB 6)。.rd-info の gap (14px) と合わせて、Searching for an opponent… と同じ 18px 空ける */
+.rd-info .dots { margin-top: 4px; }
 
 /* VS 画面 */
 .vs { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 14px; padding: 24px; position: relative; }

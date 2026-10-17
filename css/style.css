@@ -168,7 +168,8 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .body { padding: 20px 28px 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .body.center { align-items: center; justify-content: center; text-align: center; }
 .sec-label { font-size: 13px; color: #B9C0D0; margin-bottom: 8px; }
-.sec-label.second { margin-top: 44px; }
+/* Friend Match トップの 2 つのボタン (New Match / Join Match、決定 U62) */
+.ft-buttons { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
 
 .btn {
   display: block; width: 100%; padding: 10px 12px; border-radius: 8px; cursor: pointer;
@@ -473,6 +474,18 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .d-body { margin: 0 0 6px; text-align: center; font-size: 13px; color: #B9C0D0; }
 /* ランダム対戦で相手を探すのをやめたときの通知 (決定 U13)。文だけで本文は無いので、ボタンとの間を少し空ける */
 .d-title.notice { margin-bottom: 6px; line-height: 1.4; text-wrap: balance; }
+/* Join a Match (決定 U62): 右上の × で閉じる。Match Code の入力欄、赤字、Join */
+.join-dialog { position: relative; padding-top: 22px; }
+.join-dialog .d-title { margin: 0 28px 4px; }
+.d-close {
+  position: absolute; top: 10px; right: 10px; width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; cursor: pointer;
+  background: none; color: #B9C0D0; font-size: 22px; line-height: 1;
+}
+.d-close:hover:not([data-norow]) { background: rgba(255, 255, 255, 0.08); color: var(--text); }
+.d-label { font-size: 13px; color: #B9C0D0; }
+.join-dialog .input { margin-bottom: 0; }
+.join-dialog .error { margin: 0 2px; text-align: center; line-height: 1.4; text-wrap: balance; }
+.join-dialog .btn { margin-top: 4px; }
 
 /* ---- 右パネル ---------------------------------------------------------- */
 /* 決定済みや画面の説明が増えても遷移表が見えるように、上の部分は高さの上限を超えたらスクロールする */

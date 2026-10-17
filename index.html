@@ -39,17 +39,16 @@
         <div id="env-events" class="env-events"></div>
         <p id="auto-next" class="auto-next"></p>
         <details class="mock-settings">
-          <summary>モック設定 <small>(Join Match / Create Match の結果)</small></summary>
-          <label>Join Match の結果
+          <summary>モック設定 <small>(Join a Match / New Match の結果)</small></summary>
+          <label>Join a Match の結果
             <select id="ctx-codeResult">
               <option value="auto">自動 (ホストの状態に従う)</option>
-              <option value="notFound">Match not found</option>
-              <option value="expired">期限切れ</option>
+              <option value="notFound">Match not found (誤り・期限切れ)</option>
               <option value="full">満員</option>
               <option value="connFailed">接続失敗 (サーバーに届かない)</option>
             </select>
           </label>
-          <label>Create Match の結果
+          <label>New Match の結果
             <select id="ctx-createResult">
               <option value="ok">成功</option>
               <option value="connFailed">接続失敗 (サーバーに届かない)</option>

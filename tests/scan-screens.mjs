@@ -9,11 +9,13 @@
 // 再接続を待つ 20s のカウントダウンだけが数字として出ること (自分だけ Ready で待つ間は秒数ではなく待っている印 (点の動き) を出す、#1891 の FB 6)、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
 // 部屋の画面 (決定 U1〜U19) は、Match Code の下にホストにだけ "Share this code with your friend!" があり期限の表示が無いこと (U58)、
-// Match Code のコピーのボタンがホストにだけ ("Copy room code" の名前付きのアイコン。期限切れには無い、#1891 FB 5) あること、クライアントのカードに "Away" が無いこと、
-// 古い文言 (Cancel Match / Leave Match / Go Back / Stay in Room / Ready to start / Match expired. など) が無いこと、
+// Match Code のコピーのボタンがホストにだけ ("Copy match code" の名前付きのアイコン。期限切れには無い、#1891 FB 5) あること、クライアントのカードに "Away" が無いこと、
+// 古い文言 (Go Back / Stay in Room / Ready to start / Match expired. など) と "room" (名前 (aria-label / title) も、U62) が無いこと、
 // 画面の下の帯 (2 行の "Connection failed" を含む) が画面に収まりボタンと重ならないことも確かめる。
-// 部屋の画面の出口は左上の ‹ だけ (決定 U57): Close Room / Leave Room のボタンが無く、‹ はホストで "Close this room?"、クライアントで "Leave this room?" の確認を開き、
-// 確認が画面に収まって Close Room / Leave Room と Keep Waiting を押せることも確かめる。
+// 部屋の画面の出口は左上の ‹ だけ (決定 U57): 部屋を出るボタンが無く、‹ はホストで "Cancel this match?"、クライアントで "Leave this match?" の確認を開き (U62)、
+// 確認が画面に収まって Cancel Match / Keep Waiting、Leave / Stay を押せることも確かめる。
+// Friend Match トップ (決定 U62、#1891 の FB 19・20) は New Match / Join Match の 2 つのボタンだけで、Join a Match のダイアログ (題名、Match Code の欄、Join、×) が画面に収まり、
+// 赤字 (見つからない・期限切れは同じ文言) がダイアログの中にあり、接続失敗のトーストがダイアログの暗幕の上で押せることも確かめる。
 // 2026-10-08 の決定 (U44〜U55): 切断を待つ間 (対戦中 U46・開始前 U54) は濃い暗幕と "20s" だけが数字として出ること、VS 画面が "Rating 1000" で Rank が無いこと (U48)、
 // 部屋のお知らせが Close 付きの帯で画面に収まり押せること (U52)、結果画面にスタンプのミュートのボタンが無いこと (U49、#1891 の FB 8)、
 // 切断を待つ間のモック操作 (再接続する / 相手が戻る / 20 秒たつ) が端末の外で押せることも確かめる。
@@ -162,7 +164,7 @@ function checkPage() {
   if (!settings) page('モック設定が <details> でない');
   else {
     if (settings.open) page('モック設定が開いている');
-    if (!settings.querySelector('#ctx-codeResult') || !settings.querySelector('#ctx-createResult')) page('モック設定に Join Match / Create Match の結果が無い');
+    if (!settings.querySelector('#ctx-codeResult') || !settings.querySelector('#ctx-createResult')) page('モック設定に Join a Match / New Match の結果が無い');
     if (!(document.querySelector('#env-events').compareDocumentPosition(settings) & Node.DOCUMENT_POSITION_FOLLOWING)) page('モック設定が環境イベントの下にない');
   }
   // 押すと遷移表どおりに進み、自動遷移 (参加のあとの同期、0.8 秒) は実時間で進む (自由操作)
@@ -170,7 +172,7 @@ function checkPage() {
   const press = (d, ev) => document.querySelector(`.device[data-dev="${d}"] .screen [data-ev="${ev}"]`).click();
   press('host', 'friendMatch');
   if (stateOf('host') !== 'Host.FriendMatch.Room') page(`自由操作で Friend Match を押しても ${stateOf('host')}`);
-  [['host', 'createMatch'], ['client', 'friendMatch'], ['client', 'enterCode'], ['client', 'joinMatch']].forEach(([d, ev]) => press(d, ev));
+  [['host', 'createMatch'], ['client', 'friendMatch'], ['client', 'openJoin'], ['client', 'enterCode'], ['client', 'joinMatch']].forEach(([d, ev]) => press(d, ev));
   const joined = `${stateOf('host')} / ${stateOf('client')}`;
   if (joined !== 'Host.FriendMatch.Lobby.FriendJoined / Client.FriendMatch.Lobby.Connecting') page(`自由操作で参加しても ${joined}`);
   if (!/^⏱ /.test(document.querySelector('#auto-next').textContent)) page(`次の自動遷移の予定が無い (${document.querySelector('#auto-next').textContent})`);
@@ -223,7 +225,7 @@ function profileReload() {
   const sel = [...host.querySelectorAll('.pf-emoji.selected, .pf-greet.selected')].map((e) => e.textContent).join(' / ');
   if (sel !== '\u{1F680} / Bring it on!') page(`開き直した Profile で選ばれているのが ${sel}`);
   // シナリオ 1 の VS 画面は保存した値に関係なく 👋 "Hello!"
-  MockApp.show('1', 11);
+  MockApp.show('1', 12);
   const greet = [...document.querySelectorAll('.device[data-dev="host"] .vs-card.host .vs-emoji, .device[data-dev="host"] .vs-card.host .vs-greet')].map((e) => e.textContent).join(' ');
   if (greet !== '\u{1F44B} \u201cHello!\u201d') page(`シナリオ 1 の VS 画面が保存した値 (${greet}) を使う`);
   if (localStorage.getItem(ProfileStore.KEY) === null) page('シナリオを開いたら保存した値が消えた');
@@ -367,13 +369,15 @@ function scan() {
       const notice = screen.querySelector('.room-notice');
       if (/\.FriendMatch\.Room\.(HostLeft|HostDisconnected|RoomClosed|ReconnectFailed|MatchCancelled)\b/.test(state) !== !!notice) findings.push(`${at}: 部屋のお知らせの帯が ${notice ? 'ある' : '無い'}`);
       if (notice) {
+        // Join a Match (U62) を開いている間は、帯はダイアログの暗幕の後ろに残り、Close は押せない
+        const joinOpen = !!screen.querySelector('.join-dialog');
         const close = notice.querySelector('.rn-close');
-        if (!close || close.textContent !== 'Close' || close.hasAttribute('data-norow')) findings.push(`${at}: お知らせの Close を押せない`);
-        if (screen.querySelector('.dim')) findings.push(`${at}: お知らせがモーダル (暗幕がある)`);
+        if (!close || close.textContent !== 'Close' || close.hasAttribute('data-norow') !== joinOpen) findings.push(`${at}: お知らせの Close を${joinOpen ? ' Join a Match の後ろで' : ''}押せ${joinOpen ? 'る' : 'ない'}`);
+        if (screen.querySelector('.dim') && !joinOpen) findings.push(`${at}: お知らせがモーダル (暗幕がある)`);
         const sr = screen.getBoundingClientRect();
         const nr = notice.getBoundingClientRect();
         if (nr.top < sr.top || nr.bottom > sr.bottom || nr.left < sr.left || nr.right > sr.right) findings.push(`${at}: お知らせの帯が画面からはみ出している`);
-        screen.querySelectorAll('.btn, .input, .sec-label').forEach((el) => {
+        screen.querySelectorAll('.ft-buttons .btn').forEach((el) => {
           const r = el.getBoundingClientRect();
           if (r.bottom > nr.top + 0.5 && nr.bottom > r.top + 0.5 && r.right > nr.left && nr.right > r.left) findings.push(`${at}: お知らせの帯が ${el.textContent.trim()} と重なっている`);
         });
@@ -381,21 +385,69 @@ function scan() {
       }
       // スタンプのミュートは無い (U49、#1891 の FB 8)
       if (/opponent emotes/i.test(text) || /🔕/.test(state)) findings.push(`${at}: スタンプのミュートが残っている`);
-      // Ready 画面 (決定 U31 / U32 / U36) と部屋の画面 (決定 U1〜U19)。古い文言は出さない
-      const OLD = text.match(/Start Match|Ready to start|Stay in Room|Go Back|Leave Match|Cancel Match|Cancel this match|Leave this match|Match expired\.|cancelled the match|left the match\./);
+      // Ready 画面 (決定 U31 / U32 / U36) と部屋の画面 (決定 U1〜U19)。古い文言は出さない。"Room" / "room" も出さない (U62、#1891 の FB 19)
+      const OLD = text.match(/Start Match|Ready to start|Stay in Room|Go Back|Match expired\.|Create Match|Check the Match Code and try again|The match has expired|\broom\b/i);
       if (OLD) findings.push(`${at}: 古い文言 "${OLD[0]}" が残っている`);
+      const roomAttr = [...screen.querySelectorAll('[aria-label], [title]')].map((el) => `${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`).find((t) => /\broom\b/i.test(t));
+      if (roomAttr) findings.push(`${at}: 名前 (aria-label / title) に "room" がある (${roomAttr.trim()})`);
+      // Friend Match トップ (U62): ボタンは New Match と Join Match だけ。Match Code は Join a Match のダイアログに入れる
+      if (screen.classList.contains('view-friendTop')) {
+        const top = [...screen.querySelectorAll('.body .btn')].map((b) => b.textContent).join(' / ');
+        if (top !== 'New Match / Join Match' || screen.querySelector('.body .input, .body .error, .sec-label')) findings.push(`${at}: Friend Match トップが New Match / Join Match だけでない (${top})`);
+        const jd = screen.querySelector('.join-dialog');
+        const joinState = /^(Host|Client)\.FriendMatch\.Room(\.[A-Za-z]+)?\.Join(\.|$)/.test(state);
+        if (!!jd !== joinState) findings.push(`${at}: Join a Match が ${jd ? '開いている' : '無い'}`);
+        if (jd) {
+          const title = jd.querySelector('.d-title');
+          const label = jd.querySelector('.d-label');
+          const field = jd.querySelector('.input');
+          const btnsIn = [...jd.querySelectorAll('.btn')].map((b) => b.textContent);
+          const close = jd.querySelector('.d-close');
+          if (jd.getAttribute('aria-label') !== 'Join a Match' || !title || title.textContent !== 'Join a Match' || !label || label.textContent !== 'Match Code' || !field || field.getAttribute('aria-label') !== 'Match Code') findings.push(`${at}: Join a Match の題名・Match Code の欄が違う`);
+          if (btnsIn.join() !== 'Join' || !close || close.getAttribute('aria-label') !== 'Close' || close.hasAttribute('data-norow')) findings.push(`${at}: Join a Match のボタンが Join と × (閉じる) でない (${btnsIn.join(' / ')})`);
+          const filled = !/\.Join$/.test(state);
+          const value = field && field.querySelector('.value');
+          if ((value ? value.textContent : '') !== (filled ? MATCH_CODE_TEXT : '')) findings.push(`${at}: Match Code の欄が ${value ? value.textContent : '空'}`);
+          const join = jd.querySelector('.btn');
+          if (join && join.hasAttribute('data-norow') === filled) findings.push(`${at}: Join を ${filled ? '押せない' : 'Match Code を入れる前に押せる'}`);
+          const err = jd.querySelector('.error');
+          const wantErr = /\.Error\.NotFound$/.test(state) ? 'Match not found. The code may be wrong or expired.' : /\.Error\.Full$/.test(state) ? 'The match is already full.' : null;
+          if ((err ? err.textContent : null) !== wantErr) findings.push(`${at}: Join a Match の赤字が ${err ? err.textContent : 'なし'} (期待: ${wantErr || 'なし'})`);
+          // ダイアログは画面に収まり、中の部品は重ならず、× が題名と重ならない
+          const sr = screen.getBoundingClientRect();
+          const jr = jd.getBoundingClientRect();
+          if (jr.top < sr.top || jr.bottom > sr.bottom || jr.left < sr.left || jr.right > sr.right) findings.push(`${at}: Join a Match が画面からはみ出している`);
+          const parts = [title, label, field, err, join].filter(Boolean).map((el) => [el, el.getBoundingClientRect()]);
+          for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
+            const [a, ra] = parts[i]; const [b, rb] = parts[j];
+            if (ra.bottom > rb.top + 0.5 && rb.bottom > ra.top + 0.5) findings.push(`${at}: Join a Match の ${a.className || a.tagName} と ${b.className || b.tagName} が重なっている`);
+          }
+          if (close && title) { const cr = close.getBoundingClientRect(); const tr = title.getBoundingClientRect(); if (cr.left < tr.right && cr.bottom > tr.top && tr.bottom > cr.top) findings.push(`${at}: × が題名と重なっている`); }
+          if (err && err.scrollWidth > err.clientWidth + 1) findings.push(`${at}: Join a Match の赤字がはみ出している`);
+          // 接続失敗のトーストはダイアログの暗幕の上に出て押せる (U6)
+          const toastEl = screen.querySelector('.toast');
+          if (toastEl) {
+            toastEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            const tr = toastEl.getBoundingClientRect();
+            const hit = document.elementFromPoint((tr.left + tr.right) / 2, (tr.top + tr.bottom) / 2);
+            if (!hit || !toastEl.contains(hit)) findings.push(`${at}: 接続失敗のトーストが Join a Match の暗幕の下にある`);
+            const jr2 = jd.getBoundingClientRect();
+            if (tr.top < jr2.bottom + 0.5 && jr2.top < tr.bottom) findings.push(`${at}: 接続失敗のトーストが Join a Match と重なっている`);
+          }
+        }
+      }
       // Match Code の期限は画面に出さない (U58)
       if (/expires in/i.test(text)) findings.push(`${at}: Match Code の期限の表示が残っている`);
       // 部屋の画面: ホストにだけ Match Code の下に "Share this code with your friend!" (U58)。期限切れと再接続できなかった画面には出さない。数字は Match Code・カードのレーティング (#1891 FB 4)・カウントダウンだけ
       const hint = screen.querySelector('.code-hint');
       const wantHint = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.(CodeExpired|CouldNotReconnect)\b/.test(state);
       if (!!hint !== wantHint || (hint && hint.textContent !== CODE_HINT)) findings.push(`${at}: Match Code の下の一行が ${hint ? hint.textContent : 'なし'} (期待: ${wantHint ? CODE_HINT : 'なし'})`);
-      // Match Code のコピーのボタン (#1891 FB 5): ホストの部屋の画面にだけ、文字の無いアイコンで "Copy room code" の名前と title がある。期限切れには無い
+      // Match Code のコピーのボタン (#1891 FB 5): ホストの部屋の画面にだけ、文字の無いアイコンで "Copy match code" の名前と title がある (U62)。期限切れには無い
       const copy = screen.querySelector('.copy');
       const wantCopy = /^Host\.FriendMatch\.Lobby\./.test(state) && !/\.CodeExpired\b/.test(state);
       if (!!copy !== wantCopy) findings.push(`${at}: Match Code のコピーのボタンが ${copy ? 'ある' : '無い'} (期待: ${wantCopy ? 'ある' : '無い'})`);
-      if (copy && (copy.tagName !== 'BUTTON' || copy.getAttribute('aria-label') !== 'Copy room code' || copy.title !== 'Copy room code' || !copy.querySelector('svg') || copy.textContent.trim())) {
-        findings.push(`${at}: Match Code のコピーのボタンが "Copy room code" の名前付きのアイコンでない`);
+      if (copy && (copy.tagName !== 'BUTTON' || copy.getAttribute('aria-label') !== 'Copy match code' || copy.title !== 'Copy match code' || !copy.querySelector('svg') || copy.textContent.trim())) {
+        findings.push(`${at}: Match Code のコピーのボタンが "Copy match code" の名前付きのアイコンでない`);
       }
       if (/\.FriendMatch\.Lobby\./.test(state)) {
         const timerText = (screen.querySelector('.rd-timer') || { textContent: '\u0000' }).textContent;
@@ -435,8 +487,8 @@ function scan() {
         ['leaveApp', 'disconnect'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]`)) findings.push(`${at}: 端末の下のモック操作に ${ev} が無い`);
         });
-        // Leave Room / Close Room の確認 (決定 U9 / U14 / U34) を開いても、後ろの画面のボタンは消えない
-        if (/🗨 (leaveRoom|closeRoom)/.test(state)) {
+        // ‹ の確認 (決定 U9 / U34 / U57 / U62) を開いても、後ろの画面のボタンは消えない
+        if (/🗨 (leaveMatch|cancelMatch)/.test(state)) {
           const name = state.split(' + ')[0];
           const want = SCREENS[name].buttons.map((b) => b.label).join(' / ');
           const got = [...screen.querySelectorAll('.actions .btn')].map((b) => b.textContent).join(' / ');
@@ -452,21 +504,21 @@ function scan() {
           if (ra.bottom > rb.top + 0.5 && rb.bottom > ra.top + 0.5 && ra.right > rb.left && rb.right > ra.left) findings.push(`${at}: ${a.className} と ${b.className} が重なっている`);
         }
       }
-      // 部屋の画面の出口は ‹ だけ (決定 U57)。Close Room / Leave Room のボタンは確認ダイアログの中にだけある
+      // 部屋の画面の出口は ‹ だけ (決定 U57)。部屋を出るボタン (Cancel Match / Leave) は確認ダイアログの中にだけある (U62)
       if (/\.FriendMatch\.Lobby\./.test(state)) {
-        const exits = [...screen.querySelectorAll('.actions .btn')].map((b) => b.textContent).filter((t) => /^(Close|Leave) Room$/.test(t));
+        const exits = [...screen.querySelectorAll('.actions .btn')].map((b) => b.textContent).filter((t) => /^(Cancel Match|Leave|Leave Match|(Close|Leave) Room)$/.test(t));
         if (exits.length) findings.push(`${at}: 部屋の画面に ${exits.join(' / ')} のボタンがある (出口は ‹ だけ)`);
         const back = screen.querySelector('.hdr .back');
-        // 確認を開いている間は ‹ に行が無い (確認の Keep Waiting / Close Room / Leave Room で答える)
-        const wantBack = /🗨 (closeRoom|leaveRoom)/.test(state) ? 'none'
+        // 確認を開いている間は ‹ に行が無い (確認の Cancel Match / Keep Waiting、Leave / Stay で答える)
+        const wantBack = /🗨 (cancelMatch|leaveMatch)/.test(state) ? 'none'
           : /\.(Ready\.Confirming|Ready\.OpponentReady\.Confirming|Starting|ConnectionLost|Reconnecting)\b/.test(state) ? 'disabled' : 'button';
         const gotBack = back && back.tagName === 'BUTTON' && !back.hasAttribute('data-norow') ? 'button' : back && back.classList.contains('disabled') ? 'disabled' : 'none';
         if (gotBack !== wantBack) findings.push(`${at}: ‹ が ${gotBack} (期待: ${wantBack})`);
       }
       const dialog = screen.querySelector('.dialog');
-      const roomDialog = (state.match(/🗨 (closeRoom|leaveRoom)/) || [])[1];
+      const roomDialog = (state.match(/🗨 (cancelMatch|leaveMatch)/) || [])[1];
       if (roomDialog) {
-        const want = roomDialog === 'closeRoom' ? ['Close this room?', 'Close Room', 'Keep Waiting'] : ['Leave this room?', 'Leave Room', 'Keep Waiting'];
+        const want = roomDialog === 'cancelMatch' ? ['Cancel this match?', 'Cancel Match', 'Keep Waiting'] : ['Leave this match?', 'Leave', 'Stay'];
         const got = dialog ? [dialog.querySelector('.d-title').textContent].concat([...dialog.querySelectorAll('.btn')].map((b) => b.textContent)) : [];
         if (got.join() !== want.join()) findings.push(`${at}: 確認が ${got.join(' / ')} (期待: ${want.join(' / ')})`);
         if (dialog) {

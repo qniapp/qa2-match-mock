@@ -299,7 +299,8 @@
       var head = RESULT_HEADLINES[s.outcome];
       var score = s.outcome === 'NoContest' ? null : DEMO_SCORES[s.outcome];
       var rating = ratingText(s.outcome, app.state);
-      var status = REMATCH_STATUS[s.status];
+      // Friend Match で相手が抜けたときは、相手は同じ部屋に戻っている (決定 U60)
+      var status = REMATCH_STATUS[s.status === 'OpponentLeft' && app.state.match === 'friend' ? 'FriendReturned' : s.status];
       // 相手が送ったスタンプは、ミュートしていなければ相手の名前の上に出す。自分が送ったものは自分の名前の上
       var player = function (who, isMe) {
         var stamp = stampById(app.state[who + 'Stamp']);

@@ -458,10 +458,10 @@ console.log('ok  U32 / U15: VS 画面・カウントダウン中の切断は Rea
       }
     }
   }
-  // "Friend joined!" になるのは本当に入った・入り直したときだけ (U17)
+  // "Friend joined!" になるのは本当に入った・入り直したときだけ (U17)。結果画面から同じ部屋へ戻ってきたとき (U60) も入り直し
   for (const r of TRANSITIONS) {
     const toJoined = [].concat(r.to.host).some((s) => /\.FriendJoined$/.test(s)) && ![].concat(r.from.host).some((s) => /\.FriendJoined$/.test(s));
-    if (toJoined && !['client.joinMatch', 'net.recovered'].includes(r.event)) fail(`${r.id}: ${r.event} で "Friend joined!" になる (U17: 本当に入ったときだけ)`);
+    if (toJoined && !['client.joinMatch', 'net.recovered', 'host.backToFriendMatch', 'client.backToFriendMatch'].includes(r.event)) fail(`${r.id}: ${r.event} で "Friend joined!" になる (U17: 本当に入ったときだけ)`);
     if (toJoined && r.event === 'net.recovered' && ![].concat(r.from.client).every((s) => s === L('Client', 'ConnectionLost'))) fail(`${r.id}: 再接続で "Friend joined!" になる`);
   }
 }
@@ -684,13 +684,14 @@ for (const [dev, R, , O] of eachSide) {
     }
   }
 }
-// 戻り先 (U24): Friend Match トップ (入力欄は空) / Online Battle / 次の相手を探す。相手には "Your opponent left. Rematch is not available." (U25、勝敗は同じ)
+// 戻り先 (U59 / U60): 同じ部屋 (Friend Match) / Random Match / 次の相手を探す。相手には "Your opponent left. Rematch is not available." (U25、勝敗は同じ)
+const returnedTo = (R) => (R === 'Host' ? 'Host.FriendMatch.Lobby.FriendReturning' : 'Client.FriendMatch.Lobby.WaitingForHost');
 if (SCREENS['Host.FriendMatch.Room'].input !== '' || SCREENS['Client.FriendMatch.Room'].input !== '') fail('Friend Match トップの入力欄に前の Match Code が残る');
 for (const [dev, R, other, O] of eachSide) {
   for (const o of ['Win', 'Lose', 'Draw']) {
     const mine = `${R}.${o}Result`;
     const theirs = `${O}.${opposite[o]}Result`;
-    for (const [ev, session, dest] of [['backToFriendMatch', friend, `${R}.FriendMatch.Room`], ['findNextOpponent', random, `${R}.Matchmake.NextOpponent`], ['backToRandomMatch', random, `${R}.Matchmake`]]) {
+    for (const [ev, session, dest] of [['backToFriendMatch', friend, returnedTo(R)], ['findNextOpponent', random, `${R}.Matchmake.NextOpponent`], ['backToRandomMatch', random, `${R}.Matchmake`]]) {
       for (const ph of ['', '.RematchRequested', '.RematchIncoming', '.RematchDeclinedByYou.Cooldown', '.RematchCancelled']) {
         const theirPh = { '': '', '.RematchRequested': '.RematchIncoming', '.RematchIncoming': '.RematchRequested', '.RematchDeclinedByYou.Cooldown': '.RematchDeclined.Cooldown',
           '.RematchCancelled': '.RematchCancelledByYou' }[ph];
@@ -703,7 +704,7 @@ for (const [dev, R, other, O] of eachSide) {
   }
   // U59: 降参した側も勝った側と同じ戻るボタン。Find Next Opponent と Online Battle へ戻るボタンは無い
   const surrendered = (session) => at(...sides(dev, `${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), session);
-  expectFire(surrendered(friend), `${dev}.backToFriendMatch`, ...sides(dev, `${R}.FriendMatch.Room`, `${O}.WinResult.OpponentSurrendered`));
+  expectFire(surrendered(friend), `${dev}.backToFriendMatch`, ...sides(dev, returnedTo(R), `${O}.WinResult.OpponentSurrendered`));
   expectFire(surrendered(random), `${dev}.backToRandomMatch`, ...sides(dev, `${R}.Matchmake`, `${O}.WinResult.OpponentSurrendered`));
   for (const [session, ev] of [[random, 'findNextOpponent'], [friend, 'backToOnlineBattle'], [random, 'backToOnlineBattle']]) {
     if (Engine.canFire(surrendered(session), `${dev}.${ev}`)) fail(`${R}.LoseResult.Surrendered (${session.match}) に ${ev} の行がある`);
@@ -718,6 +719,39 @@ for (const [dev, R, other, O] of eachSide) {
   }
 }
 if (REMATCH_STATUS.OpponentLeft.text !== 'Your opponent left. Rematch is not available.') fail('相手が抜けたときの文言が違う');
+
+// U60 (#1891 の FB 11): Back to Friend Match は両者を同じ部屋 (同じ Match Code) へ戻す。先に押した側は部屋で待ち、相手も押すと入室と同じ流れ。
+// 部屋を閉じるのはホストの ‹ (確認つき) だけで、クライアントの ‹ はクライアントだけが抜ける
+{
+  const u60 = UNDECIDED.find((u) => u.id === 'U60');
+  if (!u60 || !u60.decided || u60.decided.date !== '2026-10-17' || !/#1891/.test(u60.desc)) fail('U60 が #1891 の FB (2026-10-17) の決定になっていない');
+  if (REMATCH_STATUS.FriendReturned.text !== 'Your friend went back to the room. Rematch is not available.') fail('Friend Match で相手が部屋に戻ったときの文言が違う');
+  if (!/'FriendReturned'/.test(read('js', 'app.js'))) fail('app.js が Friend Match の結果画面で相手が部屋に戻った一行を出していない');
+  const hostBack = 'Host.FriendMatch.Lobby.FriendReturning';
+  const clientBack = 'Client.FriendMatch.Lobby.WaitingForHost';
+  if (SCREENS[hostBack].view !== 'lobby' || SCREENS[hostBack].status !== 'Waiting for your friend to return\u2026' || !SCREENS[hostBack].codeHint) fail(`${hostBack} の画面が違う`);
+  if (SCREENS[clientBack].view !== 'lobby' || SCREENS[clientBack].status !== 'Waiting for the host to return\u2026' || SCREENS[clientBack].codeHint) fail(`${clientBack} の画面が違う`);
+  // 後から押した側は、待っている相手の部屋に入る (入室と同じく "Friend joined!" / "Connecting…" → Ready 画面)
+  const joined = ['Host.FriendMatch.Lobby.FriendJoined', 'Client.FriendMatch.Lobby.Connecting'];
+  expectFire(at('Host.WinResult.OpponentLeft', clientBack, friend), 'host.backToFriendMatch', ...joined);
+  expectFire(at(hostBack, 'Client.LoseResult.OpponentLeft', friend), 'client.backToFriendMatch', ...joined);
+  expectFire(at('Host.LoseResult.Surrendered', clientBack, friend), 'host.backToFriendMatch', ...joined);
+  // ホストの ‹ は確認のあと部屋を閉じる。あとから押したクライアントは Friend Match トップに "Room closed. The host left."
+  const closing = Engine.fire(at(hostBack, 'Client.LoseResult.OpponentLeft', friend), 'host.back');
+  if (!closing || closing.state.host !== hostBack || closing.state.hostDialog !== 'closeRoom') fail(`${hostBack} の ‹ で "Close this room?" が出ない`);
+  const closed = closing && expectFire(closing.state, 'host.dialog.closeRoom', 'Host.FriendMatch.Room', 'Client.LoseResult.OpponentLeft');
+  if (closed) expectFire(closed, 'client.backToFriendMatch', 'Host.FriendMatch.Room', 'Client.FriendMatch.Room.HostLeft');
+  // クライアントの ‹ は確認のあとクライアントだけ抜ける。部屋は残り、あとから戻ったホストには "Your friend left…"
+  const leaving = Engine.fire(at('Host.WinResult.OpponentLeft', clientBack, friend), 'client.back');
+  if (!leaving || leaving.state.client !== clientBack || leaving.state.clientDialog !== 'leaveRoom') fail(`${clientBack} の ‹ で "Leave this room?" が出ない`);
+  const left = leaving && expectFire(leaving.state, 'client.dialog.leaveRoom', 'Host.WinResult.OpponentLeft', 'Client.FriendMatch.Room.CodeEntered');
+  if (left) expectFire(left, 'host.backToFriendMatch', 'Host.FriendMatch.Lobby.ClientLeft', 'Client.FriendMatch.Room.CodeEntered');
+  // 待っている間に期限が切れた部屋 (U7) には入れない
+  expectFire(at('Host.FriendMatch.Lobby.CodeExpired', 'Client.WinResult.OpponentLeft', friend), 'client.backToFriendMatch',
+    'Host.FriendMatch.Lobby.CodeExpired', 'Client.FriendMatch.Lobby.CodeExpired');
+  // ランダム対戦に部屋は無い
+  if (Engine.canFire(at('Host.WinResult', 'Client.LoseResult', random), 'host.backToFriendMatch')) fail('ランダム対戦で Back to Friend Match の行がある');
+}
 
 // U23 / U30: 再戦。どちらからでも申し込め、応じたら VS 画面 (レートは変わらない対戦)。同時なら成立。取り消し・辞退・期限切れのあとは両者とも結果画面に残り、3 秒後にまた申し込める
 // U50: 取り消し・辞退・期限切れは両者に一行 (U30 の文言 + もう一方の文言)。3 秒たっても次の操作まで残る
@@ -855,13 +889,17 @@ for (const [k, v] of Object.entries(Object.assign({}, END_REASONS, ...Object.val
 
 // シナリオの流れ (手順ごとの両端末の状態)
 const flows = {
-  '15': [[14, 'Host.WinResult / Client.LoseResult'], [15, 'Host.FriendMatch.Room / Client.LoseResult.OpponentLeft'], [16, 'Host.FriendMatch.Room / Client.FriendMatch.Room']],
-  '15b': [[14, 'Host.LoseResult / Client.WinResult'], [15, 'Host.LoseResult.OpponentLeft / Client.FriendMatch.Room']],
+  '15': [[14, 'Host.WinResult / Client.LoseResult'], [15, 'Host.FriendMatch.Lobby.FriendReturning / Client.LoseResult.OpponentLeft'],
+    [16, 'Host.FriendMatch.Lobby.FriendJoined / Client.FriendMatch.Lobby.Connecting'], [17, 'Host.FriendMatch.Lobby.Ready / Client.FriendMatch.Lobby.Ready'],
+    [19, 'Host.FriendMatch.Lobby.ClientLeft / Client.FriendMatch.Room.CodeEntered']],
+  '15b': [[14, 'Host.LoseResult / Client.WinResult'], [15, 'Host.LoseResult.OpponentLeft / Client.FriendMatch.Lobby.WaitingForHost'],
+    [16, 'Host.FriendMatch.Lobby.FriendJoined / Client.FriendMatch.Lobby.Connecting'], [17, 'Host.FriendMatch.Lobby.Ready / Client.FriendMatch.Lobby.Ready'],
+    [19, 'Host.FriendMatch.Room / Client.FriendMatch.Room.HostLeft']],
   '15c': [[15, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [16, 'Host.Opponent / Client.Opponent'], [19, 'Host.LoseResult / Client.WinResult']],
   '15d': [[16, 'Host.WinResult.RematchCancelledByYou.Cooldown / Client.LoseResult.RematchCancelled.Cooldown'], [17, 'Host.WinResult.RematchCancelledByYou / Client.LoseResult.RematchCancelled'],
     [18, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [19, 'Host.Opponent / Client.Opponent']],
   '15e': [[16, 'Host.WinResult.RematchDeclinedByYou.Cooldown / Client.LoseResult.RematchDeclined.Cooldown'], [17, 'Host.WinResult.RematchDeclinedByYou / Client.LoseResult.RematchDeclined'],
-    [18, 'Host.WinResult.OpponentLeft / Client.FriendMatch.Room']],
+    [18, 'Host.WinResult.OpponentLeft / Client.FriendMatch.Lobby.WaitingForHost']],
   '15f': [[16, 'Host.WinResult.RematchExpired.Cooldown / Client.LoseResult.RematchExpiredIncoming.Cooldown'], [17, 'Host.WinResult.RematchExpired / Client.LoseResult.RematchExpiredIncoming'],
     [19, 'Host.Opponent / Client.Opponent']],
   '15g': [[14, 'Host.DrawResult / Client.DrawResult'], [15, 'Host.Opponent / Client.Opponent'], [17, 'Host.Game.Play / Client.Game.Play']],
@@ -913,11 +951,11 @@ for (const [dev, R, other, O] of [['host', 'Host', 'client', 'Client'], ['client
     expectFire(c, `${dev}.surrenderConfirm.surrender`, ...pair2(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`));
   }
   expectFire(Object.assign(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), friend), `${dev}.backToFriendMatch`,
-    ...pair2(`${R}.FriendMatch.Room`, `${O}.WinResult.OpponentSurrendered`));
+    ...pair2(R === 'Host' ? 'Host.FriendMatch.Lobby.FriendReturning' : 'Client.FriendMatch.Lobby.WaitingForHost', `${O}.WinResult.OpponentSurrendered`));
   expectFire(Object.assign(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), random), `${dev}.backToRandomMatch`,
     ...pair2(`${R}.Matchmake`, `${O}.WinResult.OpponentSurrendered`));
   expectFire(Object.assign(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), friend), `${other}.backToFriendMatch`,
-    ...pair2(`${R}.LoseResult.Surrendered`, `${O}.FriendMatch.Room`));
+    ...pair2(`${R}.LoseResult.Surrendered`, O === 'Host' ? 'Host.FriendMatch.Lobby.FriendReturning' : 'Client.FriendMatch.Lobby.WaitingForHost'));
   if (Engine.canFire(at('Host.Game.Countdown', 'Client.Game.Countdown'), `${dev}.matchMenu`)) fail(`カウントダウン中に ${dev}.matchMenu の行がある`);
   for (const name of [menu, confirm]) {
     const s = SCREENS[name];
@@ -943,7 +981,7 @@ if (/Game in progress/.test(read('js', 'app.js'))) fail('app.js にモック専�
 // [手順の途中, 最後] の状態
 const menuScenarios = {
   '16': [15, 'Host.Game.MatchMenu / Client.Game.MatchMenu', 'Host.Game.Play / Client.Game.Play'],
-  '16b': [19, 'Host.LoseResult.Surrendered / Client.WinResult.OpponentSurrendered', 'Host.FriendMatch.Room / Client.WinResult.OpponentSurrendered'],
+  '16b': [19, 'Host.LoseResult.Surrendered / Client.WinResult.OpponentSurrendered', 'Host.FriendMatch.Lobby.FriendReturning / Client.WinResult.OpponentSurrendered'],
   '16c': [14, 'Host.Game.MatchMenu / Client.Game.Play', 'Host.LoseResult / Client.WinResult'],
 };
 for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
@@ -1327,9 +1365,10 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   let vs = run(room, sc1.steps.slice(6, 11), '固定');
   if (!vs || vs.host !== 'Host.Opponent' || shown(vs, 'host') !== `${EMOJIS[0]} Hello!` || shown(vs, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`部屋に入ったあとに変えた値が、その部屋の VS 画面に出る (${shown(vs, 'host')} / ${shown(vs, 'client')})`);
   // 次の部屋 (ホストが作る・クライアントが入る) から新しい値
+  // Back to Friend Match は同じ部屋へ戻るだけなので固定し直さない (U60)。ホストが部屋を閉じて作り直すと新しい値
   let next = run(vs, ['vs.done', 'game.countdownDone', 'host.win', 'host.backToFriendMatch', 'client.backToFriendMatch'], '次の部屋');
-  if (next && shown(next, 'host') !== `${EMOJIS[0]} Hello!`) fail('結果画面を抜けただけで固定した値が変わる');
-  next = run(next, ['host.createMatch'], '次の部屋');
+  if (next && (shown(next, 'host') !== `${EMOJIS[0]} Hello!` || shown(next, 'client') !== '\u{1F60E} Let\u2019s go!')) fail('同じ部屋へ戻っただけで固定した値が変わる');
+  next = run(next, ['sys.roomSynced', 'host.back', 'host.dialog.closeRoom', 'host.createMatch'], '次の部屋');
   if (shown(next, 'host') !== '\u{1F680} Bring it on!' || shown(next, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`次の部屋を作っても新しい値にならない (${shown(next, 'host')} / ${shown(next, 'client')})`);
   next = run(next, ['client.enterCode', 'client.joinMatch'], '次の部屋');
   if (shown(next, 'client') !== '\u{1F340} Have fun!') fail(`次の部屋に入っても新しい値にならない (${shown(next, 'client')})`);

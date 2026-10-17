@@ -143,29 +143,30 @@ var clientInPlay = ['Client.Game.Play', 'Client.Game.MatchMenu', 'Client.Game.Su
 // 対戦中の切断 (決定 U28 / U46): 切断した側は再接続を試み、相手は 20 秒 (仮) 待つ。その間サーバーは両者のゲームと得点を止める
 var hostInGame = hostInPlay.concat(['Host.Game.Disconnected', 'Host.Game.OpponentDisconnected']);
 var clientInGame = clientInPlay.concat(['Client.Game.Disconnected', 'Client.Game.OpponentDisconnected']);
-// ランダム対戦で相手を探している状態: Random Match から (U13a) と、結果画面の Find Next Opponent から (U29)
-var hostSearching = ['Host.Matchmake', 'Host.Matchmake.NextOpponent'];
-var clientSearching = ['Client.Matchmake', 'Client.Matchmake.NextOpponent'];
+// Random Match の画面 (決定 U62、#1891 の FB 16・17): 開いただけでは探さない。
+//   .Matchmake            Ready を待っている (どこから Random Match の画面へ来てもここ)
+//   .Matchmake.Searching  Ready を押して相手を探している (同じ場所のボタンが Cancel になる)
+// ランダム対戦で相手を探している状態: Random Match の Ready から (U62) と、結果画面の Find Next Opponent から (U29)
+var hostSearching = ['Host.Matchmake.Searching', 'Host.Matchmake.NextOpponent'];
+var clientSearching = ['Client.Matchmake.Searching', 'Client.Matchmake.NextOpponent'];
 // Online Battle の中の通知 (Search again / Close、モーダルではない): 検索が止まった (U43 / U47)、開始前に相手が戻らなかった・自分が戻れなかった (U54)
 var INLINE_SEARCH_NOTICES = ['Stopped', 'MatchCancelled', 'ReconnectFailed'];
 
-// Profile 画面 (決定 U56、高宮さん 2026-10-08)。Online Battle からだけ開ける (相手を探している間・部屋・対戦中は開けない)
-function isProfileScreen(name) { return /^(Host|Client)\.Profile$/.test(name); }
 function always() { return true; }
+function never() { return false; }
 
 // 端末ごとの付属状態。keeps(状態名) が偽の画面へ移ると初期値に戻る (initial は値か、端末 ('host' / 'client') を受け取る関数)
-//   Dialog: 確認ダイアログ (画面が変わると閉じる)
+//   Dialog: ダイアログ (部屋の確認と Profile。画面が変わると閉じる)
 //   Stamp:  自分が送ったスタンプ (U27)。'gg' などは表示中 (3 秒、仮)、'sent' は消えたが次を送れるまでの待ち (送ってから 5 秒、仮)
 //   Emoji / Greeting:           保存した絵文字とあいさつ (U56)。ブラウザの localStorage に残る (読み書きは app.js、自由操作のときだけ)
-//   DraftEmoji / DraftGreeting: Profile 画面で選んでいるもの。開いたときに保存した値を写し、Save で保存した値へ写す。Cancel / ‹ で捨てる
+//   ProfileSaved: Profile のダイアログで、開いてから何か選んだ (選ぶとすぐ保存するので "Saved" を出す。#1891 の FB 14)。開く・閉じる・画面が変わると消える
 //   ShownEmoji / ShownGreeting: 相手に見せる値。部屋を作る・部屋に入る・相手を探し始めるときに保存した値を写す (行の copy、遷移表の末尾で付ける)
 var DEVICE_FIELDS = {
-  Dialog: { initial: null, keeps: function () { return false; } },
+  Dialog: { initial: null, keeps: never },
   Stamp: { initial: null, keeps: isResultState },
   Emoji: { initial: function (d) { return PROFILE_INITIAL[d].emoji; }, keeps: always },
   Greeting: { initial: function (d) { return PROFILE_INITIAL[d].greeting; }, keeps: always },
-  DraftEmoji: { initial: null, keeps: isProfileScreen },
-  DraftGreeting: { initial: null, keeps: isProfileScreen },
+  ProfileSaved: { initial: false, keeps: never },
   ShownEmoji: { initial: null, keeps: always },
   ShownGreeting: { initial: null, keeps: always },
 };
@@ -196,8 +197,8 @@ var STATE_GROUPS = {
   'Client.Game.InPlay': clientInPlay,
   'Host.Game.InMatch': hostInGame,
   'Client.Game.InMatch': clientInGame,
-  'Host.Matchmake.Searching': hostSearching,
-  'Client.Matchmake.Searching': clientSearching,
+  'Host.Matchmake.InSearch': hostSearching,
+  'Client.Matchmake.InSearch': clientSearching,
 };
 ['Host', 'Client'].forEach(function (R) {
   STATE_GROUPS[R + '.FriendMatch.Lobby.Ready.NoneReady'] = noneReady(R);
@@ -243,30 +244,43 @@ var PROFILE_EMOJIS = [
   { id: 'clover', emoji: '\u{1F340}', name: 'Four leaf clover' },
   { id: 'rocket', emoji: '\u{1F680}', name: 'Rocket' },
 ];
-// アポストロフィはどれも \u2019 (’、決定 U56)。まっすぐな ' は使わない
+// あいさつは決まった文から選ぶので、ローカライズできる (#1891 FB 13)。言語は日本語 (ja) と英語 (en) だけ。
+// 状態には id を持ち、文はそれを見る端末の言語で出す (相手のあいさつも自分の言語で読める)。
+// 英語のアポストロフィはどれも \u2019 (’、決定 U56)。まっすぐな ' は使わない。日本語の ! と ? は全角
+var GREETING_LANGS = ['en', 'ja'];
 var PROFILE_GREETINGS = [
-  { id: 'hello', text: 'Hello!' },
-  { id: 'letsGo', text: 'Let\u2019s go!' },
-  { id: 'haveFun', text: 'Have fun!' },
-  { id: 'goodLuck', text: 'Good luck!' },
-  { id: 'letsDoThis', text: 'Let\u2019s do this!' },
-  { id: 'bringItOn', text: 'Bring it on!' },
-  { id: 'ready', text: 'Ready?' },
-  { id: 'hereWeGo', text: 'Here we go!' },
-  { id: 'happyPuzzling', text: 'Happy puzzling!' },
-  { id: 'mayTheBestPlayerWin', text: 'May the best player win!' },
+  { id: 'hello', en: 'Hello!', ja: 'こんにちは！' },
+  { id: 'letsGo', en: 'Let\u2019s go!', ja: 'いくよ！' },
+  { id: 'haveFun', en: 'Have fun!', ja: '楽しもう！' },
+  { id: 'goodLuck', en: 'Good luck!', ja: 'がんばってね！' },
+  { id: 'letsDoThis', en: 'Let\u2019s do this!', ja: 'がんばろう！' },
+  { id: 'bringItOn', en: 'Bring it on!', ja: 'かかってこい！' },
+  { id: 'ready', en: 'Ready?', ja: '準備はいい？' },
+  { id: 'hereWeGo', en: 'Here we go!', ja: 'さあ、始めよう！' },
+  { id: 'happyPuzzling', en: 'Happy puzzling!', ja: 'パズルを楽しもう！' },
+  { id: 'mayTheBestPlayerWin', en: 'May the best player win!', ja: 'いい勝負をしよう！' },
 ];
-var PROFILE_DEFAULT = { emoji: PROFILE_EMOJIS[0].emoji, greeting: PROFILE_GREETINGS[0].text };
-// Online Battle で Profile を開ける画面: Online Battle と、その中の通知 (U43 / U54) を出している間。開くと通知は消える (U43: ほかの画面へ移ると消える)。
-// "No opponent found." (U13) はモーダルなので開けない
-function profileOpenable(R) { return [R + '.MultiModeSelection'].concat(INLINE_SEARCH_NOTICES.map(function (k) { return R + '.Matchmake.' + k; })); }
-STATE_GROUPS['Host.MultiModeSelection.Any'] = profileOpenable('Host');
-STATE_GROUPS['Client.MultiModeSelection.Any'] = profileOpenable('Client');
+// id のあいさつを lang (GREETING_LANGS のどれか) の文で返す
+function greetingText(id, lang) {
+  var g = PROFILE_GREETINGS.filter(function (x) { return x.id === id; })[0];
+  return g ? g[lang] : '';
+}
+var PROFILE_DEFAULT = { emoji: PROFILE_EMOJIS[0].emoji, greeting: PROFILE_GREETINGS[0].id };
+// Profile のダイアログを開ける画面 (決定 U56、入口は #1891 の FB 12 で変更): Random Match (Ready を待っている画面 (U62) と相手を探している画面。Find Next Opponent から探しているときも) と
+// Friend Match トップ (部屋のお知らせ・Match Code の赤字・トーストを出している間も)。待ち時間に、今の画面のまま変えられる。
+// Online Battle・部屋・対戦中には無く、"No opponent found." (U13) はモーダルなので開けない
+var profileSearching = { Host: hostSearching, Client: clientSearching };
+// 探していない画面 (Random Match で Ready を待っている、Friend Match トップ)。選んだものが相手に見えるのは次に探し始める・部屋を作る・入るときから
+var profileIdle = { Host: ['Host.Matchmake'].concat(hostTop), Client: ['Client.Matchmake'].concat(clientTop) };
+function profileOpenable(R) { return profileSearching[R].concat(profileIdle[R]); }
+STATE_GROUPS['Host.Profile.Openable'] = profileOpenable('Host');
+STATE_GROUPS['Client.Profile.Openable'] = profileOpenable('Client');
 // 部屋を作る・部屋に入る・相手を探し始める行で、保存した絵文字とあいさつを相手に見せる値として写す (U56)。
 // イベントがこれらで、その端末の行き先が部屋の画面か相手を探す画面の行 (接続失敗や Match Code の誤りの行は写さない)
-// 同じ相手との再戦では写し直さない (2026-10-08 に確認)
-var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'joinMatch', 'randomMatch', 'backToRandomMatch', 'searchAgain', 'findNextOpponent'];
-var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/;
+// 同じ相手との再戦では写し直さない (2026-10-08 に確認)。相手を探している間に Profile で選んだときも写す (まだ相手がいないので、見つかる相手に新しい値を見せる。遷移表の Profile の行)
+// Random Match の画面を開いただけ (U62) では写さず、Ready で探し始めるときに写す
+var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'joinMatch', 'startSearch', 'searchAgain', 'findNextOpponent'];
+var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake\.Searching$|Matchmake\.NextOpponent$)/;
 
 // ---- 遷移表 ---------------------------------------------------------------
 
@@ -277,7 +291,7 @@ var TRANSITIONS = (function () {
   // === Online Battle / Friend Match トップ ===
   T({ from: { host: 'Host.MultiModeSelection', client: '*' }, event: 'host.friendMatch', to: { host: 'Host.FriendMatch.Room', client: '*' } });
   T({ from: { host: 'Host.MultiModeSelection', client: '*' }, event: 'host.randomMatch', to: { host: 'Host.Matchmake', client: '*' },
-    note: '決定 (U13a): 相手を探す画面 ("Searching for an opponent…" と Cancel)', decided: ['U13a'] });
+    note: '決定 (U62): Random Match の画面を開くだけでは探さない。大きな Ready を待つ', decided: ['U62'] });
   T({ from: { host: hostTop, client: '*' }, event: 'host.back', to: { host: 'Host.MultiModeSelection', client: '*' } });
   T({ from: { host: hostTop, client: '*' }, event: 'host.createMatch', when: { createResult: 'connFailed' },
     to: { host: 'Host.FriendMatch.Room.ConnectionFailed', client: '*' },
@@ -291,7 +305,7 @@ var TRANSITIONS = (function () {
 
   T({ from: { host: '*', client: 'Client.MultiModeSelection' }, event: 'client.friendMatch', to: { host: '*', client: 'Client.FriendMatch.Room' } });
   T({ from: { host: '*', client: 'Client.MultiModeSelection' }, event: 'client.randomMatch', to: { host: '*', client: 'Client.Matchmake' },
-    note: '決定 (U13a): 相手を探す画面 ("Searching for an opponent…" と Cancel)', decided: ['U13a'] });
+    note: '決定 (U62): Random Match の画面を開くだけでは探さない。大きな Ready を待つ', decided: ['U62'] });
   T({ from: { host: '*', client: clientTop }, event: 'client.back', to: { host: '*', client: 'Client.MultiModeSelection' } });
   // Join a Match のダイアログ (決定 U63、#1891 の FB 19)。トップに Match Code の入力欄は置かず、Join Match で開いたダイアログに入れる。
   // ダイアログはモーダルで、開いている間は ‹ とお知らせの Close を押せない。× で閉じると入れた Match Code は捨てる
@@ -612,12 +626,14 @@ var TRANSITIONS = (function () {
       note: '決定 (U38 / U40): 降参した側は負け、相手は (メニューを開いていても) 勝ちの結果画面に "Your opponent surrendered"', decided: ['U38', 'U40'] });
   });
 
-  // === ランダム対戦 (決定 U13a: 相手が見つかり次第 VS 画面へ。Ready 画面は挟まない。U31 は Friend Match だけ) ===
+  // === ランダム対戦 (決定 U13a: 相手が見つかり次第 VS 画面へ。Friend Match の Ready 画面 (U31) は挟まない。
+  //     探し始めるのは Random Match の画面の Ready を押したときだけ、U62) ===
   T({ from: { host: hostSearching, client: clientSearching }, event: 'sys.opponentFound', auto: 2500,
     to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { match: 'random', rated: true, rematch: false },
-    note: '決定 (U13a): 相手が見つかり次第 VS 画面へ。Ready 画面と Ready ボタンは無い (U31 は Friend Match だけ)。' +
+    note: '決定 (U13a): 相手が見つかり次第 VS 画面へ。Friend Match の Ready 画面 (U31) は挟まない。' +
       '結果画面の Find Next Opponent から探しているときも同じ (U29)。決定 (U21): レートが変わる対戦 (Elo)', decided: ['U13a', 'U29', 'U21'] });
-  // 相手を探している間の操作 (決定 U13、高宮さん 2026-10-07)。探している間に行けるのは Online Battle だけ (Cancel と ‹)。
+  // Random Match の画面の操作 (決定 U62、#1891 の FB 16): 開いた直後は Ready を待ち、Ready で探し始め、Cancel で Ready を待つ状態へ戻る。
+  // 相手を探している間の操作 (決定 U13、高宮さん 2026-10-07)。探している間に行けるのは Random Match の Ready を待つ状態 (Cancel) と Online Battle (‹) だけ。
   // アプリを離れる (バックグラウンド・画面ロック) と 60 秒 (長さは仮) のタイムアウトは、Win / Lose と同じく端末の下のモック操作
   [['host', 'Host', 'client'], ['client', 'Client', 'host']].forEach(function (p) {
     var d = p[0];
@@ -629,15 +645,21 @@ var TRANSITIONS = (function () {
       r[other] = '*';
       return r;
     };
-    T({ from: row(R + '.Matchmake'), event: d + '.cancelSearch', to: row(R + '.MultiModeSelection'),
-      note: '決定 (U13a / U13): Cancel で Online Battle へ。確認ダイアログは出さない', decided: ['U13a', 'U13'] });
-    T({ from: row(R + '.Matchmake'), event: d + '.back', to: row(R + '.MultiModeSelection'),
-      note: '決定 (U13): ‹ は Cancel とまったく同じ (確認なしで Online Battle へ)', decided: ['U13'] });
-    T({ from: row(R + '.Matchmake'), event: d + '.leaveApp', to: row(R + '.Matchmake.Stopped'),
+    var idle = R + '.Matchmake';
+    var searching = R + '.Matchmake.Searching';
+    T({ from: row(idle), event: d + '.startSearch', to: row(searching),
+      note: '決定 (U62): Ready で相手を探し始める。同じ場所のボタンが Cancel になる', decided: ['U62', 'U13a'] });
+    T({ from: row(idle), event: d + '.back', to: row(R + '.MultiModeSelection'),
+      note: '決定 (U62): ‹ で Online Battle へ', decided: ['U62'] });
+    T({ from: row(searching), event: d + '.cancelSearch', to: row(idle),
+      note: '決定 (U62): Cancel で探すのをやめ、Random Match の画面のまま Ready を待つ状態へ戻る。確認ダイアログは出さない (U13)', decided: ['U62', 'U13'] });
+    T({ from: row(searching), event: d + '.back', to: row(R + '.MultiModeSelection'),
+      note: '決定 (U13 / U62): ‹ は確認なしで探すのをやめ、Online Battle へ', decided: ['U13', 'U62'] });
+    T({ from: row(searching), event: d + '.leaveApp', to: row(R + '.Matchmake.Stopped'),
       note: 'モック操作。決定 (U13 / U43): アプリを離れると検索を止め、戻ると Online Battle の中に "Search stopped while the app was in the background." の通知 (モーダルではない)', decided: ['U13', 'U43'] });
-    T({ from: row(R + '.Matchmake'), event: d + '.searchTimeout', to: row(R + '.Matchmake.NotFound'),
+    T({ from: row(searching), event: d + '.searchTimeout', to: row(R + '.Matchmake.NotFound'),
       note: 'モック操作。決定 (U13): 見つからなければ元の画面 (Online Battle) に "No opponent found." と Search again / Close。60 秒という長さは仮', decided: ['U13'] });
-    T({ from: row(R + '.Matchmake.NotFound'), event: d + '.searchAgain', to: row(R + '.Matchmake'),
+    T({ from: row(R + '.Matchmake.NotFound'), event: d + '.searchAgain', to: row(searching),
       note: '決定 (U13): Search again でもう一度相手を探す', decided: ['U13'] });
     T({ from: row(R + '.Matchmake.NotFound'), event: d + '.closeNotice', to: row(R + '.MultiModeSelection'),
       note: '決定 (U13): Close で通知を閉じ、Online Battle のまま', decided: ['U13'] });
@@ -646,13 +668,13 @@ var TRANSITIONS = (function () {
     INLINE_SEARCH_NOTICES.forEach(function (k) {
       var st = R + '.Matchmake.' + k;
       var ids = k === 'Stopped' ? ['U43'] : ['U43', 'U54'];
-      T({ from: row(st), event: d + '.searchAgain', to: row(R + '.Matchmake'),
+      T({ from: row(st), event: d + '.searchAgain', to: row(searching),
         note: '決定 (' + ids.join(' / ') + '): Search again で新しく相手を探す', decided: ids });
       T({ from: row(st), event: d + '.closeNotice', to: row(R + '.MultiModeSelection'),
         note: '決定 (' + ids.join(' / ') + '): Close で通知を閉じ、Online Battle のまま', decided: ids });
       // 通知はモーダルではないので、Online Battle のほかの操作もそのまま使える。ほかの画面へ移ると通知は消える (自動では消えない)
-      T({ from: row(st), event: d + '.randomMatch', to: row(R + '.Matchmake'),
-        note: '決定 (U43): 通知を出したまま Random Match も押せる (新しく相手を探す。通知は消える)', decided: ids.concat(['U13a']) });
+      T({ from: row(st), event: d + '.randomMatch', to: row(idle),
+        note: '決定 (U43 / U62): 通知を出したまま Random Match も押せる (Random Match の画面で Ready を待つ。通知は消える)', decided: ids.concat(['U62']) });
       T({ from: row(st), event: d + '.friendMatch', to: row(R + '.FriendMatch.Room'),
         note: '決定 (U43): 通知を出したまま Friend Match も押せる。ほかの画面へ移ると通知は消える (戻っても出ない)', decided: ids });
     });
@@ -672,10 +694,10 @@ var TRANSITIONS = (function () {
       return r;
     };
     var next = R + '.Matchmake.NextOpponent';
-    T({ from: row(next), event: d + '.cancelSearch', to: row(R + '.MultiModeSelection'),
-      note: '仮: Random Match から探しているとき (U13) と同じく、Cancel は確認なしで Online Battle へ', decided: ['U29', 'U13'] });
+    T({ from: row(next), event: d + '.cancelSearch', to: row(R + '.Matchmake'),
+      note: '仮: Random Match から探しているとき (U62) と同じく、Cancel は確認なしで探すのをやめ、Random Match の画面で Ready を待つ', decided: ['U29', 'U62'] });
     T({ from: row(next), event: d + '.back', to: row(R + '.MultiModeSelection'),
-      note: '仮: Random Match から探しているとき (U13) と同じく、‹ は Cancel とまったく同じ', decided: ['U29', 'U13'] });
+      note: '仮: Random Match から探しているとき (U13) と同じく、‹ は確認なしで Online Battle へ', decided: ['U29', 'U13'] });
     T({ from: row(next), event: d + '.searchTimeout', to: row(next + '.NotFound'),
       note: 'モック操作。決定 (U29): 60 秒 (仮) 探しても見つからなければ "No opponent found." と Search again / Back to Online', decided: ['U29'] });
     T({ from: row(next), event: d + '.leaveApp', to: row(R + '.Matchmake.Stopped'),
@@ -823,7 +845,7 @@ var TRANSITIONS = (function () {
     // ランダム対戦
     [
       ['findNextOpponent', leavable, R + '.Matchmake.NextOpponent', 'random', '決定 (U22 / U29): 次の相手を探す (60 秒、仮)', ['U22', 'U29']],
-      ['backToRandomMatch', any, R + '.Matchmake', 'random', '決定 (U59): Random Match の画面へ。メニューから Random Match を開いたのと同じ (相手を探し始める、U13a)', ['U22', 'U59', 'U13a']],
+      ['backToRandomMatch', any, R + '.Matchmake', 'random', '決定 (U59 / U62): Random Match の画面へ。メニューから Random Match を開いたのと同じ (探し始めず Ready を待つ)', ['U22', 'U59', 'U62']],
     ].forEach(function (b) {
       leaveRows(b);
       T({ from: pair(b[1], '*'), event: d + '.' + b[0], when: { match: b[3] }, to: pair(b[2], '*'),
@@ -861,45 +883,57 @@ var TRANSITIONS = (function () {
       note: 'モック操作。決定 (U27): 送ってから 5 秒 (仮) たつと次を送れる (表示中なら同時に消える)', decided: ['U27'] });
   });
 
-  // === Profile (決定 U56、高宮さん 2026-10-08) ===
-  // Online Battle の Profile で開く。上の VS 画面のカードの見本は選ぶたびに変わる。Save で保存して Online Battle へ、Cancel と ‹ は捨てて Online Battle へ。
-  // 保存した値が相手に見えるのは、次に部屋を作る・入る・相手を探し始めるときから (下の copy)
+  // === Profile (決定 U56、高宮さん 2026-10-08。入口は #1891 の FB 12 で、画面からダイアログに変更) ===
+  // Random Match (相手を探している画面) と Friend Match トップの Profile で、今の画面の上にダイアログで開く。上の VS 画面のカードの見本は選ぶたびに変わる。
+  // 選ぶとすぐ保存し (Save / Cancel は無い、#1891 の FB 14)、閉じるのは左上の ‹ だけ (Esc や外側を押しても閉じない)。どちらも画面はそのまま。
+  // 画面が変わる (相手が見つかるなど) とダイアログは閉じる。保存した値が相手に見えるのは、次に部屋を作る・入る・相手を探し始めるときから。
+  // 相手を探している間に選んだものは、見つかる相手にも見える
   [['host', 'Host', 'client'], ['client', 'Client', 'host']].forEach(function (p) {
     var d = p[0];
     var R = p[1];
     var other = p[2];
-    var row = function (mine) {
+    var row = function (mine, dialog) {
       var r = {};
       r[d] = mine;
       r[other] = '*';
+      if (dialog) r[d + 'Dialog'] = dialog;
       return r;
     };
-    var fields = function (pairs) {
+    var dialog = function (v) {
       var r = {};
-      Object.keys(pairs).forEach(function (k) { r[d + k] = d + pairs[k]; });
+      r[d] = v;
       return r;
     };
-    var profile = R + '.Profile';
-    T({ from: row(profileOpenable(R)), event: d + '.profile', to: row(profile), copy: fields({ DraftEmoji: 'Emoji', DraftGreeting: 'Greeting' }),
-      note: '決定 (U56): Online Battle の Profile で開く。保存した絵文字とあいさつが選ばれた状態で始まる。Online Battle の中の "Search stopped\u2026" などの通知を出している間も開け、通知はほかの画面へ移るので消える (U43)。"No opponent found." を出している間は開けない (2026-10-08 に確認)', decided: ['U56', 'U43'] });
-    PROFILE_EMOJIS.forEach(function (e) {
+    // 選んだ値を保存した値へ書き、"Saved" を出す。相手を探している間は、見つかる相手に見せる値にも書く
+    var pick = function (field, value, searching) {
       var set = {};
-      set[d + 'DraftEmoji'] = e.emoji;
-      T({ from: row(profile), event: d + '.pickEmoji.' + e.id, to: row('='), set: set,
-        note: '決定 (U56): 1 つだけ選べる。上の見本がすぐ変わる (まだ保存しない)', decided: ['U56'] });
+      set[d + field] = value;
+      if (searching) set[d + 'Shown' + field] = value;
+      set[d + 'ProfileSaved'] = true;
+      return set;
+    };
+    var saved = function (v) {
+      var r = {};
+      r[d + 'ProfileSaved'] = v;
+      return r;
+    };
+    var openable = profileOpenable(R);
+    T({ from: row(openable), event: d + '.profile', to: row('='), dialog: dialog('profile'), set: saved(false),
+      note: '決定 (U56、#1891 の FB 12): Random Match (Ready を待っている間と相手を探している間、U62) と Friend Match トップの Profile で、今の画面の上にダイアログで開く。' +
+        '保存した絵文字とあいさつが選ばれた状態で始まる。相手を探しているときは探すのが続く', decided: ['U56'] });
+    [[profileSearching[R], true, '相手を探し続ける。まだ相手がいないので、見つかる相手にも新しい値が見える'],
+      [profileIdle[R], false, '相手に見えるのは次に Ready で探し始める・部屋を作る・入るときから']].forEach(function (w) {
+      PROFILE_EMOJIS.forEach(function (e) {
+        T({ from: row(w[0], 'profile'), event: d + '.dialog.pickEmoji.' + e.id, to: row('='), set: pick('Emoji', e.emoji, w[1]),
+          note: '決定 (U56、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わって "Saved" が出る。' + w[2], decided: ['U56'] });
+      });
+      PROFILE_GREETINGS.forEach(function (g) {
+        T({ from: row(w[0], 'profile'), event: d + '.dialog.pickGreeting.' + g.id, to: row('='), set: pick('Greeting', g.id, w[1]),
+          note: '決定 (U56、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わって "Saved" が出る。' + w[2], decided: ['U56'] });
+      });
     });
-    PROFILE_GREETINGS.forEach(function (g) {
-      var set = {};
-      set[d + 'DraftGreeting'] = g.text;
-      T({ from: row(profile), event: d + '.pickGreeting.' + g.id, to: row('='), set: set,
-        note: '決定 (U56): 1 つだけ選べる。上の見本がすぐ変わる (まだ保存しない)', decided: ['U56'] });
-    });
-    T({ from: row(profile), event: d + '.saveProfile', to: row(R + '.MultiModeSelection'), copy: fields({ Emoji: 'DraftEmoji', Greeting: 'DraftGreeting' }),
-      note: '決定 (U56): Save で保存して Online Battle へ。相手に見えるのは次に部屋を作る・入る・相手を探し始めるときから', decided: ['U56'] });
-    T({ from: row(profile), event: d + '.cancelProfile', to: row(R + '.MultiModeSelection'),
-      note: '決定 (U56): Cancel で選んだものを捨てて Online Battle へ (保存した値のまま)', decided: ['U56'] });
-    T({ from: row(profile), event: d + '.back', to: row(R + '.MultiModeSelection'),
-      note: '決定 (U56): ‹ は Cancel と同じ (選んだものを捨てて Online Battle へ。確認は出さない、2026-10-08 に確認)', decided: ['U56'] });
+    T({ from: row(openable, 'profile'), event: d + '.dialog.closeProfile', to: row('='), dialog: dialog(null), set: saved(false),
+      note: '決定 (U56、#1891 の FB 14): 左上の ‹ でダイアログを閉じる (閉じる手段はこれだけ。選んだものは保存済み)', decided: ['U56'] });
   });
 
   rows.forEach(function (r, i) {
@@ -929,6 +963,7 @@ var EVENT_LABELS = {
   'host.ready': 'ホスト: Ready を押す',
   'host.cancelReady': 'ホスト: Cancel Ready を押す',
   'host.retry': 'ホスト: "Could not reconnect." の Retry を押す',
+  'host.startSearch': 'ホスト: Random Match の画面で Ready を押す (相手を探し始める)',
   'host.cancelSearch': 'ホスト: 相手を探している間に Cancel を押す',
   'host.leaveApp': 'ホスト: アプリを離れて戻る (モック操作: バックグラウンド・画面ロック)',
   'host.searchTimeout': 'ホスト: 60 秒 (仮) たっても相手が見つからない (モック操作)',
@@ -968,6 +1003,7 @@ var EVENT_LABELS = {
   'client.ready': 'クライアント: Ready を押す',
   'client.cancelReady': 'クライアント: Cancel Ready を押す',
   'client.retry': 'クライアント: "Could not reconnect." の Retry を押す',
+  'client.startSearch': 'クライアント: Random Match の画面で Ready を押す (相手を探し始める)',
   'client.cancelSearch': 'クライアント: 相手を探している間に Cancel を押す',
   'client.leaveApp': 'クライアント: アプリを離れて戻る (モック操作: バックグラウンド・画面ロック)',
   'client.searchTimeout': 'クライアント: 60 秒 (仮) たっても相手が見つからない (モック操作)',
@@ -1019,14 +1055,13 @@ var EVENT_LABELS = {
 // Profile (決定 U56) の操作
 [['host', 'ホスト'], ['client', 'クライアント']].forEach(function (p) {
   EVENT_LABELS[p[0] + '.profile'] = p[1] + ': Profile を押す';
-  EVENT_LABELS[p[0] + '.saveProfile'] = p[1] + ': Profile の Save を押す';
-  EVENT_LABELS[p[0] + '.cancelProfile'] = p[1] + ': Profile の Cancel を押す';
-  PROFILE_EMOJIS.forEach(function (e) { EVENT_LABELS[p[0] + '.pickEmoji.' + e.id] = p[1] + ': 絵文字 ' + e.emoji + ' を選ぶ'; });
-  PROFILE_GREETINGS.forEach(function (g) { EVENT_LABELS[p[0] + '.pickGreeting.' + g.id] = p[1] + ': あいさつ "' + g.text + '" を選ぶ'; });
+  EVENT_LABELS[p[0] + '.dialog.closeProfile'] = p[1] + ': Profile を左上の ‹ で閉じる';
+  PROFILE_EMOJIS.forEach(function (e) { EVENT_LABELS[p[0] + '.dialog.pickEmoji.' + e.id] = p[1] + ': Profile で絵文字 ' + e.emoji + ' を選ぶ'; });
+  PROFILE_GREETINGS.forEach(function (g) { EVENT_LABELS[p[0] + '.dialog.pickGreeting.' + g.id] = p[1] + ': Profile であいさつ "' + g.en + '" を選ぶ'; });
 });
 
 // ---- 画面の描画仕様 ---------------------------------------------------------
-// view: online | profile | friendTop | lobby | random | vs | game | result
+// view: online | friendTop | lobby | random | vs | game | result
 // ボタンの event はデバイス名を除いたもの (例: 'ready' → 'host.ready')
 
 // 画面の下の帯 (トースト)。tap があるものはタップで操作できる。sub は 2 行目 (決定 U6 の "Connection failed" の説明)。
@@ -1130,7 +1165,7 @@ var ROOM_NOTICES = {
 var GAME_COUNTDOWN_CONTEXT = 'ゲーム本体のカウントダウン（VsAI と同じ 3→2→1）。終わるとメニューボタン (☰) が出てプレイ開始。' +
   '3-2-1 のあとサーバーが確認した時点で試合開始 (決定 U32)。それまでの切断は勝敗をつけない: Friend Match の Ready 画面から始まった対戦は Ready 画面に戻して相手は 20 秒 (仮) 待ち (U32)、' +
   'ランダム対戦と再戦は Ready 画面に戻さずに 20 秒 (仮) 待ち、戻ったら VS 画面からやり直す (U54)。';
-var VS_CONTEXT = 'VS 画面 (10-01 の合意)。両者の名前・レーティング・あいさつ。架空の "Rank" はやめ、Friend Match でも "Rating {n}" を出す (決定 U48)。' +
+var VS_CONTEXT = 'VS 画面 (10-01 の合意)。両者の名前・レーティング・あいさつ。ゲーム画面と同じく、どちらの端末でも相手のカードが上、自分のカード (YOU) が下 (qniapp/qa2#1891 FB 15)。架空の "Rank" はやめ、Friend Match でも "Rating {n}" を出す (決定 U48)。' +
   'モックは両者とも Elo の初期値 1000 (QA² 側の仮の値)。ここでの切断は、Friend Match の Ready 画面から始まった対戦なら U32、ランダム対戦と再戦なら U54。' +
   '絵文字とあいさつは Profile で保存した値を、部屋を作った・入った・相手を探し始めたときに固定したもの (決定 U56)。';
 var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。右上のメニューボタン (☰) で MATCH MENU を開く (U37、試合は止まらない)。' +
@@ -1157,8 +1192,12 @@ var RESULT_PHASE_CONTEXT = {
 };
 var STAMP_CONTEXT = 'スタンプ (決定 U27): 👏 Good game / 🤝 Thanks for the match / 👍 Nice。1 つ 3 秒 (仮) 出て、次を送れるのは送ってから 5 秒 (仮) 後 (どちらも端末の下のモック操作で進める)。' +
   '相手のスタンプのミュートは無く、送ったスタンプはいつも両者の画面に出る (U49、#1891 の FB 8)。';
-var MATCHMAKE_CONTEXT = 'ランダム対戦で相手を探している画面 (決定 U13a / U13)。相手が見つかり次第 VS 画面へ進む (Ready 画面は無い)。' +
-  'Cancel と ‹ はどちらも確認なしで Online Battle へ戻る (U13)。探している間は、ほかの画面へは行けない。' +
+var MATCHMAKE_IDLE_CONTEXT = 'Random Match の画面を開いた直後 (決定 U62、#1891 の FB 16・17)。開いただけでは相手を探さず、大きな Ready を待つ。' +
+  'メニューの Random Match からも、結果画面の Back to Random Match からも、Online Battle の通知を出したままの Random Match からも、いつもこの状態で始まる。' +
+  'Ready を押すと相手を探し始め、同じ場所のボタンが Cancel になる。‹ で Online Battle へ戻る。' +
+  '右上の Profile (U56、#1891 の FB 12) で Profile のダイアログを開ける。ここで選んだものは、Ready で探し始めるときに相手に見せる値として固定する。';
+var MATCHMAKE_CONTEXT = 'ランダム対戦で相手を探している画面 (決定 U62 / U13a / U13)。Random Match の画面の Ready で探し始めた。相手が見つかり次第 VS 画面へ進む (Friend Match の Ready 画面は無い)。' +
+  'Ready と同じ場所の Cancel を押すと、確認なしで探すのをやめ、Random Match の画面で Ready を待つ状態へ戻る (U62)。‹ は確認なしで Online Battle へ戻る (U13)。探している間は、ほかの画面へは行けない。' +
   'アプリを離れる (バックグラウンド・画面ロック) と検索を止める。60 秒探しても見つからなければ Online Battle に "No opponent found." を出す (60 秒という長さは仮)。' +
   'どちらも端末の下のモック操作で試せる。';
 var SEARCH_STOPPED_CONTEXT = 'アプリを離れた (バックグラウンド・画面ロック) ので検索を止めた (決定 U13)。戻ると Online Battle の中に "Search stopped while the app was in the background." を出す (決定 U43)。' +
@@ -1197,7 +1236,8 @@ var START_DISCONNECT_CONTEXT = {
     '戻れば VS 画面からやり直し、戻らなければ試合を取りやめる: ランダム対戦は Online Battle に "Match cancelled. Opponent did not reconnect." と Search again / Close、' +
     'Friend Match の再戦は Friend Match トップの帯 (行き先は 2026-10-08 に確認)。',
 };
-var NEXT_SEARCH_CONTEXT = '結果画面の Find Next Opponent で次の相手を探している (決定 U29)。見た目と Cancel / ‹ は Random Match から探しているとき (U13) と同じ。' +
+var NEXT_SEARCH_CONTEXT = '結果画面の Find Next Opponent で次の相手を探している (決定 U29)。見た目と Cancel / ‹ は Random Match から探しているとき (U13 / U62) と同じ ' +
+  '(Cancel で Random Match の画面の Ready を待つ状態へ、‹ で Online Battle へ)。' +
   '60 秒 (仮) 探しても見つからなければ "No opponent found." と Search again / Back to Online。探している間にアプリを離れると、Random Match のとき (U43) と同じく Online Battle の中に "Search stopped…" (U47)。';
 var NEXT_NOT_FOUND_CONTEXT = '60 秒 (仮) 探しても次の相手が見つからなかった (決定 U29)。Search again でもう一度探し、Back to Online で Online Battle へ。' +
   '(Random Match から探したとき (U13) は Online Battle の上に出すので Close だが、こちらは Random Match の画面の上に出すので Back to Online)';
@@ -1291,9 +1331,11 @@ var ROOM_CONTEXT = {
     'モーダルなので、開いている間は \u2039 と部屋のお知らせの Close は押せない (お知らせの帯は後ろに残る、U52)。',
 };
 
-var PROFILE_CONTEXT = 'Profile (決定 U56)。上の見本は、相手の VS 画面に出る自分のカード。絵文字とあいさつを 1 つずつ選ぶと見本がすぐ変わる。名前は変えられない。' +
-  'Save で保存し、Cancel と \u2039 は選んだものを捨てる。保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから (今いる部屋や探している相手には前の値のまま)。' +
-  '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。あいさつのアポストロフィはどれも \u2019。相手 (ogwssk) も変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
+var PROFILE_CONTEXT = 'Profile (決定 U56。入口は #1891 の FB 12 で、専用の画面から今の画面の上のダイアログに変えた)。Random Match (Ready を待っている間と相手を探している間、U62) と Friend Match トップの Profile で開き、待ち時間に今の画面のまま変えられる。' +
+  '上の見本は、相手の VS 画面に出る自分のカード。絵文字とあいさつを 1 つずつ選ぶと見本がすぐ変わる。名前は変えられない。' +
+  '選ぶとすぐ保存して "Saved" を出し、Save / Cancel は無い (#1891 の FB 14)。閉じるのは左上の ‹ だけで、Esc やダイアログの外を押しても閉じない。相手が見つかるなど画面が変わるとダイアログは閉じる。' +
+  '保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから。相手を探している間に選んだものは、まだ相手がいないので見つかる相手にも見える。' +
+  '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。あいさつは日本語と英語の 2 つで、それを見る端末の言語で出す (#1891 FB 13、右パネルの「あいさつの言語」の JA / EN で切り替える)。英語のアポストロフィはどれも \u2019。相手 (ogwssk) も変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
   '値はブラウザの localStorage にだけ残し、モックでは自由操作のときだけ読み書きする (シナリオはいつも最初の値から始まり、読みも書きもしない。2026-10-08 に確認)。' +
   '同じ相手との再戦では値を固定し直さない (2026-10-08 に確認)。';
 
@@ -1310,12 +1352,17 @@ var SCREENS = (function () {
     retry: { label: 'Retry', event: 'retry', primary: true },
     createMatch: { label: 'New Match', event: 'createMatch', primary: true },
     joinMatch: { label: 'Join Match', event: 'openJoin', primary: true },
-    // ランダム対戦で相手を探している間の Cancel (決定 U13a)。席を外す人のために大きく出す
+    // Random Match の画面の大きなボタン (決定 U62 / U13a)。開いた直後は Ready、探している間は同じ場所が Cancel になる。席を外す人のために大きく出す
+    startSearch: { label: 'Ready', event: 'startSearch', primary: true, big: true },
     search: { label: 'Cancel', event: 'cancelSearch', big: true },
   };
+  function matchmakeIdle() {
+    return { view: 'random', title: 'Random Match', back: 'back', profile: true, buttons: [B.startSearch], decided: ['U62'], context: MATCHMAKE_IDLE_CONTEXT };
+  }
+  // 相手を探している画面。右上の Profile (決定 U56、#1891 の FB 12) で待ち時間に Profile のダイアログを開ける
   function matchmake() {
-    return { view: 'random', title: 'Random Match', back: 'back', status: 'Searching for an opponent…',
-      buttons: [B.search], decided: ['U13a', 'U13'], context: MATCHMAKE_CONTEXT };
+    return { view: 'random', title: 'Random Match', back: 'back', profile: true, status: 'Searching for an opponent…',
+      buttons: [B.search], decided: ['U62', 'U13a', 'U13'], context: MATCHMAKE_CONTEXT };
   }
   // 相手を探すのをやめたときの通知 (決定 U13)。Search again / Close
   function noticeButtons() {
@@ -1331,7 +1378,7 @@ var SCREENS = (function () {
   }
   // 結果画面の Find Next Opponent で次の相手を探す (決定 U29 / U47)。見た目は Random Match から探すときと同じ
   function nextSearch() {
-    return Object.assign(matchmake(), { decided: ['U29', 'U13a', 'U47'], context: NEXT_SEARCH_CONTEXT });
+    return Object.assign(matchmake(), { decided: ['U29', 'U13a', 'U62', 'U47'], context: NEXT_SEARCH_CONTEXT });
   }
   function nextNotFound() {
     return { view: 'random', title: 'Random Match', back: null, buttons: [], notice: { text: SEARCH_NOTICES.notFound, buttons: [
@@ -1352,19 +1399,15 @@ var SCREENS = (function () {
   function surrenderConfirm() {
     return { view: 'game', menu: SURRENDER_CONFIRM, decided: ['U37', 'U40', 'U41'], context: SURRENDER_CONFIRM_CONTEXT };
   }
-  // Online Battle。Profile (決定 U56) は対戦の入口と分けて下に置き、保存した絵文字を添える
+  // Online Battle。Profile は Random Match と Friend Match の画面の右上にある (決定 U56、#1891 の FB 12)
   function online(dev) {
     return { view: 'online', title: 'ONLINE BATTLE', back: null, items: [
-      { label: 'Random Match', event: 'randomMatch' }, { label: 'Friend Match', event: 'friendMatch' },
-      { label: 'Profile', event: 'profile', profile: true }] };
+      { label: 'Random Match', event: 'randomMatch' }, { label: 'Friend Match', event: 'friendMatch' }] };
   }
-  // Profile 画面 (決定 U56): 上に VS 画面のカードの見本 (名前・絵文字・あいさつ)、絵文字 10 個とあいさつ 10 個から 1 つずつ、下に Save / Cancel。‹ は Cancel と同じ
-  function profileScreen() {
-    return { view: 'profile', title: 'Profile', back: 'back', decided: ['U56'], context: PROFILE_CONTEXT };
-  }
-  // Friend Match トップ (決定 U63、#1891 の FB 19): New Match と Join Match の 2 つのボタンだけ。join があると Join a Match のダイアログを開いている
+  // Friend Match トップ (決定 U63、#1891 の FB 19): New Match と Join Match の 2 つのボタンだけ。join があると Join a Match のダイアログを開いている。
+  // 右上の Profile (決定 U56、#1891 の FB 12) で Profile のダイアログを開ける
   function top(extra) {
-    return Object.assign({ view: 'friendTop', title: 'Friend Match', back: 'back' }, extra);
+    return Object.assign({ view: 'friendTop', title: 'Friend Match', back: 'back', profile: true }, extra);
   }
   // Join a Match のダイアログ: Match Code の入力欄、Join、× (閉じる)。赤字 (error) はダイアログの中に出す
   function joinDialog(input, error) {
@@ -1443,7 +1486,8 @@ var SCREENS = (function () {
     decided: ['U61', 'U7', 'U57', 'U58'], context: ROOM_CONTEXT.FriendReturning });
   S['Host.FriendMatch.Lobby.MatchCancelled'] = lobby('Host', { status: 'Match cancelled.\nOpponent did not reconnect.',
     decided: ['U32', 'U7', 'U57', 'U58'], context: ROOM_CONTEXT.MatchCancelled });
-  S['Host.Matchmake'] = matchmake();
+  S['Host.Matchmake'] = matchmakeIdle();
+  S['Host.Matchmake.Searching'] = matchmake();
   S['Host.Matchmake.Stopped'] = inlineSearchNotice(SEARCH_NOTICES.stopped, { context: SEARCH_STOPPED_CONTEXT });
   S['Host.Matchmake.MatchCancelled'] = inlineSearchNotice(SEARCH_NOTICES.matchCancelled, { decided: ['U54', 'U43'], context: START_CANCELLED_CONTEXT.MatchCancelled });
   S['Host.Matchmake.ReconnectFailed'] = inlineSearchNotice(SEARCH_NOTICES.reconnectFailed, { decided: ['U54', 'U52', 'U43'], context: START_CANCELLED_CONTEXT.ReconnectFailed });
@@ -1461,11 +1505,8 @@ var SCREENS = (function () {
   S['Host.Game.Disconnected'] = disconnectWait('self');
   S['Host.Game.OpponentDisconnected'] = disconnectWait('opponent');
 
-  S['Host.Profile'] = profileScreen();
-
   // --- クライアント ---
   S['Client.MultiModeSelection'] = online('client');
-  S['Client.Profile'] = profileScreen();
   S['Client.FriendMatch.Room'] = top({ decided: ['U63'] });
   S[CLIENT_JOIN] = top({ join: joinDialog(), decided: ['U63'], context: ROOM_CONTEXT.Join });
   S[CLIENT_JOIN + '.CodeEntered'] = top({ join: joinDialog('QWERTY123'), decided: ['U63'], context: ROOM_CONTEXT.Join });
@@ -1484,7 +1525,8 @@ var SCREENS = (function () {
   S[CLIENT_JOIN + '.ConnectionFailed'] = top({ join: joinDialog('QWERTY123'), toast: 'failedJoin', decided: ['U6', 'U63'], context: ROOM_CONTEXT.ConnectionFailed });
   readyScreens('Client');
   S[CLIENT_WAITING_FOR_HOST] = lobby('Client', { status: ROOM_TEXT.waitingForHost, decided: ['U61', 'U9', 'U57'], context: ROOM_CONTEXT.WaitingForHost });
-  S['Client.Matchmake'] = matchmake();
+  S['Client.Matchmake'] = matchmakeIdle();
+  S['Client.Matchmake.Searching'] = matchmake();
   S['Client.Matchmake.Stopped'] = inlineSearchNotice(SEARCH_NOTICES.stopped, { context: SEARCH_STOPPED_CONTEXT });
   S['Client.Matchmake.MatchCancelled'] = inlineSearchNotice(SEARCH_NOTICES.matchCancelled, { decided: ['U54', 'U43'], context: START_CANCELLED_CONTEXT.MatchCancelled });
   S['Client.Matchmake.ReconnectFailed'] = inlineSearchNotice(SEARCH_NOTICES.reconnectFailed, { decided: ['U54', 'U52', 'U43'], context: START_CANCELLED_CONTEXT.ReconnectFailed });
@@ -1555,6 +1597,9 @@ var DIALOGS = {
   // クライアントの ‹ (決定 U57 / U9 / U63)。部屋を抜ける。本文は U34
   leaveMatch: { title: 'Leave this match?', body: ROOM_LEAVE_BODY,
     buttons: [{ label: 'Leave', event: 'dialog.leaveMatch', danger: true }, { label: 'Stay', event: 'dialog.stay' }] },
+  // Profile (決定 U56、#1891 の FB 12)。Random Match と Friend Match トップの上に開く。中身 (‹・見本・絵文字・あいさつ・"Saved") は app.js が描く。
+  // 選ぶとすぐ保存し、閉じるのは左上の ‹ だけ (#1891 の FB 14)
+  profile: { title: 'Profile', profile: true, close: 'dialog.closeProfile', context: PROFILE_CONTEXT },
 };
 
 // ---- VS 画面のデモデータ (架空) ----------------------------------------------
@@ -1563,7 +1608,7 @@ var DIALOGS = {
 // ホストの絵文字とあいさつは Profile で保存した値 (決定 U56、付属状態の Emoji / Greeting)。相手 (クライアント) の役は前からの値のまま始まる
 var PLAYERS = {
   host: { name: 'Yasuhito' },
-  client: { name: 'ogwssk', emoji: '😎', greeting: 'Let\u2019s go!' },
+  client: { name: 'ogwssk', emoji: '😎', greeting: 'letsGo' },
 };
 // 保存した値が無いときの最初の値。ホストは全員の既定値 (👋 "Hello!")、クライアントは ogwssk が前から選んでいる値
 var PROFILE_INITIAL = {
@@ -1639,12 +1684,14 @@ var UNDECIDED = [
       '‹ も Cancel とまったく同じ (Online Battle へ)。探している間は、ほかの画面へは行けない (出口は Cancel と ‹ だけ)。' +
       'アプリを離れる (バックグラウンドへ移る・画面ロック) と検索を止め、戻ったときに通知を出す (文言・出す場所・ボタンは U43 で決定: Online Battle の中に "Search stopped while the app was in the background." と Search again / Close)。' +
       '60 秒探しても相手が見つからなければ元の画面 (Online Battle) に戻り、"No opponent found." と Search again / Close を出す。Search again でもう一度探し、Close で通知を閉じる。' +
-      '60 秒という長さは仮 (変わりうる)。相手が見つかり次第 VS 画面へ進むこと (U13a) は変わらない。',
+      '60 秒という長さは仮 (変わりうる)。相手が見つかり次第 VS 画面へ進むこと (U13a) は変わらない。 ' +
+      '2026-10-17 の U62 で、Cancel は Online Battle ではなく Random Match の画面の Ready を待つ状態へ戻すことにした (‹ は今までどおり Online Battle へ)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U13a', title: 'ランダム対戦は相手が見つかり次第 VS 画面へ (Ready 画面なし)',
     desc: 'U13 から分けた決定。ランダム対戦では、相手が見つかったらすぐ VS 画面へ進む (Ready 画面・Ready ボタン・"Starting match…" は挟まない)。' +
       '両者が Ready を押す U31 は Friend Match だけ。相手を探している画面には "Searching for an opponent…" (点が順に光る) と、席を外す人のための大きな Cancel を出す。' +
-      'Cancel を押すと Online Battle の画面に戻る。確認を挟まないこと、‹・アプリを離れたとき・タイムアウトの扱いは U13 で決定 (2026-10-07)。',
+      'Cancel を押すと Online Battle の画面に戻る。確認を挟まないこと、‹・アプリを離れたとき・タイムアウトの扱いは U13 で決定 (2026-10-07)。 ' +
+      '2026-10-17 の U62 で、Random Match の画面を開いただけでは探さず、Ready を押してから探すことにした (Cancel は Ready を待つ状態へ戻す)。',
     decided: { by: '高宮さん', date: '2026-10-03' } },
   { id: 'U14', title: 'ホストの ‹ は部屋を残して帯で示す。閉じるのは Close Room。別の画面へ移ると自分の Ready は消える',
     desc: 'ホストが ‹ で部屋の画面を離れても部屋は残し、行った先の画面の下の帯で部屋の様子を示す (図02)。部屋を閉じるのは別のボタン Close Room (以前の Cancel Match)。' +
@@ -1859,17 +1906,19 @@ var UNDECIDED = [
       '2026-10-10 の U57 で無くなった (離席中の帯が無い)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U56', title: 'Profile: 相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ。次の部屋・次の検索から相手に見える',
-    desc: 'Online Battle に Profile を置く (両端末)。Profile 画面の上には VS 画面のカードの見本 (名前・絵文字・あいさつ) を出し、選ぶたびにすぐ変える。下に Save / Cancel (\u2039 は Cancel と同じ)。' +
+    desc: 'Random Match (相手を探している画面) と Friend Match トップの右上に Profile を置き (両端末)、押すと今の画面の上にダイアログで開く (#1891 の YoshiyukiN さんの FB 12 番目で、' +
+      'Online Battle の Profile と専用の Profile 画面をやめた。待ち時間に設定でき、画面を戻る必要がない)。ダイアログの上には VS 画面のカードの見本 (名前・絵文字・あいさつ) を出し、選ぶたびにすぐ変える。' +
+      '選ぶとすぐ保存して "Saved" を出し、Save / Cancel は無い。閉じるのは左上の ‹ だけで、Esc やダイアログの外を押しても閉じない (#1891 の FB 14)。' +
       '絵文字は ' + PROFILE_EMOJIS.map(function (e) { return e.emoji; }).join(' ') + ' から 1 つ、あいさつは ' +
-      PROFILE_GREETINGS.map(function (g) { return '"' + g.text + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
-      '全員の既定値は \u{1F44B} "Hello!"。開けるのは対戦の外だけで、相手を探している間・部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
-      '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から。保存はブラウザ (localStorage) だけ。' +
+      PROFILE_GREETINGS.map(function (g) { return '"' + g.en + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
+      '全員の既定値は \u{1F44B} "Hello!"。部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
+      '値は部屋を作る・部屋に入る・相手を探し始めるときに固定し、変えたものが相手に見えるのは次の部屋・次の検索から (相手を探している間に選んだものは、まだ相手がいないので見つかる相手にも見える)。保存はブラウザ (localStorage) だけ。' +
       '結果画面のスタンプ (U27) は変わらない。候補と既定値は QA² 側の仮の値 (変わりうる)。' +
-      'あいさつのアポストロフィはどれも \u2019。10-08 に候補を 4 つ同じ位置で入れ替えた (うち 2 つは協力しているように聞こえたため)。' +
+      'あいさつは日本語と英語にローカライズし、それを見る端末の言語で出す (#1891 FB 13。ほかの言語は無い)。英語のアポストロフィはどれも \u2019。10-08 に候補を 4 つ同じ位置で入れ替えた (うち 2 つは協力しているように聞こえたため)。' +
       '相手 (ogwssk) も Profile を変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
-      '次のことも 2026-10-08 に確認: \u2039 は Cancel と同じで確認を出さない。Online Battle の中の "Search stopped\u2026" などの通知を出している間も開け (開くと通知は消える、U43)、"No opponent found." を出している間は開けない。' +
+      '次のことも 2026-10-08 に確認: 閉じるときに確認を出さない。"No opponent found." を出している間は開けない。' +
       'モックの localStorage は自由操作のときだけ読み書きし、シナリオはいつも最初の値から始まって読みも書きもしない。' +
-      '同じ相手との再戦では値を固定し直さず、ホストの "Join another match" はモックでは固定するときに含めない。Online Battle の Profile のボタンには保存した絵文字を添える。',
+      '同じ相手との再戦では値を固定し直さず、ホストの "Join another match" はモックでは固定するときに含めない。Profile のボタンには保存した絵文字を添える。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U57', title: '部屋の画面の出口は左上の ‹ だけ。ホストは "Close this room?"、クライアントは "Leave this room?" の確認を出す',
     desc: '#1891 の YoshiyukiN さんの FB の 1・2 番目。部屋の画面 (Match Code を出している待機・Ready 画面・切断待ちなど) の Close Room (ホスト) と Leave Room (クライアント) のボタンを無くし、' +
@@ -1888,7 +1937,8 @@ var UNDECIDED = [
   { id: 'U59', title: '結果画面の戻るボタンはホストとクライアントで同じ 1 つ: Back to Friend Match / Back to Random Match',
     desc: '#1891 の FB の 9 番目。結果画面の下のボタンをホストとクライアントで同じにし、戻るボタンはどちらの対戦でも 1 つだけにする。' +
       'Friend Match は Back to Friend Match で Friend Match トップへ (U24)。ランダム対戦は Back to Online をやめて Back to Random Match にし、Random Match の画面へ直接戻る。' +
-      '戻った Random Match の画面は、メニューから Random Match を開いたときと同じ最初の状態 (相手を探し始める、U13a。相手に見せる絵文字とあいさつもこのとき固定する、U56) (#1891 の FB の 17 番目)。' +
+      '戻った Random Match の画面は、メニューから Random Match を開いたときと同じ最初の状態 (#1891 の FB の 17 番目)。' +
+      '最初の状態は U62 (同じ日、FB の 16・17 番目) で、相手を探し始めずに Ready を待つ状態になった (相手に見せる絵文字とあいさつは Ready で探し始めるときに固定する、U56)。' +
       '降参した側 (以前は Back to Online だけ、U41) も勝った側と同じ戻るボタンにする。Find Next Opponent (U22 / U29) と、次の相手が見つからないときの Back to Online は変えない。',
     decided: { by: '#1891 の FB (9・17 番目)', date: '2026-10-17' } },
   { id: 'U60', title: 'ランダム対戦の結果画面: 勝った側は Find Next Opponent、負けた側は同じ相手への Rematch。相手が Accept したときだけ再戦',
@@ -1908,6 +1958,15 @@ var UNDECIDED = [
       'ホストが先に部屋を閉じていたら、あとから押したクライアントは Friend Match トップに "Room closed. The host left." (U34 / U52)。 ' +
       '2026-10-17 の U63 で、確認は "Cancel this match?" / "Leave this match?"、帯は "The host canceled the match."、一行は "Your friend went back to Friend Match. Rematch is not available." になった。',
     decided: { by: '#1891 の FB (11 番目)', date: '2026-10-17' } },
+  { id: 'U62', title: 'Random Match の画面は開いただけでは探さない。Ready で探し始め、探している間は同じボタンが Cancel になる',
+    desc: '#1891 の FB の 16・17 番目。Random Match の画面を開くと、相手を探さずに大きな Ready を出して待つ。Ready を押すと "Searching for an opponent…" で相手を探し始め、' +
+      '同じ場所のボタンが Cancel になる。Cancel を押すと確認なしで探すのをやめ、Random Match の画面のまま Ready を待つ状態に戻る (以前は Online Battle へ戻った、U13)。' +
+      '‹ は Ready を待っているときも探しているときも、確認なしで Online Battle へ戻る。' +
+      'Random Match の画面へはどこから来ても Ready を待つ状態で始まる: メニューの Random Match、Online Battle の通知を出したままの Random Match (U43)、結果画面の Back to Random Match (U59)。' +
+      'はっきり「もう一度探す」ボタン (Search again (U13 / U43 / U54)・Find Next Opponent (U29)) は今までどおりすぐ探し始める。' +
+      'Find Next Opponent で探している間の Cancel も、Random Match から探しているときと同じく Ready を待つ状態へ戻す (仮)。' +
+      '相手に見せる絵文字とあいさつ (U56) は、画面を開いたときではなく Ready で探し始めるときに固定する。',
+    decided: { by: '#1891 の FB (16・17 番目)', date: '2026-10-17' } },
   { id: 'U63', title: 'Friend Match トップは New Match / Join Match だけ。Match Code は Join a Match のダイアログで入れる。画面に "Room" と書かない',
     desc: '#1891 の FB の 19・20 番目。Friend Match トップのボタンは New Match (以前の Create Match) と Join Match の 2 つだけにし、Match Code の入力欄とその下の Join Match は置かない。' +
       'Join Match を押すと Join a Match のダイアログ (Match Code の入力欄、Join、× で閉じる) が開き、Match Code を入れて Join で入る。Match Code の誤りと満員の赤字はダイアログの中に出す。' +

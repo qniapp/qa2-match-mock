@@ -82,8 +82,8 @@ try {
   await send('Page.navigate', { url });
   for (let i = 0; i < 100 && !events.some((e) => e.method === 'Page.loadEventFired'); i++) await new Promise((r) => setTimeout(r, 100));
 
-  const evaluate = async (fn) => {
-    const r = await send('Runtime.evaluate', { returnByValue: true, awaitPromise: true, expression: `document.fonts.ready.then(() => (${fn})())` });
+  const evaluate = async (fn, ...args) => {
+    const r = await send('Runtime.evaluate', { returnByValue: true, awaitPromise: true, expression: `document.fonts.ready.then(() => (${fn})(...${JSON.stringify(args)}))` });
     if (r.result.exceptionDetails) throw new Error(JSON.stringify(r.result.exceptionDetails));
     return r.result.result.value;
   };
@@ -102,6 +102,11 @@ try {
   // localStorage に既定値と違う値がある状態で全シナリオを描く (シナリオはいつも最初の値から)
   const { frames, findings, norow, mutedVs } = await evaluate(scan);
   findings.unshift(...pageFindings);
+  // あいさつを日本語にした端末 (#1891 FB 13、#...&lang=ja) でも、あいさつが出るシナリオを描く。日本語はあいさつだけ
+  await open('#lang=ja');
+  const ja = await evaluate(scan, ['22', '22b'], 'ja');
+  findings.push(...ja.findings.map((f) => `[JA] ${f}`));
+  if (!ja.frames) findings.push('[JA] あいさつを日本語にした画面を 1 枚も描いていない');
   if (!mutedVs) findings.push('スタンプをミュートしたままの VS 画面 (あいさつが隠れないこと) を描いたシナリオが無い');
 
   console.log(`${frames} 枚 (全シナリオの全手順と、カウントダウン 3 / 2 / 1) の両端末の画面を確かめました`);
@@ -117,6 +122,7 @@ try {
     console.log('ok  左のシナリオのパネル、右パネルの状態名の行・「ほか:」・ログタブ、凡例の未決・点線 / 実線、端末の上の未決の帯、トグルのラジオはありません');
     console.log('ok  タブの名前は「決定」で、モック設定は閉じています');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
+    console.log(`ok  あいさつを日本語 (JA) にした端末でも、Profile と VS 画面のあいさつだけが日本語で、収まっています (${ja.frames} 枚)`);
     console.log(`ok  Profile: Cancel は保存せず、Save したものは開き直しても残り、シナリオは localStorage に関係なく最初の値から。ミュートしたままの VS 画面 ${mutedVs} 枚にもあいさつがあります`);
   }
 } finally {
@@ -206,7 +212,7 @@ function profileSave() {
   press('[data-ev="pickGreeting.bringItOn"]');
   press('[data-ev="saveProfile"]');
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
-  if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'Bring it on!' || saved.client.emoji !== '\u{1F60E}') page(`Save で保存されない (${localStorage.getItem(KEY)})`);
+  if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'bringItOn' || saved.client.emoji !== '\u{1F60E}') page(`Save で保存されない (${localStorage.getItem(KEY)})`);
   return findings;
 }
 
@@ -229,7 +235,8 @@ function profileReload() {
 }
 
 // ページの中で実行する。MockApp.show は同期的に描画する
-function scan() {
+// only を渡すと、そのシナリオ (id の配列) だけを描く。wantLang は両端末のあいさつの言語 (#1891 FB 13、既定は en)
+function scan(only, wantLang = 'en') {
   const BAD_TEXT = [[/仮/, '「仮」'], [/未決/, '「未決」'], [/決定/, '「決定」'], [/\bU\d{1,2}\b/, 'U 番号'], [/[\u3040-\u30ff\u3400-\u9fff]/, '日本語']];
   const MATCH_CODE_TEXT = 'QWERTY123';
   const BAD_SEL = '.mock-note, .tmp, .decided-note, [class*="pill-"], [data-undecided]';
@@ -256,7 +263,13 @@ function scan() {
       const screen = dev.querySelector('.screen');
       const state = dev.querySelector('.state-name').textContent;
       const at = `${where} ${dev.dataset.dev} (${state})`;
-      const text = screen.textContent;
+      // あいさつの言語 (#1891 FB 13)。日本語にしたあいさつだけは日本語を出してよい
+      const lang = document.querySelector(`.lang-toggle[data-dev="${dev.dataset.dev}"] [aria-pressed="true"]`).dataset.lang;
+      if (lang !== wantLang) findings.push(`${at}: あいさつの言語が ${lang} (期待: ${wantLang})`);
+      const quote = lang === 'ja' ? ['\u300c', '\u300d'] : ['\u201c', '\u201d'];
+      const say = (id) => greetingText(id, lang);
+      const localized = lang === 'ja' ? [...screen.querySelectorAll('.vs-greet, .pf-greet')].map((e) => e.textContent) : [];
+      const text = localized.reduce((t, g) => t.replace(g, ''), screen.textContent);
       BAD_TEXT.forEach(([re, what]) => { const m = text.match(re); if (m) findings.push(`${at}: ${what} "${m[0]}" (${text.trim().slice(0, 80)})`); });
       screen.querySelectorAll(BAD_SEL).forEach((el) => findings.push(`${at}: ${el.tagName.toLowerCase()}.${el.className}`));
       screen.querySelectorAll('[title], [aria-label]').forEach((el) => {
@@ -324,7 +337,7 @@ function scan() {
       if (screen.querySelector('.vs')) {
         ['host', 'client'].forEach((who) => {
           const card = [...screen.querySelectorAll(`.vs-card.${who} .vs-emoji, .vs-card.${who} .vs-greet`)].map((e) => e.textContent).join(' ');
-          const want = `${current[who + 'ShownEmoji']} \u201c${current[who + 'ShownGreeting']}\u201d`;
+          const want = `${current[who + 'ShownEmoji']} ${quote[0]}${say(current[who + 'ShownGreeting'])}${quote[1]}`;
           if (card !== want) findings.push(`${at}: VS 画面の ${who} のカードが ${card} (期待: ${want})`);
           if (card.includes("'")) findings.push(`${at}: VS 画面の ${who} のあいさつにまっすぐな ' (’ にそろえる)`);
         });
@@ -342,14 +355,14 @@ function scan() {
         const emojis = [...screen.querySelectorAll('.pf-emoji')];
         const greets = [...screen.querySelectorAll('.pf-greet')];
         if (emojis.map((e) => e.textContent).join(' ') !== PROFILE_EMOJIS.map((e) => e.emoji).join(' ')) findings.push(`${at}: 絵文字の候補が ${emojis.map((e) => e.textContent).join(' ')}`);
-        if (greets.map((e) => e.textContent).join(' / ') !== PROFILE_GREETINGS.map((g) => g.text).join(' / ')) findings.push(`${at}: あいさつの候補が違う`);
+        if (greets.map((e) => e.textContent).join(' / ') !== PROFILE_GREETINGS.map((g) => g[lang]).join(' / ')) findings.push(`${at}: あいさつの候補が違う (${lang})`);
         // どのあいさつも 1 行に収まる (折り返すとその行だけボタンが高くなる)
         greets.forEach((g) => { const r = document.createRange(); r.selectNodeContents(g); if (r.getClientRects().length !== 1) findings.push(`${at}: あいさつ ${g.textContent} が 1 行に収まらない`); });
         const sel = [...screen.querySelectorAll('.selected')].map((e) => e.textContent);
-        if (sel.join(' / ') !== `${current[d + 'DraftEmoji']} / ${current[d + 'DraftGreeting']}`) findings.push(`${at}: 選ばれているのが ${sel.join(' / ')}`);
+        if (sel.join(' / ') !== `${current[d + 'DraftEmoji']} / ${say(current[d + 'DraftGreeting'])}`) findings.push(`${at}: 選ばれているのが ${sel.join(' / ')}`);
         if ([...screen.querySelectorAll('[aria-pressed="true"]')].length !== 2) findings.push(`${at}: aria-pressed が 2 つでない`);
         const pv = [...screen.querySelectorAll('.pf-card > div')].map((e) => e.textContent).join(' ');
-        if (pv !== `${current[d + 'DraftEmoji']} ${d === 'host' ? 'Yasuhito' : 'ogwssk'} \u201c${current[d + 'DraftGreeting']}\u201d`) findings.push(`${at}: 見本が ${pv}`);
+        if (pv !== `${current[d + 'DraftEmoji']} ${d === 'host' ? 'Yasuhito' : 'ogwssk'} ${quote[0]}${say(current[d + 'DraftGreeting'])}${quote[1]}`) findings.push(`${at}: 見本が ${pv}`);
         if (screen.querySelector('input, textarea, [contenteditable]')) findings.push(`${at}: 自由入力の欄がある`);
         const btns = [...screen.querySelectorAll('.pf-actions .btn')].map((b) => b.textContent);
         if (btns.join() !== 'Save,Cancel') findings.push(`${at}: ボタンが ${btns.join(' / ')}`);
@@ -489,7 +502,7 @@ function scan() {
       if (n) norow[state] = n;
     });
   };
-  SCENARIOS.forEach((sc) => {
+  SCENARIOS.filter((sc) => !only || only.includes(sc.id)).forEach((sc) => {
     for (let step = 0; step <= sc.steps.length; step++) {
       const where = `s=${sc.id} step=${step}`;
       if (!show(where, sc, step)) continue;

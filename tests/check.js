@@ -1211,7 +1211,9 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
 
 // 決定 U56 (高宮さん 2026-10-08): Profile。相手に見せる絵文字とあいさつを 10 個ずつの候補から 1 つずつ選ぶ
 {
-  const { PROFILE_EMOJIS, PROFILE_GREETINGS, PROFILE_DEFAULT, PLAYERS, ProfileStore } = ctx;
+  const { PROFILE_EMOJIS, PROFILE_GREETINGS, PROFILE_DEFAULT, PLAYERS, ProfileStore, GREETING_LANGS, greetingText } = ctx;
+  // 状態のあいさつは id (#1891 FB 13)。英語の文にして比べる
+  const say = (id) => greetingText(id, 'en');
   const u56 = UNDECIDED.find((u) => u.id === 'U56');
   if (!u56 || !u56.decided || u56.decided.by !== '高宮さん' || u56.decided.date !== '2026-10-08') fail('U56 (Profile) が 高宮さん 2026-10-08 の決定になっていない');
   if (UNDECIDED.some((u) => !u.decided)) fail('Profile を足して未決ができた (期待: 0 件)');
@@ -1219,19 +1221,27 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   const EMOJIS = ['\u{1F44B}', '\u{1F642}', '\u{1F60E}', '\u{1F916}', '\u{1F9E0}', '\u269B\uFE0F', '\u{1F52C}', '\u{1F31F}', '\u{1F340}', '\u{1F680}'];
   const GREETINGS = ['Hello!', 'Let\u2019s go!', 'Have fun!', 'Good luck!', 'Let\u2019s do this!', 'Bring it on!', 'Ready?', 'Here we go!', 'Happy puzzling!', 'May the best player win!'];
   if (PROFILE_EMOJIS.map((e) => e.emoji).join('|') !== EMOJIS.join('|')) fail(`絵文字の候補が ${PROFILE_EMOJIS.map((e) => e.emoji).join(' ')} (期待: ${EMOJIS.join(' ')})`);
-  if (PROFILE_GREETINGS.map((g) => g.text).join('|') !== GREETINGS.join('|')) fail(`あいさつの候補が ${PROFILE_GREETINGS.map((g) => g.text).join(' / ')}`);
+  if (PROFILE_GREETINGS.map((g) => g.en).join('|') !== GREETINGS.join('|')) fail(`あいさつの候補が ${PROFILE_GREETINGS.map((g) => g.en).join(' / ')}`);
+  // あいさつは日本語と英語だけにローカライズする (#1891 FB 13)。日本語の ! と ? は全角で、英語の文字は混ぜない
+  const GREETINGS_JA = ['こんにちは！', 'いくよ！', '楽しもう！', 'がんばってね！', 'がんばろう！', 'かかってこい！', '準備はいい？', 'さあ、始めよう！', 'パズルを楽しもう！', 'いい勝負をしよう！'];
+  if (JSON.stringify(GREETING_LANGS) !== '["en","ja"]') fail(`あいさつの言語が ${GREETING_LANGS.join(', ')} (期待: en, ja だけ)`);
+  for (const g of PROFILE_GREETINGS) if (Object.keys(g).join() !== 'id,en,ja') fail(`あいさつ ${g.id} の言語が ${Object.keys(g).slice(1).join(', ')} (期待: en, ja だけ)`);
+  if (PROFILE_GREETINGS.map((g) => g.ja).join('|') !== GREETINGS_JA.join('|')) fail(`日本語のあいさつが ${PROFILE_GREETINGS.map((g) => g.ja).join(' / ')}`);
+  if (new Set(GREETINGS_JA).size !== GREETINGS_JA.length) fail('日本語のあいさつに同じ文がある');
+  for (const t of GREETINGS_JA) if (/[A-Za-z!?'\u2019]/.test(t)) fail(`日本語のあいさつ ${t} に半角の ! ? や英字がある`);
+  if (greetingText('bringItOn', 'ja') !== 'かかってこい！' || greetingText('bringItOn', 'en') !== 'Bring it on!') fail('greetingText が id と言語で文を返さない');
   for (const list of [PROFILE_EMOJIS, PROFILE_GREETINGS]) if (new Set(list.map((x) => x.id)).size !== 10) fail('候補の id が 10 個そろっていない');
   for (const e of PROFILE_EMOJIS) if (!/^[A-Z][a-z ]+$/.test(e.name)) fail(`絵文字 ${e.emoji} の読み上げ名が英語でない (${e.name})`);
   // 既定値は全員 👋 "Hello!"。相手の役 (ogwssk 😎 "Let’s go!") は前からの値のまま。名前は変えられず、ほかの名前は足さない
-  if (PROFILE_DEFAULT.emoji !== EMOJIS[0] || PROFILE_DEFAULT.greeting !== 'Hello!') fail('既定値が 👋 "Hello!" でない');
+  if (PROFILE_DEFAULT.emoji !== EMOJIS[0] || say(PROFILE_DEFAULT.greeting) !== 'Hello!') fail('既定値が 👋 "Hello!" でない');
   const init = Engine.initialState();
-  if (`${init.hostEmoji} ${init.hostGreeting}` !== `${EMOJIS[0]} Hello!`) fail(`ホストの最初の値が ${init.hostEmoji} ${init.hostGreeting}`);
-  if (`${init.clientEmoji} ${init.clientGreeting}` !== '\u{1F60E} Let\u2019s go!') fail(`クライアント (ogwssk) の最初の値が ${init.clientEmoji} ${init.clientGreeting}`);
-  if (JSON.stringify(PLAYERS) !== JSON.stringify({ host: { name: 'Yasuhito' }, client: { name: 'ogwssk', emoji: '\u{1F60E}', greeting: 'Let\u2019s go!' } })) fail(`PLAYERS が ${JSON.stringify(PLAYERS)}`);
+  if (`${init.hostEmoji} ${say(init.hostGreeting)}` !== `${EMOJIS[0]} Hello!`) fail(`ホストの最初の値が ${init.hostEmoji} ${init.hostGreeting}`);
+  if (`${init.clientEmoji} ${say(init.clientGreeting)}` !== '\u{1F60E} Let\u2019s go!') fail(`クライアント (ogwssk) の最初の値が ${init.clientEmoji} ${init.clientGreeting}`);
+  if (JSON.stringify(PLAYERS) !== JSON.stringify({ host: { name: 'Yasuhito' }, client: { name: 'ogwssk', emoji: '\u{1F60E}', greeting: 'letsGo' } })) fail(`PLAYERS が ${JSON.stringify(PLAYERS)}`);
   // アポストロフィは ’ (U+2019) だけ: 候補、ホストの既定値、相手 (ogwssk) の値、どのシナリオの VS 画面のあいさつにも ' (U+0027) が無い
   const straight = (t) => typeof t === 'string' && t.includes("'");
-  for (const t of PROFILE_GREETINGS.map((g) => g.text).concat(PROFILE_DEFAULT.greeting, PLAYERS.client.greeting)) if (straight(t)) fail(`あいさつ ${t} にまっすぐな ' がある (’ にそろえる)`);
-  if (!PROFILE_GREETINGS.some((g) => g.text.includes('\u2019'))) fail('あいさつの候補に ’ が 1 つも無い');
+  for (const t of PROFILE_GREETINGS.map((g) => g.en).concat(say(PROFILE_DEFAULT.greeting), say(PLAYERS.client.greeting))) if (straight(t)) fail(`あいさつ ${t} にまっすぐな ' がある (’ にそろえる)`);
+  if (!PROFILE_GREETINGS.some((g) => g.en.includes('\u2019'))) fail('あいさつの候補に ’ が 1 つも無い');
   let vsGreetings = 0;
   for (const sc of SCENARIOS) {
     for (let n = 0; n <= sc.steps.length; n++) {
@@ -1240,7 +1250,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
         if (!SCREENS[st[d]] || SCREENS[st[d]].view !== 'vs') continue;
         for (const who of Engine.DEVICES) {
           vsGreetings++;
-          if (straight(st[who + 'ShownGreeting'])) fail(`シナリオ ${sc.id} 手順 ${n}: VS 画面のあいさつ ${st[who + 'ShownGreeting']} にまっすぐな '`);
+          if (!say(st[who + 'ShownGreeting']) || straight(say(st[who + 'ShownGreeting']))) fail(`シナリオ ${sc.id} 手順 ${n}: VS 画面のあいさつ ${st[who + 'ShownGreeting']} が候補に無いか、まっすぐな '`);
         }
       }
     }
@@ -1283,27 +1293,27 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     const open = (st) => Engine.fire(st, `${d}.profile`);
     let st = Engine.initialState();
     const pick = (s, e, g) => [`${d}.pickEmoji.${e}`, `${d}.pickGreeting.${g}`].reduce((x, ev) => { const r = Engine.fire(x, ev); if (!r) fail(`${ev} の行が無い`); return r ? r.state : x; }, s);
-    const before = `${st[d + 'Emoji']} ${st[d + 'Greeting']}`;
+    const before = `${st[d + 'Emoji']} ${say(st[d + 'Greeting'])}`;
     let o = open(st).state;
-    if (`${o[d + 'DraftEmoji']} ${o[d + 'DraftGreeting']}` !== before) fail(`${R}.Profile を開いたときの見本が保存した値でない`);
+    if (`${o[d + 'DraftEmoji']} ${say(o[d + 'DraftGreeting'])}` !== before) fail(`${R}.Profile を開いたときの見本が保存した値でない`);
     o = pick(o, 'robot', 'goodLuck');
-    if (`${o[d + 'DraftEmoji']} ${o[d + 'DraftGreeting']}` !== '\u{1F916} Good luck!' || `${o[d + 'Emoji']} ${o[d + 'Greeting']}` !== before) fail(`${R}.Profile で選んでも見本が変わらないか、保存前に保存した値が変わる`);
+    if (`${o[d + 'DraftEmoji']} ${say(o[d + 'DraftGreeting'])}` !== '\u{1F916} Good luck!' || `${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== before) fail(`${R}.Profile で選んでも見本が変わらないか、保存前に保存した値が変わる`);
     for (const ev of ['cancelProfile', 'back']) {
       const c = Engine.fire(o, `${d}.${ev}`).state;
-      if (c[d] !== `${R}.MultiModeSelection` || `${c[d + 'Emoji']} ${c[d + 'Greeting']}` !== before || c[d + 'DraftEmoji'] !== null) fail(`${R}.Profile の ${ev} で捨てられない`);
+      if (c[d] !== `${R}.MultiModeSelection` || `${c[d + 'Emoji']} ${say(c[d + 'Greeting'])}` !== before || c[d + 'DraftEmoji'] !== null) fail(`${R}.Profile の ${ev} で捨てられない`);
     }
     const saved = Engine.fire(o, `${d}.saveProfile`).state;
-    if (saved[d] !== `${R}.MultiModeSelection` || `${saved[d + 'Emoji']} ${saved[d + 'Greeting']}` !== '\u{1F916} Good luck!') fail(`${R}.Profile の Save で保存されない`);
+    if (saved[d] !== `${R}.MultiModeSelection` || `${saved[d + 'Emoji']} ${say(saved[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${R}.Profile の Save で保存されない`);
     if (`${open(saved).state[d + 'DraftEmoji']}` !== '\u{1F916}') fail(`${R}.Profile をもう一度開くと保存した値から始まらない`);
   }
 
   // 値を固定するのは部屋を作る・入る・相手を探し始めるとき。変えたものが相手に見えるのは次の部屋・次の検索から
   const run = (st, evs, where) => evs.reduce((s, ev) => { if (!s) return s; const r = Engine.fire(s, ev); if (!r) fail(`${where}: ${ev} の行が無い (${s.host} / ${s.client})`); return r && r.state; }, st);
-  const shown = (st, d) => st && `${st[d + 'ShownEmoji']} ${st[d + 'ShownGreeting']}`;
+  const shown = (st, d) => st && `${st[d + 'ShownEmoji']} ${say(st[d + 'ShownGreeting'])}`;
   const sc1 = SCENARIOS.find((x) => x.id === '1');
   let room = Engine.replay(sc1, 6).state; // 両者が Ready 画面
   // 部屋にいる間に (ほかのタブなどで) 保存した値が変わっても、この部屋で相手に見えるのは部屋に入ったときの値
-  room = Object.assign({}, room, { hostEmoji: '\u{1F680}', hostGreeting: 'Bring it on!', clientEmoji: '\u{1F340}', clientGreeting: 'Have fun!' });
+  room = Object.assign({}, room, { hostEmoji: '\u{1F680}', hostGreeting: 'bringItOn', clientEmoji: '\u{1F340}', clientGreeting: 'haveFun' });
   let vs = run(room, sc1.steps.slice(6, 11), '固定');
   if (!vs || vs.host !== 'Host.Opponent' || shown(vs, 'host') !== `${EMOJIS[0]} Hello!` || shown(vs, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`部屋に入ったあとに変えた値が、その部屋の VS 画面に出る (${shown(vs, 'host')} / ${shown(vs, 'client')})`);
   // 次の部屋 (ホストが作る・クライアントが入る) から新しい値
@@ -1354,28 +1364,32 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   if (STAMPS.map((x) => `${x.emoji} ${x.text}`).join(' / ') !== '\u{1F44F} Good game / \u{1F91D} Thanks for the match / \u{1F44D} Nice') fail('結果画面のスタンプ (U27) が変わった');
   const sc22b = SCENARIOS.find((x) => x.id === '22b');
   const end22b = sc22b && Engine.replay(sc22b).state;
-  if (!end22b || end22b.host !== 'Host.MultiModeSelection' || `${end22b.hostEmoji} ${end22b.hostGreeting}` !== `${EMOJIS[0]} Hello!`) fail('シナリオ 22b の Cancel / ‹ で値が変わる');
+  if (!end22b || end22b.host !== 'Host.MultiModeSelection' || `${end22b.hostEmoji} ${say(end22b.hostGreeting)}` !== `${EMOJIS[0]} Hello!`) fail('シナリオ 22b の Cancel / ‹ で値が変わる');
 
   // localStorage: モックの名前で区切ったキーに保存し、読み直す (新しく開いたアプリ) と同じ値。壊れた値・候補に無い値は最初の値に戻す
   const mem = new Map();
   const storage = { getItem: (k) => (mem.has(k) ? mem.get(k) : null), setItem: (k, v) => mem.set(k, String(v)) };
   if (!/^qa2-match-mock\./.test(ProfileStore.KEY)) fail(`localStorage のキー ${ProfileStore.KEY} がモックの名前で区切られていない`);
   const fresh = ProfileStore.load(storage);
-  if (JSON.stringify(fresh) !== JSON.stringify({ host: { emoji: EMOJIS[0], greeting: 'Hello!' }, client: { emoji: '\u{1F60E}', greeting: 'Let\u2019s go!' } })) fail(`何も保存していないときの値が ${JSON.stringify(fresh)}`);
+  if (JSON.stringify(fresh) !== JSON.stringify({ host: { emoji: EMOJIS[0], greeting: 'hello' }, client: { emoji: '\u{1F60E}', greeting: 'letsGo' } })) fail(`何も保存していないときの値が ${JSON.stringify(fresh)}`);
   const savedState = run(Engine.initialState(ctx.Engine.defaultCtx(), fresh), ['host.profile', 'host.pickEmoji.rocket', 'host.pickGreeting.happyPuzzling', 'host.saveProfile'], '保存');
   ProfileStore.save(storage, { host: { emoji: savedState.hostEmoji, greeting: savedState.hostGreeting }, client: { emoji: savedState.clientEmoji, greeting: savedState.clientGreeting } });
   const reopened = Engine.initialState(Engine.defaultCtx(), ProfileStore.load(storage));
-  if (`${reopened.hostEmoji} ${reopened.hostGreeting}` !== '\u{1F680} Happy puzzling!' || reopened.clientEmoji !== '\u{1F60E}') fail(`保存して開き直した値が ${reopened.hostEmoji} ${reopened.hostGreeting}`);
+  if (`${reopened.hostEmoji} ${reopened.hostGreeting}` !== '\u{1F680} happyPuzzling' || reopened.clientEmoji !== '\u{1F60E}') fail(`保存して開き直した値が ${reopened.hostEmoji} ${reopened.hostGreeting}`);
   const opened = Engine.fire(reopened, 'host.profile').state;
-  if (`${opened.hostDraftEmoji} ${opened.hostDraftGreeting}` !== '\u{1F680} Happy puzzling!') fail('開き直したあとの Profile の見本が保存した値でない');
-  for (const bad of ['{', 'null', JSON.stringify({ host: { emoji: 'X', greeting: 'Hello!' } }), JSON.stringify({ host: { emoji: EMOJIS[1], greeting: 'Hi!' } })]) {
+  if (`${opened.hostDraftEmoji} ${opened.hostDraftGreeting}` !== '\u{1F680} happyPuzzling') fail('開き直したあとの Profile の見本が保存した値でない');
+  // 前のモック (#1891 FB 13 より前) は英語の文で残していた。読み直すと id になる
+  mem.set(ProfileStore.KEY, JSON.stringify({ host: { emoji: EMOJIS[1], greeting: 'Good luck!' }, client: { emoji: '\u{1F60E}', greeting: 'Let\u2019s go!' } }));
+  const legacy = ProfileStore.load(storage);
+  if (legacy.host.greeting !== 'goodLuck' || legacy.client.greeting !== 'letsGo') fail(`前のモックが残した英語の文を id に読み替えない (${JSON.stringify(legacy)})`);
+  for (const bad of ['{', 'null', JSON.stringify({ host: { emoji: 'X', greeting: 'hello' } }), JSON.stringify({ host: { emoji: EMOJIS[1], greeting: 'Hi!' } }), JSON.stringify({ host: { emoji: EMOJIS[1], greeting: 'こんにちは！' } })]) {
     mem.set(ProfileStore.KEY, bad);
     if (ProfileStore.load(storage).host.emoji !== EMOJIS[0]) fail(`壊れた値 ${bad} で最初の値に戻らない`);
   }
   // シナリオは localStorage に関係なく、いつも最初の値から (Engine.replay は保存した値を受け取らない)
   if (Engine.replay(sc22, 0).state.hostEmoji !== EMOJIS[0]) fail('シナリオが最初の値から始まらない');
   if (!/if \(app\.scenario \|\| !storage\) return;/.test(appJs)) fail('app.js がシナリオの再生中にも localStorage に書く');
-  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10 (アポストロフィは ’)・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・ミュートでもあいさつは出る');
+  console.log('ok  U56 (2026-10-08): Profile の候補 10 + 10 (アポストロフィは ’、あいさつは日本語と英語、#1891 FB 13)・既定値 👋 "Hello!"・Online Battle からだけ開ける・Save / Cancel / ‹・次の部屋と次の検索から相手に見える・localStorage・ミュートでもあいさつは出る');
 }
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));

@@ -22,6 +22,8 @@
     detached: false, // シナリオの途中で手順と違う操作をした
     cd: 3, // 手順で止めているとき、ゲーム本体のカウントダウンで表示しておく数字 (#...&cd=3|2|1)
     ctx: Engine.defaultCtx(),
+    // 端末ごとのあいさつの言語 (#1891 FB 13、GREETING_LANGS のどれか)。表示だけの設定で、状態と遷移表には入れない
+    lang: { host: 'en', client: 'en' },
     state: null,
     lastRow: null,
     autoTimer: null,
@@ -221,12 +223,12 @@
           (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
       };
       return header(dev, s, s.title) + '<div class="profile">' +
-        '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(PLAYERS[dev].name, emoji, greeting) + '</div>' +
+        '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(dev, PLAYERS[dev].name, emoji, greeting) + '</div>' +
         '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
           return choice('pf-emoji', 'pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
         }).join('') + '</div>' +
         '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
-          return choice('pf-greet', 'pickGreeting.' + g.id, g.text === greeting, null, esc(g.text));
+          return choice('pf-greet', 'pickGreeting.' + g.id, g.id === greeting, null, esc(g[app.lang[dev]]));
         }).join('') + '</div></div>' +
         '<div class="actions pf-actions"><div class="btn-row">' +
         '<button type="button" class="btn primary"' + attrs(dev, 'saveProfile') + '>Save</button>' +
@@ -271,7 +273,7 @@
       var card = function (who) {
         return '<div class="vs-card ' + who + (who === me ? ' me' : '') + '">' +
           (who === me ? '<span class="you">YOU</span>' : '') +
-          vsCardBody(PLAYERS[who].name, app.state[who + 'ShownEmoji'], app.state[who + 'ShownGreeting'], 'Rating ' + ELO.initial) + '</div>';
+          vsCardBody(dev, PLAYERS[who].name, app.state[who + 'ShownEmoji'], app.state[who + 'ShownGreeting'], 'Rating ' + ELO.initial) + '</div>';
       };
       return '<div class="vs">' + card('host') + '<div class="vs-mark">VS</div>' + card('client') +
         '<div class="vs-bar"><i></i></div></div>' + (s.overlay ? overlayHtml(s) : '');
@@ -326,12 +328,18 @@
 
   function fmt(n) { return n.toLocaleString('en-US'); }
 
-  // VS 画面のカードの中身。Profile の見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)
-  function vsCardBody(name, emoji, greeting, rating) {
+  // あいさつを囲むかぎかっこ。英語は “ ”、日本語は「 」(#1891 FB 13)
+  var GREETING_QUOTES = { en: ['\u201c', '\u201d'], ja: ['\u300c', '\u300d'] };
+
+  // VS 画面のカードの中身。Profile の見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)。
+  // あいさつ (id) は、相手のものも含めて、描いている端末 dev の言語で出す (#1891 FB 13)
+  function vsCardBody(dev, name, emoji, greeting, rating) {
+    var lang = app.lang[dev];
+    var q = GREETING_QUOTES[lang];
     return '<div class="vs-emoji">' + esc(emoji) + '</div>' +
       '<div class="vs-name">' + esc(name) + '</div>' +
       (rating ? '<div class="vs-rating">' + esc(rating) + '</div>' : '') +
-      '<div class="vs-greet">“' + esc(greeting) + '”</div>';
+      '<div class="vs-greet" lang="' + lang + '">' + q[0] + esc(greetingText(greeting, lang)) + q[1] + '</div>';
   }
 
   // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に名前とレーティング (#1891 FB 4、VS 画面と同じ値) と "✓ Ready" / "Not ready"。
@@ -503,6 +511,7 @@
       screen.dataset.html = html;
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
+    $$('.lang-toggle[data-dev="' + dev + '"] [data-lang]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.lang === app.lang[dev])); });
   }
 
   function uniq(list) {
@@ -670,6 +679,8 @@
   function updateHash() {
     var hash = app.scenario ? '#s=' + app.scenario.id + '&step=' + app.step : '#s=free';
     if (frozen() && inGameCountdown()) hash += '&cd=' + app.cd;
+    var lang = langParam(app.lang);
+    if (lang) hash += '&lang=' + lang;
     if (location.hash !== hash) history.replaceState(null, '', hash);
   }
 
@@ -714,6 +725,18 @@
     return GAME_COUNTDOWN.digits.indexOf(n) === -1 ? GAME_COUNTDOWN.digits[0] : n;
   }
 
+  // あいさつの言語の hash (#...&lang=ja は両端末、lang=ja,en はホスト,クライアント)。両方 en なら書かない
+  function langParam(lang) {
+    if (lang.host === 'en' && lang.client === 'en') return '';
+    return lang.host === lang.client ? lang.host : lang.host + ',' + lang.client;
+  }
+
+  function langOf(p) {
+    var v = (p.lang || '').split(',');
+    var pick = function (x) { return GREETING_LANGS.indexOf(x) === -1 ? 'en' : x; };
+    return { host: pick(v[0]), client: pick(v.length > 1 ? v[1] : v[0]) };
+  }
+
   // シナリオ id ('' は自由操作) の step 手順目を開く。ゲーム本体のカウントダウン中なら cd (3 / 2 / 1) で止めて表示する
   function show(id, step, cd) {
     app.cd = GAME_COUNTDOWN.digits.indexOf(cd) === -1 ? GAME_COUNTDOWN.digits[0] : cd;
@@ -723,6 +746,7 @@
   // #s=<シナリオ ID>&step=<手順数>&cd=<3|2|1>。s が無いか free なら自由操作
   function applyHash() {
     var p = parseHash();
+    app.lang = langOf(p);
     show(p.s && p.s !== 'free' ? p.s : '', parseInt(p.step, 10) || 0, cdParam(p));
   }
 
@@ -746,6 +770,12 @@
     var copy = t.closest('.device .copy');
     if (copy) {
       if (navigator.clipboard) navigator.clipboard.writeText(MATCH_CODE).catch(function () {});
+      return;
+    }
+    var langEl = t.closest('.lang-toggle [data-lang]');
+    if (langEl) {
+      app.lang[langEl.closest('.lang-toggle').dataset.dev] = langEl.dataset.lang;
+      render();
       return;
     }
     var evEl = t.closest('.device [data-ev]');
@@ -778,7 +808,7 @@
     var cur = app.scenario ? app.scenario.id : '';
     var want = p.s && p.s !== 'free' ? p.s : '';
     if (want !== cur || (parseInt(p.step, 10) || 0) !== app.step) applyHash();
-    else if (cdParam(p) !== app.cd) { app.cd = cdParam(p); render(); }
+    else if (cdParam(p) !== app.cd || langParam(langOf(p)) !== langParam(app.lang)) { app.cd = cdParam(p); app.lang = langOf(p); render(); }
   });
 
   // 手順を 1 枚ずつ描いて確かめるテスト (tests/scan-screens.mjs) 用。hash を大量に書き換えると Chromium が history.replaceState を黙って捨てるので、直接呼ぶ。

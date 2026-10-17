@@ -564,7 +564,7 @@ function scan(only, wantLang = 'en') {
         const chev = toast.querySelector('.chev');
         if (chev) { const cr = chev.getBoundingClientRect(); if (cr.top < tr.top || cr.bottom > tr.bottom) findings.push(`${at}: 帯の › が帯の外にある (${toast.textContent})`); }
       }
-      if (screen.querySelector('[data-ev="leaveApp"], [data-ev="disconnect"]')) findings.push(`${at}: ルームのモック操作が端末の画面の中にある`);
+      if (screen.querySelector('[data-ev="leaveApp"], [data-ev="disconnect"]')) findings.push(`${at}: マッチのモック操作が端末の画面の中にある`);
       if (/\.FriendMatch\.Lobby\.(Ready|Starting|Reconnecting|OpponentDisconnected|FriendJoined|Connecting|ConnectionLost|FriendDisconnected)/.test(state)) {
         const cards = [...screen.querySelectorAll('.rd-card')];
         const states = cards.map((c) => c.querySelector('.rd-state').textContent);

@@ -178,7 +178,10 @@
     if (spec.back === 'disabled') back = '<span class="back disabled" aria-disabled="true">‹</span>';
     else if (spec.back) back = '<button type="button" class="back"' + attrs(dev, spec.back) + ' aria-label="Back">‹</button>';
     else back = '<span class="back hidden-back">‹</span>';
-    return '<div class="hdr">' + back + '<div class="title">' + esc(title || '') + '</div></div>';
+    // Random Match と Friend Match トップの右上の Profile (決定 U56、#1891 の FB 12)。保存した絵文字を添え、押すと今の画面の上にダイアログで開く
+    var profile = spec.profile ? '<button type="button" class="hdr-profile" aria-haspopup="dialog"' + attrs(dev, 'profile') + '>' +
+      '<span class="hp-emoji" aria-hidden="true">' + esc(app.state[dev + 'Emoji']) + '</span>Profile</button>' : '';
+    return '<div class="hdr">' + back + '<div class="title">' + esc(title || '') + '</div>' + profile + '</div>';
   }
 
   function buttonsHtml(dev, buttons) {
@@ -209,30 +212,8 @@
   var VIEWS = {
     online: function (dev, s) {
       return header(dev, s, s.title) + '<div class="menu">' + s.items.map(function (it) {
-        // Profile (決定 U56) は対戦の入口より控えめにし、保存した絵文字を添える
-        var label = it.profile ? '<span class="mi-label"><span class="mi-emoji" aria-hidden="true">' + app.state[dev + 'Emoji'] + '</span>' + esc(it.label) + '</span>' : esc(it.label);
-        return '<button type="button" class="menu-item' + (it.profile ? ' secondary' : '') + '"' + attrs(dev, it.event) + '>' + label + '<span class="chev">›</span></button>';
+        return '<button type="button" class="menu-item"' + attrs(dev, it.event) + '>' + esc(it.label) + '<span class="chev">›</span></button>';
       }).join('') + inlineNoticeHtml(dev, s.inlineNotice) + '</div>';
-    },
-    // Profile 画面 (決定 U56): 上に VS 画面のカードの見本 (選ぶたびに変わる)、絵文字とあいさつを 1 つずつ、下に Save / Cancel
-    profile: function (dev, s) {
-      var emoji = app.state[dev + 'DraftEmoji'];
-      var greeting = app.state[dev + 'DraftGreeting'];
-      var choice = function (cls, ev, selected, label, content) {
-        return '<button type="button" class="' + cls + (selected ? ' selected' : '') + '" aria-pressed="' + selected + '"' +
-          (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
-      };
-      return header(dev, s, s.title) + '<div class="profile">' +
-        '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(dev, PLAYERS[dev].name, emoji, greeting) + '</div>' +
-        '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
-          return choice('pf-emoji', 'pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
-        }).join('') + '</div>' +
-        '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
-          return choice('pf-greet', 'pickGreeting.' + g.id, g.id === greeting, null, esc(g[app.lang[dev]]));
-        }).join('') + '</div></div>' +
-        '<div class="actions pf-actions"><div class="btn-row">' +
-        '<button type="button" class="btn primary"' + attrs(dev, 'saveProfile') + '>Save</button>' +
-        '<button type="button" class="btn"' + attrs(dev, 'cancelProfile') + '>Cancel</button></div></div>';
     },
     friendTop: function (dev, s) {
       var input = s.input
@@ -267,7 +248,7 @@
         (s.status ? '<div class="status">' + esc(s.status) + '</div><div class="dots"><i></i><i></i><i></i></div>' : '') + '</div>' +
         buttonsHtml(dev, s.buttons);
     },
-    // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56。スタンプのミュート U49 とは関係なく出す)
+    // 絵文字とあいさつは、部屋を作った・入った・探し始めたときに固定した値 (決定 U56)
     vs: function (dev, s) {
       var me = dev;
       var card = function (who) {
@@ -296,24 +277,23 @@
         fieldHtml(OPP_FIELD, 'g-mini') + '<span class="g-opp-gauge"></span></div>' + me + '</div>' +
         (s.menu ? matchMenuHtml(dev, s.menu) : '') + (s.overlay ? overlayHtml(s) : '');
     },
-    // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・スコア・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
+    // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
+    // スコアは出さない (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ)
     // ボタンと Rating の行は Friend Match かランダム対戦か (セッションの match / rated) で変わる
     result: function (dev, s) {
       var other = dev === 'host' ? 'client' : 'host';
       var head = RESULT_HEADLINES[s.outcome];
-      var score = s.outcome === 'NoContest' ? null : DEMO_SCORES[s.outcome];
       var rating = ratingText(s.outcome, app.state);
-      var status = REMATCH_STATUS[s.status];
-      // 相手が送ったスタンプは、ミュートしていなければ相手の名前の上に出す。自分が送ったものは自分の名前の上
+      // Friend Match で相手が抜けたときは、相手は同じ部屋に戻っている (決定 U61)
+      var status = REMATCH_STATUS[s.status === 'OpponentLeft' && app.state.match === 'friend' ? 'FriendReturned' : s.status];
+      // 送ったスタンプは、両者の画面で送った人の名前の上に出す
       var player = function (who, isMe) {
         var stamp = stampById(app.state[who + 'Stamp']);
-        var shown = stamp && (isMe || !app.state[dev + 'Mute']);
         return '<div class="r-player' + (isMe ? ' me' : '') + '">' +
-          (shown ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
+          (stamp ? '<div class="r-bubble"><span class="r-emoji">' + stamp.emoji + '</span>' + esc(stamp.text) + '</div>' : '') +
           (isMe ? '<span class="you">YOU</span>' : '') + '<b>' + esc(PLAYERS[who].name) + '</b></div>';
       };
-      var stats = (score ? '<div class="r-row"><span>Score</span><b>' + fmt(score[0]) + ' \u2013 ' + fmt(score[1]) + '</b></div>' : '') +
-        (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
+      var stats = (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
         (rating && !/^No /.test(rating) ? '<div class="r-row"><span>Rating</span><b>' + esc(rating) + '</b></div>' : '');
       return header(dev, s, s.title) + '<div class="result">' +
         '<div class="r-outcome ' + head[1] + '">' + head[0] + '</div>' +
@@ -331,7 +311,7 @@
   // あいさつを囲むかぎかっこ。英語は “ ”、日本語は「 」(#1891 FB 13)
   var GREETING_QUOTES = { en: ['\u201c', '\u201d'], ja: ['\u300c', '\u300d'] };
 
-  // VS 画面のカードの中身。Profile の見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)。
+  // VS 画面のカードの中身。Profile のダイアログの見本 (決定 U56) も同じものを使う (見本にはレーティングを出さない)。
   // あいさつ (id) は、相手のものも含めて、描いている端末 dev の言語で出す (#1891 FB 13)
   function vsCardBody(dev, name, emoji, greeting, rating) {
     var lang = app.lang[dev];
@@ -343,7 +323,7 @@
   }
 
   // Ready 画面 (決定 U36): プレイヤーごとのカード (自分が左、YOU 付き) に名前とレーティング (#1891 FB 4、VS 画面と同じ値) と "✓ Ready" / "Not ready"。
-  // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、カウントダウン (秒)
+  // その下にお知らせ (タイムアウトなど)、状況の一行 ("Waiting for opponent…" など)、待っている印 (点の動き) か再接続のカウントダウン (秒)
   function readyHtml(dev, s) {
     var other = dev === 'host' ? 'client' : 'host';
     var card = function (who, ready, isMe) {
@@ -355,6 +335,7 @@
       '<div class="rd-info">' +
       (s.readyNotice ? '<p class="rd-notice" role="status">' + esc(s.readyNotice) + '</p>' : '') +
       (s.status ? '<div class="status">' + esc(s.status).replace(/\n/g, '<br>') + '</div>' : '') +
+      (s.dots ? '<div class="dots" aria-hidden="true"><i></i><i></i><i></i></div>' : '') +
       (s.timer ? '<div class="rd-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div>' : '') +
       '</div></div>';
   }
@@ -363,19 +344,16 @@
     return STAMPS.filter(function (st) { return st.id === id; })[0] || null;
   }
 
-  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。
-  // その下に相手のスタンプのミュート "Mute opponent emotes" / "Unmute opponent emotes" (決定 U49)
+  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。ミュートのボタンは無い (#1891 の FB 8)
   function stampsHtml(dev) {
     var waiting = app.state[dev + 'Stamp'] !== null;
-    var muted = app.state[dev + 'Mute'];
     return '<div class="r-stamps">' + STAMPS.map(function (st) {
       if (waiting) return '<button type="button" class="r-stamp is-disabled" disabled aria-label="' + esc(st.text) + '">' + st.emoji + '</button>';
       return '<button type="button" class="r-stamp" aria-label="' + esc(st.text) + '"' + attrs(dev, 'stamp.' + st.id) + '>' + st.emoji + '</button>';
-    }).join('') + '</div><button type="button" class="r-mute' + (muted ? ' muted' : '') + '"' + attrs(dev, muted ? 'unmuteStamps' : 'muteStamps') + '>' +
-      '<span class="r-mute-icon" aria-hidden="true">' + (muted ? '\u{1F515}' : '\u{1F514}') + '</span>' + (muted ? 'Unmute opponent emotes' : 'Mute opponent emotes') + '</button>';
+    }).join('') + '</div>';
   }
 
-  // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Rematch / Decline) は横に並べる
+  // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Accept / Decline) は横に並べる
   function resultActionsHtml(dev, buttons) {
     var btn = function (b) {
       if (b.disabled) return '<button type="button" class="btn is-disabled" disabled>' + esc(b.label) + '</button>';
@@ -440,7 +418,7 @@
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
   // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29 / U47)、ロビー (Ready 画面) では「アプリを離れる」と「切断する」(決定 U5 / U35)、
-  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。右パネルの環境イベントと同じ)、
+  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、再戦を申し込んで待っている間は相手の応答の「相手が応じる」「相手が断る」「20 秒たつ」(決定 U30 / U60。相手の端末の Accept / Decline と同じ)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。右パネルの環境イベントと同じ)、
   // それ以外は時間切れの決着 (勝ち / 負け / 同点、決定 U44) と、この端末の接続が切れる「切断する」(決定 U28 / U32 / U54)
   function mockControlsHtml(dev) {
     var btn = function (ev, text, cls) { return '<button type="button" class="mc-btn' + (cls ? ' ' + cls : '') + '"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
@@ -454,11 +432,19 @@
       return '<span class="mc-label">モック操作 (切断中):</span>' + envBtn('net.recovered', overlay === DISCONNECT_OVERLAYS.self ? '再接続する' : '相手が戻る') +
         envBtn('timer.disconnectTimeout', '20 秒たつ');
     }
-    if (/\.Matchmake/.test(state) && MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(app.state, dev + '.' + ev); })) {
+    // Profile のダイアログ (決定 U56) を開いている間も検索中の操作を出す (ダイアログの外の操作なので、押せない表示になる)
+    var undimmed = Object.assign({}, app.state);
+    undimmed[dev + 'Dialog'] = null;
+    if (/\.Matchmake/.test(state) && MOCK_SEARCH_CONTROLS.some(function (ev) { return Engine.canFire(undimmed, dev + '.' + ev); })) {
       return '<span class="mc-label">モック操作 (検索中):</span>' + btn('leaveApp', 'アプリを離れる') + btn('searchTimeout', '60 秒たつ');
     }
     if (/\.FriendMatch\.Lobby\./.test(state)) {
       return '<span class="mc-label">モック操作 (ルーム):</span>' + btn('leaveApp', 'アプリを離れる') + btn('disconnect', '切断する');
+    }
+    if (/\.RematchRequested$/.test(state)) {
+      var other = dev === 'host' ? 'client' : 'host';
+      return '<span class="mc-label">モック操作 (再戦):</span>' + envBtn(other + '.rematch', '相手が応じる') + envBtn(other + '.declineRematch', '相手が断る') +
+        envBtn('timer.rematchTimeout', '20 秒たつ');
     }
     if (isResultState(app.state[dev])) {
       return '<span class="mc-label">モック操作 (スタンプ):</span>' + btn('stampShown', '3 秒たつ') + btn('stampInterval', '5 秒たつ');
@@ -485,9 +471,35 @@
       }).join('') + '</div></div>';
   }
 
+  // Profile のダイアログ (決定 U56、#1891 の FB 12): 今の画面の上に、題名と右上の ×、VS 画面のカードの見本 (選ぶたびに変わる)、
+  // 絵文字とあいさつを 1 つずつ、下に Save / Cancel。× と Cancel (と Esc) は同じ
+  function profileDialogHtml(dev, d) {
+    var emoji = app.state[dev + 'DraftEmoji'];
+    var greeting = app.state[dev + 'DraftGreeting'];
+    var choice = function (cls, ev, selected, label, content) {
+      return '<button type="button" class="' + cls + (selected ? ' selected' : '') + '" aria-pressed="' + selected + '"' +
+        (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
+    };
+    var titleId = 'pf-title-' + dev;
+    return '<div class="dim"><div class="dialog pf-dialog" role="dialog" aria-modal="true" aria-labelledby="' + titleId + '">' +
+      '<div class="pf-head"><div class="d-title" id="' + titleId + '">' + esc(d.title) + '</div>' +
+      '<button type="button" class="pf-close" aria-label="Close"' + attrs(dev, d.close) + '>×</button></div>' +
+      '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(dev, PLAYERS[dev].name, emoji, greeting) + '</div>' +
+      '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
+        return choice('pf-emoji', 'dialog.pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
+      }).join('') + '</div>' +
+      '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
+        return choice('pf-greet', 'dialog.pickGreeting.' + g.id, g.id === greeting, null, esc(g[app.lang[dev]]));
+      }).join('') + '</div>' +
+      '<div class="btn-row pf-actions">' +
+      '<button type="button" class="btn primary"' + attrs(dev, 'dialog.saveProfile') + '>Save</button>' +
+      '<button type="button" class="btn"' + attrs(dev, d.close) + '>Cancel</button></div></div></div>';
+  }
+
   function dialogHtml(dev, key) {
     if (!key) return '';
     var d = DIALOGS[key];
+    if (d.profile) return profileDialogHtml(dev, d);
     return '<div class="dim"><div class="dialog" role="dialog"><div class="d-title">' + esc(d.title) + '</div>' +
       '<p class="d-body">' + esc(d.body) + '</p>' +
       d.buttons.map(function (b) {
@@ -506,9 +518,14 @@
     var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + noticeHtml(dev, spec.notice) + dialogHtml(dev, dlg);
     // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを最初からやり直させない)
     if (screen.dataset.html !== html) {
+      // 差し替える前にフォーカスしていたボタンへ、差し替えたあともフォーカスを戻す (キーボードで Profile の候補を続けて選べるように)。
+      // Profile のダイアログを開いたときは、フォーカスをダイアログの中 (×) へ移す
+      var focused = screen.contains(document.activeElement) && document.activeElement.dataset.ev;
       screen.className = 'screen view-' + spec.view;
       screen.innerHTML = html;
       screen.dataset.html = html;
+      var target = (focused && $('[data-ev="' + focused + '"]', screen)) || (dlg && $('.pf-dialog .pf-close', screen));
+      if (target && (focused || dlg)) target.focus({ preventScroll: true });
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
     $$('.lang-toggle[data-dev="' + dev + '"] [data-lang]').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.lang === app.lang[dev])); });
@@ -638,6 +655,8 @@
     Engine.DEVICES.forEach(function (d) {
       add(d, sc && sc[d + 'Note']);
       [].concat(SCREENS[app.state[d]].context).forEach(function (text) { add(d, text); });
+      var dlg = app.state[d + 'Dialog'];
+      if (dlg) add(d, DIALOGS[dlg].context);
     });
     return lines.map(function (text) {
       var who = seen[text].map(function (d) {
@@ -797,9 +816,20 @@
     else if (t.id === 'filter-available') renderTable();
   });
 
+  // Esc で Profile のダイアログを閉じる (× と Cancel と同じ)。両端末で開いているときは、フォーカスのある端末 (無ければホスト) を閉じる
+  function closeProfileByEsc(target) {
+    var focusedDev = target.closest && target.closest('.device');
+    var devs = Engine.DEVICES.filter(function (d) { return app.state[d + 'Dialog'] === 'profile'; });
+    if (!devs.length) return false;
+    var dev = focusedDev && devs.indexOf(focusedDev.dataset.dev) !== -1 ? focusedDev.dataset.dev : devs[0];
+    userFire(dev + '.' + DIALOGS.profile.close);
+    return true;
+  }
+
   document.addEventListener('keydown', function (e) {
     if (e.target.closest('input, select, textarea')) return;
-    if (e.key === 'ArrowRight') nextStep();
+    if (e.key === 'Escape' && closeProfileByEsc(e.target)) e.preventDefault();
+    else if (e.key === 'ArrowRight') nextStep();
     else if (e.key === 'ArrowLeft' && app.scenario) rebuild(app.step - 1);
   });
 

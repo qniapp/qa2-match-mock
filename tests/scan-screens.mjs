@@ -2,6 +2,7 @@
 // 全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 も) をヘッドレス Chromium で描画し、
 // 両端末の画面 (.screen) にゲームが出さないもの (仮・未決・決定の印、U 番号、モックの注記、日本語) が無いことを確かめる。
 // ランダム対戦の画面に 60 秒 (仮の長さ) が出ないこと、検索中のモック操作が端末の外にあることも確かめる (決定 U13)。
+// Random Match の画面は開いた直後が大きな Ready だけで、探している間は同じ場所・同じ大きさの Cancel になることも確かめる (決定 U61、#1891 の FB 16)。
 // アプリを離れて検索が止まった通知がモーダルではなく、メニューをさまたげないことも確かめる (決定 U43)。
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
 // 結果画面にスコアの行が無いこと (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ) も確かめる (決定 U20 / U27 / U28 / U30)。
@@ -237,6 +238,7 @@ function scan() {
   const BAD_SEL = '.mock-note, .tmp, .decided-note, [class*="pill-"], [data-undecided]';
   const findings = [];
   const norow = {};
+  const bigButtonAt = { idle: new Set(), searching: new Set() }; // Random Match の画面の大きなボタンの位置 (端末ごと)
   let frames = 0;
   let current = null; // 描いている手順の遷移表の状態
   // 手順の移動は MockApp.show (#s=..&step=..&cd=.. の deep link と同じ) を直接呼んで行う。
@@ -268,7 +270,24 @@ function scan() {
       // ランダム対戦 (決定 U13): 60 秒という仮の長さは端末の画面に出さない。「アプリを離れる」「60 秒たつ」は端末の外 (下のモック操作) だけ
       if (/\.Matchmake/.test(state) && /\d/.test(text)) findings.push(`${at}: 数字がある (60 秒は端末の画面に出さない): ${text.trim().slice(0, 80)}`);
       if (screen.querySelector('[data-ev="leaveApp"], [data-ev="searchTimeout"]')) findings.push(`${at}: 検索中のモック操作が端末の画面の中にある`);
-      if (/\.Matchmake$/.test(state)) {
+      // Random Match の画面 (決定 U61): 開いた直後は "Searching…" の無い大きな Ready だけ。探している間は同じ場所が大きな Cancel になる
+      if (/\.Matchmake(\.Searching)?$/.test(state)) {
+        const searching = /\.Searching$/.test(state);
+        const btns = [...screen.querySelectorAll('.actions .btn')];
+        const want = searching ? 'Cancel:cancelSearch' : 'Ready:startSearch';
+        const got = btns.map((b) => `${b.textContent}:${b.dataset.ev}`).join();
+        if (got !== want || !btns[0].classList.contains('big') || btns[0].hasAttribute('data-norow')) findings.push(`${at}: ボタンが大きな ${want} だけでない (${got})`);
+        if (!!screen.querySelector('.dots') !== searching || /Searching/.test(text) !== searching) findings.push(`${at}: "Searching for an opponent…" と点が${searching ? '無い' : 'ある'}`);
+        if (btns[0]) {
+          const r = btns[0].getBoundingClientRect();
+          const key = `${dev.dataset.dev} ${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}`;
+          bigButtonAt[searching ? 'searching' : 'idle'].add(key);
+        }
+      }
+      if (/\.Matchmake$/.test(state) && dev.querySelector('.mock-controls [data-ev="leaveApp"]:not([data-norow]), .mock-controls [data-ev="searchTimeout"]:not([data-norow])')) {
+        findings.push(`${at}: Ready を待っている間に検索中のモック操作を押せる`);
+      }
+      if (/\.Matchmake\.Searching$/.test(state)) {
         ['leaveApp', 'searchTimeout'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]:not([data-norow])`)) findings.push(`${at}: 端末の下のモック操作で ${ev} を押せない`);
         });
@@ -505,5 +524,9 @@ function scan() {
       }
     }
   });
+  // Ready と Cancel は同じ場所の同じ大きさのボタン (U61)
+  const idleAt = [...bigButtonAt.idle].sort().join(' | ');
+  const searchingAt = [...bigButtonAt.searching].sort().join(' | ');
+  if (!idleAt || idleAt !== searchingAt) findings.push(`Random Match の Ready (${idleAt}) と Cancel (${searchingAt}) の位置・大きさが違う`);
   return { frames, findings, norow };
 }

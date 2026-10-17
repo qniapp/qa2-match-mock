@@ -7,7 +7,7 @@
 
 var SCENARIOS = (function () {
   var hostCreates = ['host.friendMatch', 'host.createMatch'];
-  // Join Match で Join a Match を開き、Match Code を入れて Join (決定 U62)
+  // Join Match で Join a Match を開き、Match Code を入れて Join (決定 U63)
   var joinCode = ['client.openJoin', 'client.enterCode', 'client.joinMatch'];
   var clientJoins = ['client.friendMatch'].concat(joinCode);
   // 参加の確認 (ホスト "Friend joined!" / クライアント "Connecting…") → 両者がそろって同期が終わると Ready 画面 (決定 U4)
@@ -57,7 +57,7 @@ var SCENARIOS = (function () {
       steps: toReady.concat(hostReady, ['host.leaveApp'], bothStart, toGame) },
     { id: '8', title: '無効な Match Code', diagram: '08', ctx: { codeResult: 'notFound' }, hostNote: clientOnly,
       steps: clientJoins },
-    { id: '9', title: 'Match Code が期限切れ (見つからないときと同じ表示)', diagram: '09 (10-17 の決定 U62 で 08 と同じ表示に)',
+    { id: '9', title: 'Match Code が期限切れ (見つからないときと同じ表示)', diagram: '09 (10-17 の決定 U63 で 08 と同じ表示に)',
       steps: hostCreates.concat(['timer.codeExpired'], clientJoins) },
     { id: '10', title: 'マッチが満員', diagram: '10', ctx: { codeResult: 'full' }, hostNote: clientOnly,
       steps: clientJoins },

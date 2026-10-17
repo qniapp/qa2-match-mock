@@ -168,7 +168,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .body { padding: 20px 28px 0; flex: 1; display: flex; flex-direction: column; min-height: 0; }
 .body.center { align-items: center; justify-content: center; text-align: center; }
 .sec-label { font-size: 13px; color: #B9C0D0; margin-bottom: 8px; }
-/* Friend Match トップの 2 つのボタン (New Match / Join Match、決定 U62) */
+/* Friend Match トップの 2 つのボタン (New Match / Join Match、決定 U63) */
 .ft-buttons { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
 
 .btn {
@@ -474,7 +474,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .d-body { margin: 0 0 6px; text-align: center; font-size: 13px; color: #B9C0D0; }
 /* ランダム対戦で相手を探すのをやめたときの通知 (決定 U13)。文だけで本文は無いので、ボタンとの間を少し空ける */
 .d-title.notice { margin-bottom: 6px; line-height: 1.4; text-wrap: balance; }
-/* Join a Match (決定 U62): 右上の × で閉じる。Match Code の入力欄、赤字、Join */
+/* Join a Match (決定 U63): 右上の × で閉じる。Match Code の入力欄、赤字、Join */
 .join-dialog { position: relative; padding-top: 22px; }
 .join-dialog .d-title { margin: 0 28px 4px; }
 .d-close {

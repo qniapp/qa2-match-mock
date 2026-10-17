@@ -232,7 +232,7 @@
         '<button type="button" class="btn primary"' + attrs(dev, 'saveProfile') + '>Save</button>' +
         '<button type="button" class="btn"' + attrs(dev, 'cancelProfile') + '>Cancel</button></div></div>';
     },
-    // Friend Match トップ (決定 U62、#1891 の FB 19): New Match と Join Match の 2 つだけ。Match Code は Join Match で開く Join a Match に入れる
+    // Friend Match トップ (決定 U63、#1891 の FB 19): New Match と Join Match の 2 つだけ。Match Code は Join Match で開く Join a Match に入れる
     friendTop: function (dev, s) {
       return header(dev, s, s.title) +
         '<div class="body">' +
@@ -400,7 +400,7 @@
       '<div class="rd-timer m-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div></div></div>';
   }
 
-  // Join a Match のダイアログ (決定 U62)。右上の × で閉じる。Match Code の誤り・満員の赤字は入力欄の下に出す
+  // Join a Match のダイアログ (決定 U63)。右上の × で閉じる。Match Code の誤り・満員の赤字は入力欄の下に出す
   function joinDialogHtml(dev, j) {
     var value = j.input ? '<span class="value">' + esc(j.input) + '</span>' : '<span class="placeholder">Enter code</span>';
     var field = Engine.canFire(app.state, dev + '.enterCode')
@@ -414,7 +414,7 @@
       '<button type="button" class="btn primary"' + attrs(dev, 'joinMatch') + '>Join</button></div></div>';
   }
 
-  // Friend Match トップの部屋のお知らせ (決定 U52)。モーダルではない帯で、Close で閉じる (Join a Match を開いて Match Code を入れても消えない、U62)
+  // Friend Match トップの部屋のお知らせ (決定 U52)。モーダルではない帯で、Close で閉じる (Join a Match を開いて Match Code を入れても消えない、U63)
   function roomNoticeHtml(dev, n) {
     if (!n) return '';
     return '<div class="room-notice" role="status"><p class="rn-text">' + sentences(n.text) + '</p>' + n.buttons.map(function (b) {

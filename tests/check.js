@@ -128,8 +128,8 @@ const OLD_EVENTS = ['sys.autoStart', 'host.startMatch', 'client.startMatch', 'sy
   // 2026-10-10 (U57): Close Room / Leave Room のボタンと、部屋を残す離席 (帯・"Your friend left."・作り直しの確認) は無くなった
   'host.closeRoom', 'host.leaveRoom', 'client.leaveRoom', 'host.dialog.leaveRoom', 'host.joinMatch', 'host.dialog.createMatch', 'host.dialog.joinMatch',
   'host.dialog.keepCurrent', 'sys.friendLeftShown',
-  // 2026-10-17 (U62、#1891 の FB 19): 確認の Close Room / Leave Room / クライアントの Keep Waiting は Cancel Match / Leave / Stay に。
-  // (Cancel Match / Leave / Stay は SPEC15 で一度消した名前だが、U62 で文言ごと戻したので古いイベントからは外した)
+  // 2026-10-17 (U63、#1891 の FB 19): 確認の Close Room / Leave Room / クライアントの Keep Waiting は Cancel Match / Leave / Stay に。
+  // (Cancel Match / Leave / Stay は SPEC15 で一度消した名前だが、U63 で文言ごと戻したので古いイベントからは外した)
   'host.dialog.closeRoom', 'client.dialog.leaveRoom', 'client.dialog.keepWaiting'];
 for (const ev of OLD_EVENTS) if (EVENT_LABELS[ev]) fail(`古いイベント ${ev} のラベルが残っている`);
 for (const r of TRANSITIONS) {
@@ -150,7 +150,7 @@ for (const name of Object.keys(SCREENS)) {
 // "Start Match" や古い文言はどこにも出さない (画面・ダイアログ・トースト・アプリ)
 // (右パネルの説明 context は経緯を書くので除く)
 const shownText = JSON.stringify([SCREENS, DIALOGS, TOASTS], (k, v) => (k === 'context' ? undefined : v));
-// U62 (#1891 の FB 19・20): 画面に "Room" / "room" を出さない (Close / Leave Room、"Close this room?"、"Room closed…" など)。
+// U63 (#1891 の FB 19・20): 画面に "Room" / "room" を出さない (Close / Leave Room、"Close this room?"、"Room closed…" など)。
 // 見つからない・期限切れの赤字は 1 つにまとめたので、以前の 2 つの文言も出さない
 const OLD_TEXTS = /Start Match|Ready to start|Stay in Room|Go Back|Match expired\.|Unable to start|Check the Match Code and try again|The match has expired|Create Match/;
 if (OLD_TEXTS.test(shownText + read('js', 'app.js'))) fail(`画面に古い文言 (${(shownText + read('js', 'app.js')).match(OLD_TEXTS)[0]}) が残っている`);
@@ -159,7 +159,7 @@ if (OLD_TEXTS.test(shownText + read('js', 'app.js'))) fail(`画面に古い文�
   const visible = JSON.stringify([Object.values(SCREENS), DIALOGS, TOASTS, ctx.REMATCH_STATUS, ctx.ROOM_NOTICES], (k, v) => (k === 'context' ? undefined : v)) +
     read('js', 'app.js').replace(/room-notice/g, '');
   const m = visible.match(/\broom\b/i);
-  if (m) fail(`画面に "${m[0]}" が残っている (U62: "Room" とは書かない)`);
+  if (m) fail(`画面に "${m[0]}" が残っている (U63: "Room" とは書かない)`);
 }
 if (/Start Match/.test(read('README.md') + JSON.stringify(UNDECIDED) + JSON.stringify(SCENARIOS))) fail('README・未決一覧・シナリオに "Start Match" が残っている (今は Ready)');
 // Ready 画面からは、自動遷移でも環境イベントでも VS 画面に進まない (読み込みの "Starting match…" を経る)
@@ -391,7 +391,7 @@ for (const [d, R, o, O] of eachSideAll) {
     if (res && (ctx.isResultState(res.state.host) || ctx.isResultState(res.state.client))) fail(`部屋での切断 ${pair(w)} から ${ev} で結果画面へ行く`);
   }
 }
-// 部屋がもう無いので Friend Match トップに "The match was canceled." の帯 (U52。赤字は Join a Match の中にだけ出す、U62)
+// 部屋がもう無いので Friend Match トップに "The match was canceled." の帯 (U52。赤字は Join a Match の中にだけ出す、U63)
 expectFire(at('Host.FriendMatch.Room', L('Client', 'ConnectionLost')), 'net.recovered', 'Host.FriendMatch.Room', 'Client.FriendMatch.Room.RoomClosed');
 if (Engine.canFire(at(L('Host', 'ConnectionLost'), L('Client', 'FriendDisconnected')), 'host.back')) fail('再接続中のホストが ‹ を押せる');
 console.log('ok  U5: 部屋での切断は Ready を消して 20 秒まで再接続、"Could not reconnect." と Retry / ‹、クライアントは Friend Match トップ・ホストは空の部屋 (両端末)');
@@ -468,7 +468,7 @@ console.log('ok  U32 / U15: VS 画面・カウントダウン中の切断は Rea
         const st = at(...(d === 'host' ? [mine, theirs] : [theirs, mine]));
         const res = Engine.fire(st, `${d}.back`);
         if (!res || res.state[`${d}Dialog`] !== dlg || res.state[d] !== mine || res.state[O.toLowerCase()] !== theirs) { fail(`${mine} / ${theirs} で ${d}.back が ${dlg} の確認にならない`); continue; }
-        // 残るボタンはホストが Keep Waiting (U11)、クライアントが Stay (U62)
+        // 残るボタンはホストが Keep Waiting (U11)、クライアントが Stay (U63)
         const stay = Engine.fire(res.state, `${d}.dialog.${d === 'host' ? 'keepWaiting' : 'stay'}`);
         if (!stay || pair(stay.state) !== pair(st) || stay.state[`${d}Dialog`] !== null) fail(`${mine} / ${theirs} で ${d === 'host' ? 'Keep Waiting' : 'Stay'} のあと部屋に残らない`);
         const done = Engine.fire(res.state, `${d}.dialog.${dlg}`);
@@ -489,7 +489,7 @@ console.log('ok  U32 / U15: VS 画面・カウントダウン中の切断は Rea
     if (toJoined && r.event === 'net.recovered' && ![].concat(r.from.client).every((s) => s === L('Client', 'ConnectionLost'))) fail(`${r.id}: 再接続で "Friend joined!" になる`);
   }
 }
-console.log('ok  U57 / U62: 部屋の画面の出口は ‹ だけ (部屋を出るボタンは無い)。ホストは "Cancel this match?" で閉じ (Keep Waiting で残る)、クライアントは "Leave this match?" で抜ける (Stay で残る)。離席と帯は無い (両端末)');
+console.log('ok  U57 / U63: 部屋の画面の出口は ‹ だけ (部屋を出るボタンは無い)。ホストは "Cancel this match?" で閉じ (Keep Waiting で残る)、クライアントは "Leave this match?" で抜ける (Stay で残る)。離席と帯は無い (両端末)');
 
 // 決定 U6 / U7 / U10 / U18
 {
@@ -544,7 +544,7 @@ const readyFlows = {
   '3a': [[10, `${L('Host', 'ConnectionLost')} / ${L('Client', 'FriendDisconnected')}`], [11, `${L('Host', 'Ready')} / ${L('Client', 'Ready')}`]],
   '3b': [[9, `${L('Host', 'Waiting')} / ${L('Client', 'CouldNotReconnect')}`], [11, `${L('Host', 'Waiting')} / Client.FriendMatch.Room`]],
   '3c': [[9, `${L('Host', 'CouldNotReconnect')} / Client.FriendMatch.Room.RoomClosed`], [11, `${L('Host', 'Waiting')} / Client.FriendMatch.Room.RoomClosed`],
-    // U62: Join a Match を開いても帯は後ろに残り (U52)、× で閉じると帯のある Friend Match トップに戻る
+    // U63: Join a Match を開いても帯は後ろに残り (U52)、× で閉じると帯のある Friend Match トップに戻る
     [12, `${L('Host', 'Waiting')} / Client.FriendMatch.Room.RoomClosed.Join`], [13, `${L('Host', 'Waiting')} / Client.FriendMatch.Room.RoomClosed`],
     [14, `${L('Host', 'Waiting')} / Client.FriendMatch.Room`], [17, `${L('Host', 'FriendJoined')} / ${L('Client', 'Connecting')}`]],
   '3e': [[9, `${L('Host', 'CouldNotReconnect')} / Client.FriendMatch.Room.RoomClosed`], [10, `${L('Host', 'CouldNotReconnect')} / Client.FriendMatch.Room.RoomClosed`],
@@ -1261,10 +1261,10 @@ if (/class="m-dim paused[^"]*"[^;]*matchMenu|function matchMenuHtml[^}]*paused/.
 if (/Rank|rank/.test(appJs + JSON.stringify(ctx.PLAYERS)) || !/Rating ' \+ ELO\.initial/.test(appJs)) fail('VS 画面が "Rating {n}" になっていない / Rank が残っている (U48)');
 // U49: スタンプのミュートは無い (#1891 の FB 8)。結果画面にミュートのボタンを出さない
 if (/opponent emotes|r-mute/.test(appJs + read('css', 'style.css'))) fail('結果画面にミュートのボタンが残っている (U49、#1891 の FB 8)');
-// U51: ホストの ‹ の確認の題名 (U62 で "Cancel this match?" に)。U12 のクライアント向けの本文は保留 (README に書く)
-if (DIALOGS.cancelMatch.title !== 'Cancel this match?') fail('ホストの ‹ の確認の題名が "Cancel this match?" でない (U51 / U62)');
+// U51: ホストの ‹ の確認の題名 (U63 で "Cancel this match?" に)。U12 のクライアント向けの本文は保留 (README に書く)
+if (DIALOGS.cancelMatch.title !== 'Cancel this match?') fail('ホストの ‹ の確認の題名が "Cancel this match?" でない (U51 / U63)');
 if (!/保留/.test(UNDECIDED.find((u) => u.id === 'U51').desc) || !/U12[^\n]*保留|保留[^\n]*U12/.test(read('README.md'))) fail('U12 のクライアント向けの本文が保留だと書かれていない (U51)');
-// U52: 部屋のお知らせはモーダルではない帯で Close で閉じる。Join a Match を開いて Match Code を入れても消えない (U62)
+// U52: 部屋のお知らせはモーダルではない帯で Close で閉じる。Join a Match を開いて Match Code を入れても消えない (U63)
 const ROOM_NOTICES_WANT = { HostLeft: 'The host canceled the match.', HostDisconnected: 'The host disconnected. The match was canceled.', RoomClosed: 'The match was canceled.',
   ReconnectFailed: 'Could not reconnect. The match did not start.', MatchCancelled: 'Match cancelled. Opponent did not reconnect.' };
 if (JSON.stringify(ctx.ROOM_NOTICES) !== JSON.stringify(ROOM_NOTICES_WANT)) fail('部屋のお知らせの文言が違う (U52)');
@@ -1284,7 +1284,7 @@ for (const k of Object.keys(ROOM_NOTICES_WANT)) {
   expectFire(at('Host.MultiModeSelection', `${top}.Join.CodeEntered`), 'client.closeJoin', 'Host.MultiModeSelection', top);
   expectFire(at('Host.MultiModeSelection', top), 'client.closeNotice', 'Host.MultiModeSelection', 'Client.FriendMatch.Room');
   // Join a Match はモーダルなので、開いている間はお知らせの Close と ‹ を押せない
-  for (const ev of ['client.closeNotice', 'client.back']) if (Engine.canFire(at('Host.MultiModeSelection', `${top}.Join.CodeEntered`), ev)) fail(`${top}.Join.CodeEntered で ${ev} の行がある (U62: ダイアログはモーダル)`);
+  for (const ev of ['client.closeNotice', 'client.back']) if (Engine.canFire(at('Host.MultiModeSelection', `${top}.Join.CodeEntered`), ev)) fail(`${top}.Join.CodeEntered で ${ev} の行がある (U63: ダイアログはモーダル)`);
   expectFire(at('Host.FriendMatch.Lobby.Waiting', `${top}.Join.CodeEntered`), 'client.joinMatch', 'Host.FriendMatch.Lobby.FriendJoined', 'Client.FriendMatch.Lobby.Connecting');
   expectFire(at('Host.MultiModeSelection', top), 'client.back', 'Host.MultiModeSelection', 'Client.MultiModeSelection');
   for (const r of TRANSITIONS) if (r.auto && [].concat(r.from.client).includes(top)) fail(`${top} から自動で進む (U52: Close で閉じる)`);
@@ -1296,18 +1296,18 @@ for (const k of ['ReconnectFailed', 'MatchCancelled']) {
   expectFire(at(name, 'Client.MultiModeSelection'), 'host.createMatch', 'Host.FriendMatch.Lobby.Waiting', 'Client.MultiModeSelection');
 }
 if (!/roomNoticeHtml/.test(appJs) || !/\.room-notice \{ display: flex/.test(read('css', 'style.css'))) fail('部屋のお知らせが Close 付きの帯で描かれていない (U52)');
-// U62 (#1891 の FB 19・20): Friend Match トップは New Match / Join Match の 2 つのボタンだけ。Match Code は Join Match で開く Join a Match に入れる。
+// U63 (#1891 の FB 19・20): Friend Match トップは New Match / Join Match の 2 つのボタンだけ。Match Code は Join Match で開く Join a Match に入れる。
 // 赤字はダイアログの中に出し、見つからない・期限切れは同じ "Match not found. The code may be wrong or expired."
 {
-  const u62 = UNDECIDED.find((u) => u.id === 'U62');
-  if (!u62 || !u62.decided || u62.decided.date !== '2026-10-17' || !/#1891/.test(u62.desc) || !/19/.test(u62.decided.by) || !/20/.test(u62.decided.by)) fail('U62 が #1891 の FB 19・20 (2026-10-17) の決定になっていない');
+  const u62 = UNDECIDED.find((u) => u.id === 'U63');
+  if (!u62 || !u62.decided || u62.decided.date !== '2026-10-17' || !/#1891/.test(u62.desc) || !/19/.test(u62.decided.by) || !/20/.test(u62.decided.by)) fail('U63 が #1891 の FB 19・20 (2026-10-17) の決定になっていない');
   const ft = appJs.slice(appJs.indexOf('friendTop: function'), appJs.indexOf('lobby: function'));
   const labels = [...ft.matchAll(/>([A-Za-z ]+)<\/button>/g)].map((m) => m[1]);
-  if (labels.join() !== 'New Match,Join Match' || /class="input"|sec-label/.test(ft)) fail(`Friend Match トップのボタンが New Match / Join Match だけでない (${labels.join(' / ')})、または入力欄が残っている (U62)`);
-  if (!/attrs\(dev, 'createMatch'\) \+ '>New Match</.test(ft) || !/attrs\(dev, 'openJoin'\) \+ '>Join Match</.test(ft)) fail('New Match / Join Match のイベントが createMatch / openJoin でない (U62)');
+  if (labels.join() !== 'New Match,Join Match' || /class="input"|sec-label/.test(ft)) fail(`Friend Match トップのボタンが New Match / Join Match だけでない (${labels.join(' / ')})、または入力欄が残っている (U63)`);
+  if (!/attrs\(dev, 'createMatch'\) \+ '>New Match</.test(ft) || !/attrs\(dev, 'openJoin'\) \+ '>Join Match</.test(ft)) fail('New Match / Join Match のイベントが createMatch / openJoin でない (U63)');
   const jd = appJs.slice(appJs.indexOf('function joinDialogHtml'), appJs.indexOf('function roomNoticeHtml'));
   for (const want of ['aria-label="Join a Match"', '<div class="d-title">Join a Match</div>', '>Match Code</div>', "attrs(dev, 'enterCode')", "attrs(dev, 'joinMatch') + '>Join</button>", "attrs(dev, 'closeJoin')", 'class="error"']) {
-    if (!jd.includes(want)) fail(`Join a Match のダイアログに ${want} が無い (U62)`);
+    if (!jd.includes(want)) fail(`Join a Match のダイアログに ${want} が無い (U63)`);
   }
   const J = 'Client.FriendMatch.Room.Join';
   const want = { [J]: ['', null], [`${J}.CodeEntered`]: ['QWERTY123', null], [`${J}.Error.NotFound`]: ['QWERTY123', 'Match not found. The code may be wrong or expired.'],
@@ -1316,32 +1316,32 @@ if (!/roomNoticeHtml/.test(appJs) || !/\.room-notice \{ display: flex/.test(read
     const sc = SCREENS[name];
     if (!sc || sc.view !== 'friendTop' || !sc.join || sc.join.input !== input || sc.join.error !== error) fail(`${name} の Join a Match が ${JSON.stringify(sc && sc.join)} (期待: ${input} / ${error})`);
   }
-  for (const name of Object.keys(SCREENS)) if (SCREENS[name].error || 'input' in SCREENS[name]) fail(`${name} にダイアログの外の入力欄・赤字がある (U62)`);
-  if (Object.keys(SCREENS).some((n) => /\.Error\.Expired$|Room\.CodeEntered$|Room\.ConnectionFailed$/.test(n) && n.startsWith('Client.'))) fail('ダイアログの外の .CodeEntered / .ConnectionFailed か、期限切れの赤字 (.Error.Expired) が残っている (U62)');
+  for (const name of Object.keys(SCREENS)) if (SCREENS[name].error || 'input' in SCREENS[name]) fail(`${name} にダイアログの外の入力欄・赤字がある (U63)`);
+  if (Object.keys(SCREENS).some((n) => /\.Error\.Expired$|Room\.CodeEntered$|Room\.ConnectionFailed$/.test(n) && n.startsWith('Client.'))) fail('ダイアログの外の .CodeEntered / .ConnectionFailed か、期限切れの赤字 (.Error.Expired) が残っている (U63)');
   // 開く・入れる・閉じる・Join
   expectFire(at('Host.MultiModeSelection', 'Client.FriendMatch.Room'), 'client.openJoin', 'Host.MultiModeSelection', J);
   expectFire(at('Host.MultiModeSelection', J), 'client.enterCode', 'Host.MultiModeSelection', `${J}.CodeEntered`);
   for (const from of [J, `${J}.CodeEntered`, `${J}.Error.NotFound`, `${J}.Error.Full`, `${J}.ConnectionFailed`]) {
     expectFire(at('Host.MultiModeSelection', from), 'client.closeJoin', 'Host.MultiModeSelection', 'Client.FriendMatch.Room');
-    if (Engine.canFire(at('Host.MultiModeSelection', from), 'client.back')) fail(`${from} で ‹ を押せる (U62: ダイアログはモーダル)`);
+    if (Engine.canFire(at('Host.MultiModeSelection', from), 'client.back')) fail(`${from} で ‹ を押せる (U63: ダイアログはモーダル)`);
   }
   if (Engine.canFire(at('Host.FriendMatch.Lobby.Waiting', J), 'client.joinMatch')) fail('Match Code を入れる前に Join で入れる');
   // 見つからない・期限切れは同じ赤字 (FB 20)。モック設定にも期限切れは無い
   expectFire(at('Host.MultiModeSelection', `${J}.CodeEntered`), 'client.joinMatch', 'Host.MultiModeSelection', `${J}.Error.NotFound`);
   expectFire(at(L('Host', 'CodeExpired'), `${J}.CodeEntered`), 'client.joinMatch', L('Host', 'CodeExpired'), `${J}.Error.NotFound`);
   expectFire(at('Host.FriendMatch.Lobby.Waiting', `${J}.Error.NotFound`), 'client.joinMatch', L('Host', 'FriendJoined'), L('Client', 'Connecting'));
-  if (TRANSITIONS.some((r) => r.when && r.when.codeResult === 'expired') || /value="expired"/.test(read('index.html'))) fail('Match Code の期限切れが見つからないときと別の結果として残っている (U62、FB 20)');
+  if (TRANSITIONS.some((r) => r.when && r.when.codeResult === 'expired') || /value="expired"/.test(read('index.html'))) fail('Match Code の期限切れが見つからないときと別の結果として残っている (U63、FB 20)');
   const sc9 = SCENARIOS.find((x) => x.id === '9');
-  if (!sc9 || Engine.replay(sc9).state.client !== `${J}.Error.NotFound` || Engine.replay(sc9).state.host !== L('Host', 'CodeExpired')) fail('シナリオ 9 (期限切れ) が "Match not found. The code may be wrong or expired." で終わらない (U62)');
+  if (!sc9 || Engine.replay(sc9).state.client !== `${J}.Error.NotFound` || Engine.replay(sc9).state.host !== L('Host', 'CodeExpired')) fail('シナリオ 9 (期限切れ) が "Match not found. The code may be wrong or expired." で終わらない (U63)');
   // 接続失敗のトーストはダイアログを開いたまま出し、ダイアログの暗幕の上に描く (タップできる)
-  if (appJs.indexOf('joinDialogHtml(dev, s.join)') === -1 || !/VIEWS\[spec\.view\]\(dev, spec\) \+ toastHtml/.test(appJs)) fail('接続失敗のトーストが Join a Match の暗幕の上に描かれない (U6 / U62)');
+  if (appJs.indexOf('joinDialogHtml(dev, s.join)') === -1 || !/VIEWS\[spec\.view\]\(dev, spec\) \+ toastHtml/.test(appJs)) fail('接続失敗のトーストが Join a Match の暗幕の上に描かれない (U6 / U63)');
   expectFire(at('Host.MultiModeSelection', `${J}.ConnectionFailed`), 'client.tapToast', 'Host.MultiModeSelection', `${J}.CodeEntered`);
   // 文言: ホスト "Cancel this match?" (Cancel Match / Keep Waiting)、クライアント "Leave this match?" (Leave / Stay)、帯と一行
-  if (SCREENS[L('Host', 'ClientLeft')].status.split('\n')[0] !== 'Your opponent left the match.') fail('クライアントが抜けたときのホストの一行が "Your opponent left the match." でない (U62)');
-  if (ctx.ROOM_NOTICES.HostLeft !== 'The host canceled the match.') fail('ホストが閉じたときのクライアントの帯が "The host canceled the match." でない (U62)');
-  if (btns(SCREENS[L('Host', 'CodeExpired')]) !== 'New Match' || SCREENS[L('Client', 'CodeExpired')].buttons[0].event !== 'openJoin') fail('期限切れの画面のボタンが New Match / Join Match (Join a Match を開く) でない (U62)');
+  if (SCREENS[L('Host', 'ClientLeft')].status.split('\n')[0] !== 'Your opponent left the match.') fail('クライアントが抜けたときのホストの一行が "Your opponent left the match." でない (U63)');
+  if (ctx.ROOM_NOTICES.HostLeft !== 'The host canceled the match.') fail('ホストが閉じたときのクライアントの帯が "The host canceled the match." でない (U63)');
+  if (btns(SCREENS[L('Host', 'CodeExpired')]) !== 'New Match' || SCREENS[L('Client', 'CodeExpired')].buttons[0].event !== 'openJoin') fail('期限切れの画面のボタンが New Match / Join Match (Join a Match を開く) でない (U63)');
 }
-console.log('ok  U62 (#1891 FB 19・20): Friend Match トップは New Match / Join Match だけ、Join a Match のダイアログ (Match Code・Join・×・赤字)、見つからない・期限切れは同じ赤字、"Room" を使わない文言');
+console.log('ok  U63 (#1891 FB 19・20): Friend Match トップは New Match / Join Match だけ、Join a Match のダイアログ (Match Code・Join・×・赤字)、見つからない・期限切れは同じ赤字、"Room" を使わない文言');
 
 // U53: Ready を送っている間・読み込み・VS 画面から先は取り消せない
 for (const [h, c] of [[L('Host', 'Ready.Confirming'), L('Client', 'Ready')], [L('Host', 'Starting'), L('Client', 'Starting')], ['Host.Opponent', 'Client.Opponent'], ['Host.Game.Countdown', 'Client.Game.Countdown']]) {

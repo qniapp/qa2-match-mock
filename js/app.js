@@ -447,7 +447,7 @@
       return '<span class="mc-label">モック操作 (検索中):</span>' + btn('leaveApp', 'アプリを離れる') + btn('searchTimeout', '60 秒たつ');
     }
     if (/\.FriendMatch\.Lobby\./.test(state)) {
-      return '<span class="mc-label">モック操作 (ルーム):</span>' + btn('leaveApp', 'アプリを離れる') + btn('disconnect', '切断する');
+      return '<span class="mc-label">モック操作 (マッチ):</span>' + btn('leaveApp', 'アプリを離れる') + btn('disconnect', '切断する');
     }
     if (/\.RematchRequested$/.test(state)) {
       var other = dev === 'host' ? 'client' : 'host';

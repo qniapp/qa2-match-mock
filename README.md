@@ -1787,6 +1787,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
    → 変更 (2026-10-07): "Ready to start" は "Friend is ready!" (U1)、"Match code expired" は "Match code expired." (U7)、"Connection failed" は 2 行目に説明 (U6)、"Connection lost" のトーストは無くなり部屋の画面に "Connection lost. Reconnecting…" (U5)。"Reconnecting…" / "Your friend left." の帯を足した (U19 / U17)
 3. ボタンは何が起きるかを書く: "Create a new match?" / "Join another match?" は **Keep Current Match**、"Cancel this match?" は **Keep Waiting** / **Cancel Match**
    → 変更 (2026-10-07): Cancel Match は **Close Room** (確認は "Close this room?"、U14)、クライアントは **Leave Room** (確認は "Leave this room?"、U9)。残るボタンはどちらも **Keep Waiting** (U11)
+   → 変更 (2026-10-10 の U57、2026-10-17 の U63): 部屋を出るボタンは無くなり、‹ の確認だけ。ホストは "Cancel this match?" (**Cancel Match** / **Keep Waiting**)、クライアントは "Leave this match?" (**Leave** / **Stay**)
 4. フレンド待機の文言は **"Waiting for your friend…"** (三点リーダー 1 文字)
 5. マッチ成立時に **VS 画面** (両者の名前・ランク・あいさつ + 絵文字、約 2.5 秒) → ~~**3 · 2 · 1**~~ → ゲーム開始 (プレースホルダー)。
    VS 画面のプレイヤー情報はモック用の架空データです。
@@ -1811,12 +1812,13 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 | 図05 の "Client User / left the match." → 自動で "Waiting for your friend…" | "Your friend left. Waiting for another friend…" (自動では進まない) | U34 の決定 |
 | 図06 の "Unable to start the match. Please try again." と開始ボタン | 読み込みが 20 秒で終わらなければ "Match could not start. Please try again."、同期に失敗したら "Couldn’t start the match. Please ready up again." で Ready 画面に戻る | U32 / U15 の決定 |
 | 図02 の赤いトースト "Ready to start" | 赤い帯 "Friend is ready!" (友だちが Ready を押したとき) | U1 の決定 |
-| Cancel Match (ホスト) / Leave Match (クライアント) | Close Room / Leave Room | U14 / U9 の決定 |
-| "Cancel this match?" / "Leave this match?" と "Go Back" | "Close this room?" (題名は 2026-10-08 に U51 で決定) / "Leave this room?" と Keep Waiting | U9 / U11 / U14 / U51 の決定 |
+| Cancel Match (ホスト) / Leave Match (クライアント) | ボタンは無く、左上の ‹ が確認を出す (確認のボタンは Cancel Match / Leave) | U14 / U9 の決定 (Close Room / Leave Room) のあと、U57 / U63 |
+| "Cancel this match?" / "Leave this match?" と "Go Back" | "Cancel this match?" と Keep Waiting / "Leave this match?" と Stay | U11 / U63 の決定 (2026-10-07 から 2026-10-17 までは "Close this room?" / "Leave this room?" と Keep Waiting、U9 / U14 / U51) |
 | クライアントの "Match expired." / トーストの "Match code expired" | "Match code expired." | U7 の決定 |
 | 決定の文言の "..." ("Waiting for opponent..." など) | "…" (三点リーダー 1 文字) | 合意 4 の表記にそろえた ("Waiting for opponent…" / "Waiting for them to reconnect…" / "Confirming…" / "Your friend left. Waiting for another friend…") |
 
 "Leave this match?" の "Go Back" は合意の対象外だったので未決 U11 にしていましたが、2026-10-07 に "Keep Waiting" に決まりました (確認は "Leave this room?" にまとめた)。
+2026-10-17 の U63 で、クライアントの確認は "Leave this match?" と Leave / Stay になりました。
 
 ## 未決一覧
 
@@ -1835,7 +1837,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   詳しくは「2026-10-17 の決定 (U62: Random Match の画面は Ready で探し始める)」を見てください。
 - **U61 Back to Friend Match は両者を同じ部屋 (同じ Match Code) へ戻す。部屋を閉じるのはホストの ‹ だけ** - 決定 (#1891 の FB の 11 番目、2026-10-17)  
   - 先に押した側は同じ部屋で相手を待ち、相手には "Your friend went back to the room. Rematch is not available."。相手も押すと Ready 画面。
-  - ホストの ‹ ("Close this room?") で部屋を閉じ、クライアントの ‹ ("Leave this room?") はクライアントだけが抜ける。
+  - ホストの ‹ ("Cancel this match?") で部屋を閉じ、クライアントの ‹ ("Leave this match?") はクライアントだけが抜ける (確認の文言は U63)。
   詳しくは「2026-10-17 の決定 (U61: Back to Friend Match で両者を同じ部屋へ戻す)」を見てください。
 - **U60 ランダム対戦の結果画面: 勝った側は Find Next Opponent、負けた側は同じ相手への Rematch** - 決定 (#1891 の FB の 10 番目、2026-10-17)  
   - 負けた側が Rematch を押すと "Waiting for opponent to accept…"、相手 (勝った側) は Accept / Decline。Accept したときだけ再戦。断った・応答がないときは結果画面に一行。
@@ -1851,7 +1853,8 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   詳しくは「2026-10-10 の決定 (U58: Match Code の期限を出さず、ホストに一行)」を見てください。
 - **U57 部屋の出口は左上の ‹ だけ** - 決定 (YoshiyukiN さんの FB、#1891 の 1・2 番目、2026-10-10)  
   - 部屋の画面の Close Room (ホスト) と Leave Room (クライアント) のボタンを無くし、左上の ‹ に統一する。ホストの ‹ は部屋を閉じ、クライアントの ‹ は部屋を抜ける。
-  - ‹ でも確認を出す: ホストは "Close this room?" ([Close Room] / [Keep Waiting])、クライアントは "Leave this room?" ([Leave Room] / [Keep Waiting])。本文は U34。Keep Waiting で部屋に残る。
+  - ‹ でも確認を出す: ホストは "Cancel this match?" ([Cancel Match] / [Keep Waiting])、クライアントは "Leave this match?" ([Leave] / [Stay])。本文は U34。Keep Waiting / Stay で部屋に残る。
+    文言は 2026-10-17 の U63 (FB 19・20) で変えた (決めたときは "Close this room?" / "Leave this room?" と [Close Room] / [Leave Room]・[Keep Waiting])。
   - 部屋を残したまま別の画面へは移れない (U14 の離席と帯、U12 の確認は無くなった)。
   詳しくは「2026-10-10 の決定 (U57: 部屋の出口は ‹ だけ)」を見てください。
 - **U56 Profile (絵文字とあいさつ)** - 決定 (高宮さん 2026-10-08)  
@@ -1877,7 +1880,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   - **U48** VS 画面は架空の Rank をやめて "Rating {n}"。Friend Match でも出す。
   - **U49** スタンプのミュートは同じ相手と続けて対戦している間 (再戦を含む) だけ。自分のスタンプは自分に見え、相手には知らせない。ボタンは "Mute opponent emotes" / "Unmute opponent emotes"。**#1891 の FB 8 でミュートの設定ごとやめた**。
   - **U50** 再戦が取り消し・辞退・期限切れになったら、もう一方にも "Rematch request cancelled" / "Rematch declined" / "Rematch request expired"。一行は次の操作まで残り、Rematch を押せないのは 3 秒。
-  - **U51** ホストの確認の題名は "Close this room?" のまま。**U12 のクライアント向けの本文 ("This will leave your current room. Your friend’s room will stay open.") は、出す場面が無いので保留**。
+  - **U51** ホストの確認の題名は "Close this room?" のまま (2026-10-17 の U63 で "Cancel this match?")。**U12 のクライアント向けの本文 ("This will leave your current room. Your friend’s room will stay open.") は、出す場面が無いので保留**。
   - **U52** 切断した側には "Connection lost. Reconnecting…" と残りの秒数。U32 で戻れなかった側には "Could not reconnect. The match did not start."。U5 でホストが戻らなかったとき、クライアントには "The room was closed." ("You left the room" とは出さない)。部屋のお知らせはモーダルではない帯で、Close で閉じる (Match Code を入れても消えない)。
   - **U53** 今のモックのまま。Ready は送っている間と VS 画面から先は取り消せない (「VS 画面までは取り消せる」案は採らない)。
   - **U54** ランダム対戦と再戦の開始前 (VS 画面・カウントダウン) の切断は 20 秒待ち、戻らなければ取りやめ (勝敗なし・レートは変わらない)。ランダム対戦は Search again / Close。再戦は Ready 画面に戻らず、戻ったら VS 画面から。
@@ -1891,15 +1894,15 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   - **U3** VS 画面中の切断は U32 で決まった (Ready 画面に戻して相手は 20 秒待つ。トグルは削除)。
   - **U4** Ready を押せるのは、サーバーが参加を確認し、両者が部屋の画面にいて、同期が終わってから。1.5 秒の固定の待ち時間はやめた。同期の前は、ホストに "Friend joined!"、クライアントに "Connecting…"。
   - **U5** 部屋での切断は 20 秒まで自動で再接続し、その間は両者の Ready を消す。切れた側 "Connection lost. Reconnecting…"、残った側 "Your friend disconnected. Waiting for them to reconnect…"。
-    20 秒で戻れなければ、切れた側に "Could not reconnect." と Retry / Leave Room。クライアントは Friend Match トップへ戻り、ホストは空の部屋を残す。**20 秒は QA² 側の仮の値**。
+    20 秒で戻れなければ、切れた側に "Could not reconnect." と Retry / Leave Room (U57 で Leave Room は無くなり Retry と ‹)。クライアントは Friend Match トップへ戻り、ホストは空の部屋を残す。**20 秒は QA² 側の仮の値**。
   - **U6** "Connection failed" は Create / Join がサーバーに届かないときだけ。ホスト "Couldn’t create a room. Try again."、クライアント "Couldn’t join the room. Try again."。Match Code の誤り・期限切れ・満員・閉じた部屋の表示とは別。
   - **U7** Match Code の期限は 30 分で、サーバーが数える。読み込み・VS 画面・カウントダウンと U32 の再接続待ちの間は時計が止まる。切れたら両者に "Match code expired."。**30 分は QA² 側の仮の値**。部屋の画面の残り時間の表示は U58 (2026-10-10) で無くなった。
   - **U8** ホストが閉じたあとのクライアントは U34 で決まった ("Room closed. The host left." で Friend Match トップへ)。
-  - **U9** クライアントには Leave Room。Leave Room と ‹ は同じ確認: "Leave this room?" / "No match has started. No win or loss will be recorded." / Leave Room・Keep Waiting。
+  - **U9** クライアントの ‹ は確認: "Leave this match?" / "No match has started. No win or loss will be recorded." / Leave・Stay (U63)。決めたときは Leave Room のボタンもあり、確認は "Leave this room?" と Leave Room・Keep Waiting (ボタンは U57 で無くなった)。
   - **U10** 期限切れの画面に Ready を出さない。ホストは Create Match、クライアントは Join Match。
   - **U11** 確認の "Go Back" は "Keep Waiting" に。
   - **U12** "Create a new match?" / "Join another match?" の本文は役割で変える (ホスト: "This will close your current room. Your friend will return to Friend Match."、クライアント: "This will leave your current room. Your friend’s room will stay open.")。古い部屋は新しい部屋を作れた・入れたときだけ閉じる。クライアント向けの本文を出す場面がモックに無いことは U51 (2026-10-08: クライアント向けの本文は保留)。
-  - **U14** ホストの ‹ は部屋を残して帯で示す。閉じるのは Close Room。別の画面へ移ると自分の Ready は消える。
+  - **U14** ホストの ‹ は部屋を残して帯で示す。閉じるのは Close Room。別の画面へ移ると自分の Ready は消える。U57 で離席と Close Room は無くなり、ホストの出口は ‹ の確認 "Cancel this match?" (Cancel Match / Keep Waiting、U63) だけ。
   - **U15** 同期に失敗したら両者の Ready を消し、ふつうの Ready の流れ (60 秒の期限つき) からやり直す。Match Code が有効な間は何度でも。"Couldn’t start the match. Please ready up again."。
   - **U16** 青 / 緑の帯もタップすると部屋の画面に戻る。どの帯のタップでも Ready にはならない。
   - **U17** "Friend joined!" は本当に入った・入り直したときだけ。ホストの離席中にクライアントが抜けたら "Your friend left." を一度だけ。
@@ -1921,7 +1924,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   片方が押すと、押した側は "Waiting for opponent…"、相手側は "Opponent is ready. Are you?" (U36)。3-2-1 のあとサーバーが確認するまでは試合開始ではない (U32)。
   詳しくは「Ready 画面と開始前の切断」を見てください。
 - **U32 VS 画面・カウントダウン中の切断: Ready を消して止め、相手は 20 秒待つ。読み込みは 20 秒まで** - 決定 (高宮さん 2026-10-07)  
-  止めて両者の Ready を消す。相手には "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Leave Room。戻ったら両者ともう一度 Ready を押し、カウントダウンは 3 から。
+  止めて両者の Ready を消す。相手には "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウンと Leave Room (U57 で Leave Room は無くなり ‹ だけ)。戻ったら両者ともう一度 Ready を押し、カウントダウンは 3 から。
   戻らなければ "Match cancelled. Opponent did not reconnect." (結果なし、ホストは同じ Match Code のままルームに残る)。ホストが切断したときは、クライアントに "Room closed. The host disconnected." を出して Friend Match トップへ。
   読み込みは 20 秒までで、終わらなければ "Match could not start. Please try again." で両者とも Ready 画面へ。試合が始まるのは 3-2-1 のあとサーバーが確認したときで、そこからはこれまでのルール (U28 / U38)。
   **20 秒は QA² 側の仮の値**。切断した側の画面は U52、ランダム対戦・再戦の VS 画面中の切断は U54 にしました (どちらも 2026-10-08 に決定)。
@@ -1931,7 +1934,8 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 - **U34 取り消しと退出** - 決定 (高宮さん 2026-10-07)  
   Cancel Ready してもルームに残り、相手には "Opponent is no longer ready."。クライアントが抜けるとホストに "Your friend left. Waiting for another friend…" (Match Code は同じ)。
   ホストがルームを閉じるとクライアントに "Room closed. The host left." を出して Friend Match トップへ。抜ける前に確認 "No match has started. No win or loss will be recorded."。
-  ボタンはクライアントが Leave Room (U9)、ホストが Close Room (U14)、確認の題名は "Leave this room?" (U9)、残るボタンは Keep Waiting (U11)。ホストの確認の題名は U51 ("Close this room?"、2026-10-08)。
+  出口はどちらも ‹ の確認 (U57)。ホストは "Cancel this match?" と Cancel Match / Keep Waiting、クライアントは "Leave this match?" と Leave / Stay (U63)。
+  決めたときのボタンはクライアントが Leave Room (U9)、ホストが Close Room (U14)、確認の題名は "Leave this room?" / "Close this room?" (U51、2026-10-08) でした。
 - **U35 クライアントが別画面へ移る / ‹ は退出と同じ確認。アプリを離れるとその人の Ready が消える** - 決定 (高宮さん 2026-10-07)  
   図07 の「別画面へ移ってもマッチを残す」流れは無くなりました。アプリを離れたときに相手に出す表示は U53 にしました (2026-10-08 に決定: Cancel Ready と同じ "Opponent is no longer ready.")。
   ホストの ‹ は同じ日の U14 で変わりました (部屋を残して帯で示し、ホストの Ready は消える)。確認を出すのはクライアントだけです (U9)。
@@ -1970,18 +1974,19 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 - **U42 MATCH MENU 中も BGM を下げない** - 決定 (高宮さん 2026-10-07、案A)  
   実ゲームのポーズは BGM を -5dB 下げる (ダッキング) が、MATCH MENU では試合が続くので BGM を下げない。モックには音が無いので、決定の記録だけ。
 
-- **U20 結果画面: 勝敗・両者の名前・スコア・終わった理由を出す** - 決定 (高宮さん 2026-10-07)  
+- **U20 結果画面: 勝敗・両者の名前・終わった理由とレーティングの変化を出す (スコアは出さない)** - 決定 (高宮さん 2026-10-07)  
   結果画面に勝敗 (Win / Lose / Draw / No contest)、両者の名前、スコア、終わった理由を出す。スコアが決まっていないときは "----" などを出さずに行ごと出さない。
   2026-10-17 の qniapp/qa2#1891 FB 7 で、スコアはどの結果画面にも出さず、勝敗とレーティングの変化 (例: "1000 → 1012 (+12)") だけにしました。
   通常の決着のときの終わった理由の文言 (モックは "Match finished") と、引き分けになる条件は決定に無いので U44 にしました (2026-10-08 に決定: "Time is up" / "Same score when time ran out")。
 - **U21 レーティング: Friend Match は変わらない。ランダム対戦は Elo (初期値 1000、K=24)。同じ相手との再戦は変わらない** - 決定 (高宮さん 2026-10-07)  
   Friend Match は "No rating change (friend match)"。ランダム対戦は Elo で、例えば "1000 → 1012 (+12)"。ランダム対戦で同じ相手と続けて再戦したときは変わらない。
   **初期値 1000 と K=24 は QA² 側の仮の値** (変わりうる)。VS 画面の "Rank" との関係は U48 にしました (2026-10-08 に決定: "Rating {n}")。
-- **U22 結果画面のボタン** - 決定 (高宮さん 2026-10-07)  
+- **U22 結果画面のボタン: Friend Match は Rematch / Back to Friend Match、ランダム対戦は Find Next Opponent / Rematch / Back to Random Match** - 決定 (高宮さん 2026-10-07)  
   Friend Match: Rematch / Back to Friend Match。ランダム対戦: Find Next Opponent / Rematch / Back to Online。降参した側は Back to Online だけ (U41)。
   2026-10-17 の U59 で、ランダム対戦の Back to Online は Back to Random Match に、降参した側は勝った側と同じ戻るボタンになりました。
 - **U23 再戦: どちらからでも申し込め、相手が応じたらそのまま VS 画面へ。同時に申し込んだら成立** - 決定 (高宮さん 2026-10-07)
-- **U24 戻り先: Friend Match は Friend Match トップ (前の Match Code は無効)、ランダム対戦は Online Battle** - 決定 (高宮さん 2026-10-07)  
+- **U24 戻り先: Back to Friend Match は同じ Match Code の部屋、Back to Random Match は Random Match の画面** - 決定 (高宮さん 2026-10-07)  
+  決めたときは、Friend Match は Friend Match トップ (前の Match Code は無効)、ランダム対戦は Back to Online で Online Battle へ戻っていました。
   降参した側は Friend Match でも Online Battle に戻る (U41 で決定済み)。2026-10-17 の U59 で、ランダム対戦は Random Match の画面へ、降参した側も勝った側と同じ戻り先になりました。
   2026-10-17 の U61 で、Friend Match の Back to Friend Match は同じ Match Code の同じ部屋へ戻るようになりました。
 - **U25 相手が結果画面を抜けたら "Your opponent left. Rematch is not available."** - 決定 (高宮さん 2026-10-07)  

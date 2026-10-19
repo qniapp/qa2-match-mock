@@ -83,19 +83,20 @@ var Engine = (function () {
         // copy: { 写す先: 写す元 } は、発火する前の付属状態の値を写す (U56 の相手に見せる値)
         else if (has(row.copy, key)) next[key] = state[row.copy[key]];
         else if (f === 'Dialog' && has(row.dialog, d)) next[key] = row.dialog[d];
-        // 画面が変わったら、その画面で続かない付属状態は初期値に戻す (ダイアログは必ず閉じる)
-        else if (next[d] !== state[d] && !DEVICE_FIELDS[f].keeps(next[d])) next[key] = initialOf(f, d);
+        // 画面が変わったら、その画面で続かない付属状態は初期値に戻す (確認のダイアログは必ず閉じる。Profile は開ける画面の間は残る、U68)
+        else if (next[d] !== state[d] && !DEVICE_FIELDS[f].keeps(next[d], state[key])) next[key] = initialOf(f, d);
       });
     });
     Object.keys(SESSION_FIELDS).forEach(function (k) { if (has(row.set, k)) next[k] = row.set[k]; });
     return next;
   }
 
-  // 端末の上の状態名の後ろに付ける付属状態 (ダイアログ・送ったスタンプ)
+  // 端末の上の状態名の後ろに付ける付属状態 (ダイアログ・トースト・送ったスタンプ)
   function extrasLabel(state, d) {
     var dlg = state[d + 'Dialog'];
+    var toast = state[d + 'Toast'];
     var stamp = state[d + 'Stamp'];
-    return (dlg ? ' + 🗨 ' + dlg : '') + (stamp ? ' + 💬 ' + stamp : '');
+    return (dlg ? ' + 🗨 ' + dlg : '') + (toast ? ' + 🔔 ' + toast : '') + (stamp ? ' + 💬 ' + stamp : '');
   }
 
   // 一致する行があれば { state, row }、無ければ null

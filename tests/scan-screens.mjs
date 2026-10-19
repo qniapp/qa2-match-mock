@@ -128,7 +128,7 @@ try {
     console.log('ok  タブの名前は「決定」で、モック設定は閉じています');
     console.log('ok  端末の画面に仮・未決・決定の印、U 番号、モックの注記、日本語はありません');
     console.log(`ok  あいさつを日本語 (JA) にした端末でも、Profile と VS 画面のあいさつだけが日本語で、収まっています (${ja.frames} 枚)`);
-    console.log(`ok  Profile: Random Match / Friend Match トップの上にダイアログで開き、選ぶとすぐ保存して "Saved" を出し、Esc・暗幕では閉じず ‹ で閉じ、選んだものは開き直しても残り、シナリオは localStorage に関係なく最初の値から`);
+    console.log(`ok  Profile: Random Match / Friend Match トップ / 部屋の画面の上にダイアログで開き、選ぶとすぐ保存し ("Saved" は出さない)、Esc・暗幕では閉じず右上の × で閉じ、選んだものは開き直しても残り、シナリオは localStorage に関係なく最初の値から`);
   }
 } finally {
   await cleanup();
@@ -190,8 +190,8 @@ function checkPage() {
   }, 1500));
 }
 
-// ページの中で実行する。自由操作で Random Match / Friend Match トップの Profile を押すと、画面はそのままダイアログが開き (#1891 の FB 12)、
-// 選ぶとすぐ localStorage に保存して "Saved" を出す。閉じるのは左上の ‹ だけで、Esc や暗幕を押しても閉じない (決定 U56、#1891 の FB 14)
+// ページの中で実行する。自由操作で Random Match / Friend Match トップ / 部屋の画面 (U68) の Profile を押すと、画面はそのままダイアログが開き (#1891 の FB 12)、
+// 選ぶとすぐ localStorage に保存する ("Saved" は出さない)。閉じるのは右上の × だけで、Esc や暗幕を押しても閉じない (決定 U56 / U64、#1891 の FB 14)
 function profileSave() {
   const findings = [];
   const page = (what) => findings.push(`Profile: ${what}`);
@@ -202,7 +202,8 @@ function profileSave() {
   const press = (sel) => { const el = host.querySelector(`.screen ${sel}`); if (!el || el.hasAttribute('data-norow')) { page(`${sel} を押せない (${stateName()})`); return; } el.focus(); el.click(); }; // 押すボタンにフォーカスしてから押す (指やマウスで押したときと同じ)
   const preview = () => [...host.querySelectorAll('.pf-card .vs-emoji, .pf-card .vs-name, .pf-card .vs-greet')].map((e) => e.textContent).join(' ');
   const dialog = () => host.querySelector('.screen .dim > .pf-dialog[role="dialog"][aria-modal="true"]');
-  const savedNote = () => { const n = host.querySelector('.pf-saved[role="status"]'); return n ? n.textContent : null; };
+  const close = '.pf-dialog > .d-close[aria-label="Close"]';
+  const noSaved = (when) => { if (dialog() && (/Saved/.test(dialog().textContent) || dialog().querySelector('.pf-saved, .pf-back'))) page(`${when}に "Saved" か ‹ がある (U64)`); };
   const stored = () => { const v = JSON.parse(localStorage.getItem(KEY) || 'null'); return v && `${v.host.emoji} ${v.host.greeting}`; };
   if (host.querySelector('.screen [data-ev="profile"]')) page('Online Battle に Profile がある');
   press('[data-ev="friendMatch"]');
@@ -212,37 +213,48 @@ function profileSave() {
   const title = dialog() && document.getElementById(dialog().getAttribute('aria-labelledby'));
   if (!title || title.textContent !== 'Profile') page('ダイアログの aria-labelledby が題名 "Profile" を指していない');
   if (!host.querySelector('.screen .friend-top, .screen .body')) page('ダイアログの後ろに Friend Match トップが無い');
-  if (document.activeElement !== host.querySelector('.pf-back')) page('ダイアログを開いたときにフォーカスが ‹ に無い');
+  if (document.activeElement !== host.querySelector(`.screen ${close}`)) page('ダイアログを開いたときにフォーカスが × に無い');
   if (preview() !== '\u{1F44B} Yasuhito \u201cHello!\u201d') page(`開いたときの見本が ${preview()}`);
-  if (savedNote() !== '') page(`何も選ぶ前に "${savedNote()}" が出ている`);
-  if (dialog() && dialog().querySelector('.pf-close, .pf-actions, [data-ev="dialog.saveProfile"]')) page('ダイアログに Save / Cancel / × が残っている');
+  noSaved('何も選ぶ前');
+  if (dialog() && dialog().querySelector('.pf-close, .pf-actions, [data-ev="dialog.saveProfile"]')) page('ダイアログに Save / Cancel が残っている');
   press('[data-ev="dialog.pickEmoji.robot"]');
   if (stored() !== '\u{1F916} hello') page(`絵文字を選んでもすぐ保存されない (${localStorage.getItem(KEY)})`);
   press('[data-ev="dialog.pickGreeting.goodLuck"]');
   if (preview() !== '\u{1F916} Yasuhito \u201cGood luck!\u201d') page(`選んでも見本が変わらない (${preview()})`);
   if (stored() !== '\u{1F916} goodLuck') page(`あいさつを選んでもすぐ保存されない (${localStorage.getItem(KEY)})`);
-  if (savedNote() !== '\u2713 Saved') page(`選んだあとに "Saved" が出ない (${savedNote()})`);
+  noSaved('選んだあと');
   if (document.activeElement !== host.querySelector('[data-ev="dialog.pickGreeting.goodLuck"]')) page('選んだあとにフォーカスが選んだボタンに残らない');
   // Esc と暗幕では閉じない
   document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
   if (!dialog() || stateName() !== 'Host.FriendMatch.Room + 🗨 profile') page(`Esc で閉じた (${stateName()})`);
   host.querySelector('.screen .dim').click();
   if (!dialog() || stateName() !== 'Host.FriendMatch.Room + 🗨 profile') page(`ダイアログの外 (暗幕) を押すと閉じた (${stateName()})`);
-  // 左上の ‹ で閉じると、Friend Match トップのまま選んだものが残る
-  press('.pf-back');
-  if (dialog() || stateName() !== 'Host.FriendMatch.Room') page(`‹ で閉じないか、Friend Match トップから移った (${stateName()})`);
-  if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F916}') page('‹ で閉じたあとの Profile のボタンの絵文字が 🤖 でない');
+  // 右上の × で閉じると、Friend Match トップのまま選んだものが残る
+  press(close);
+  if (dialog() || stateName() !== 'Host.FriendMatch.Room') page(`× で閉じないか、Friend Match トップから移った (${stateName()})`);
+  if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F916}') page('× で閉じたあとの Profile のボタンの絵文字が 🤖 でない');
   press('[data-ev="profile"]');
   if (preview() !== '\u{1F916} Yasuhito \u201cGood luck!\u201d') page(`開き直した見本が ${preview()}`);
-  if (savedNote() !== '') page('開き直しても "Saved" が残っている');
-  press('.pf-back');
+  press(close);
+  // 部屋の画面 (U68) でも開け、選んだものはこの対戦の相手に見せる値になる。Match Code のコピーで "Match code copied" のトースト (U69)
+  press('[data-ev="createMatch"]');
+  press('[data-ev="copyCode"]');
+  const copied = host.querySelector('.screen .toast');
+  if (!copied || copied.textContent !== 'Match code copied' || stateName() !== 'Host.FriendMatch.Lobby.Waiting + 🔔 codeCopied') page(`Match Code をコピーしてもトーストが出ない (${stateName()} / ${copied && copied.textContent})`);
+  press('[data-ev="profile"]');
+  if (!dialog() || !/^Host\.FriendMatch\.Lobby\.Waiting( \+ 🔔 codeCopied)? \+ 🗨 profile$/.test(stateName().replace(' + 🗨 profile + 🔔 codeCopied', ' + 🔔 codeCopied + 🗨 profile'))) page(`部屋の画面で Profile を押しても、画面がそのままダイアログが開かない (${stateName()})`);
+  press('[data-ev="dialog.pickEmoji.star"]');
+  press(close);
+  if (dialog() || !/^Host\.FriendMatch\.Lobby\.Waiting/.test(stateName()) || host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F31F}') page(`部屋の画面で × で閉じないか、選んだものが残らない (${stateName()})`);
+  press('.back');
+  press('[data-ev="dialog.cancelMatch"]');
   // Random Match の画面 (Ready を待っている間、U62) でも開ける
   press('.back');
   press('[data-ev="randomMatch"]');
   press('[data-ev="profile"]');
   if (!dialog() || stateName() !== 'Host.Matchmake + 🗨 profile') page(`Random Match (Ready を待っている) で Profile を押しても、画面がそのままダイアログが開かない (${stateName()})`);
-  press('.pf-back');
-  if (dialog() || stateName() !== 'Host.Matchmake') page(`‹ で閉じないか、Random Match (Ready を待っている) から移った (${stateName()})`);
+  press(close);
+  if (dialog() || stateName() !== 'Host.Matchmake') page(`× で閉じないか、Random Match (Ready を待っている) から移った (${stateName()})`);
   // Random Match で相手を探している間に開いて選ぶと、相手を探し続けたまま保存する
   press('[data-ev="startSearch"]');
   press('[data-ev="profile"]');
@@ -250,8 +262,8 @@ function profileSave() {
   press('[data-ev="dialog.pickEmoji.rocket"]');
   press('[data-ev="dialog.pickGreeting.bringItOn"]');
   if (stateName() !== 'Host.Matchmake.Searching + 🗨 profile') page(`選ぶと Random Match から移るか、ダイアログが閉じる (${stateName()})`);
-  press('.pf-back');
-  if (dialog() || stateName() !== 'Host.Matchmake.Searching') page(`‹ で閉じないか、Random Match から移った (${stateName()})`);
+  press(close);
+  if (dialog() || stateName() !== 'Host.Matchmake.Searching') page(`× で閉じないか、Random Match から移った (${stateName()})`);
   if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F680}') page('閉じたあとの Profile のボタンの絵文字が 🚀 でない');
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
   if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'bringItOn' || saved.client.emoji !== '\u{1F60E}') page(`選んだものが保存されない (${localStorage.getItem(KEY)})`);
@@ -385,8 +397,8 @@ function scan(only, wantLang = 'en') {
         if (evs !== 'net.recovered,timer.disconnectTimeout') findings.push(`${at}: 端末の下のモック操作で再接続 / 20 秒たつを押せない (${evs})`);
         if (screen.querySelector('.g-menu')) findings.push(`${at}: 切断を待つ間にメニューボタンがある`);
       }
-      if (screen.querySelector('.m-dim') && !/\.Game\.(MatchMenu|SurrenderConfirm)\b/.test(state) && !isWaiting) findings.push(`${at}: 暗幕がある`);
-      if (/\.Game\.(MatchMenu|SurrenderConfirm)\b/.test(state) && screen.querySelector('.m-dim.paused')) findings.push(`${at}: MATCH MENU の暗幕が止まった表示 (U37)`);
+      if (screen.querySelector('.m-dim') && !/\.Game\.MatchMenu\b/.test(state) && !isWaiting) findings.push(`${at}: 暗幕がある`);
+      if (/\.Game\.MatchMenu\b/.test(state) && screen.querySelector('.m-dim.paused')) findings.push(`${at}: MATCH MENU の暗幕が止まった表示 (U37)`);
       // VS 画面 (決定 U48): 両者のカードに "Rating 1000"。Rank は無い
       if (screen.querySelector('.vs')) {
         const ratings = [...screen.querySelectorAll('.vs-card .vs-rating')].map((e) => e.textContent);
@@ -409,15 +421,16 @@ function scan(only, wantLang = 'en') {
           if (card.includes("'")) findings.push(`${at}: VS 画面の ${who} のあいさつにまっすぐな ' (’ にそろえる)`);
         });
       }
-      // Profile のボタン (決定 U56、#1891 の FB 12): Random Match (相手を探している画面) と Friend Match トップの右上にだけあり、保存した絵文字を添える。
-      // 題名と重ならず、画面に収まる。押せないのはダイアログを開いている間 (と、"No opponent found." の後ろ) だけ
+      // Profile のボタン (決定 U56、#1891 の FB 12): Random Match (相手を探している画面)、Friend Match トップ、‹ を押せる部屋の画面 (期限切れを除く、U68) の右上にだけあり、
+      // 保存した絵文字を添える。題名と重ならず、画面に収まる。押せないのはダイアログを開いている間 (と、"No opponent found." の後ろ) だけ
       const pItem = screen.querySelector('.hdr-profile');
-      const pWant = /^(Host|Client)\.(Matchmake(\.Searching|\.NextOpponent)?|FriendMatch\.Room(\.[A-Za-z.]+)?)( \+|$)/.test(state) && !/Matchmake\..*NotFound/.test(state);
+      const inLobby = /\.FriendMatch\.Lobby\./.test(current[d]) && !/\.CodeExpired$/.test(current[d]) && screen.querySelector('.hdr button.back');
+      const pWant = (/^(Host|Client)\.(Matchmake(\.Searching|\.NextOpponent)?|FriendMatch\.Room(\.[A-Za-z.]+)?)( \+|$)/.test(state) && !/Matchmake\..*NotFound/.test(state)) || !!inLobby;
       if (pWant !== !!pItem || screen.querySelectorAll('[data-ev="profile"]').length !== (pWant ? 1 : 0)) findings.push(`${at}: Profile のボタンが ${pItem ? 'ある' : '無い'}`);
       if (pItem) {
         if (pItem.textContent !== `${current[d + 'Emoji']}Profile` || pItem.getAttribute('aria-haspopup') !== 'dialog') findings.push(`${at}: Profile のボタンが ${pItem.textContent}`);
         // Join a Match のダイアログ (U63) もモーダルなので、開いている間は押せない
-        if (pItem.hasAttribute('data-norow') !== (/ 🗨 profile/.test(state) || /\.FriendMatch\.Room(\.[A-Za-z]+)?\.Join\b/.test(state))) findings.push(`${at}: Profile のボタンを押せるかが違う`);
+        if (pItem.hasAttribute('data-norow') !== (current[d + 'Dialog'] !== null || /\.FriendMatch\.Room(\.[A-Za-z]+)?\.Join\b/.test(state))) findings.push(`${at}: Profile のボタンを押せるかが違う`);
         const sr = screen.getBoundingClientRect();
         const r = pItem.getBoundingClientRect();
         const t = document.createRange();
@@ -426,18 +439,21 @@ function scan(only, wantLang = 'en') {
         if (r.top < sr.top || r.right > sr.right - 8) findings.push(`${at}: Profile のボタンが画面の端からはみ出している`);
         if (tr.right > r.left - 6 && tr.left < r.right) findings.push(`${at}: Profile のボタンが題名と重なっている`);
       }
-      // Profile のダイアログ (決定 U56、#1891 の FB 12 / FB 14): ‹・題名・見本・絵文字 10・あいさつ 10・"Saved" が画面に収まって重ならず、選んだものが 1 つずつ。Save / Cancel / × は無い
+      // Profile のダイアログ (決定 U56、#1891 の FB 12 / FB 14): 題名・右上の × (U64)・見本・絵文字 10・あいさつ 10 が画面に収まって重ならず、選んだものが 1 つずつ。Save / Cancel・‹・"Saved" は無い
       const pfDialog = screen.querySelector('.dim > .pf-dialog');
       if (/ 🗨 profile/.test(state) !== !!pfDialog) findings.push(`${at}: Profile のダイアログが ${pfDialog ? 'ある' : '無い'}`);
       if (pfDialog) {
         if (pfDialog.getAttribute('role') !== 'dialog' || pfDialog.getAttribute('aria-modal') !== 'true') findings.push(`${at}: Profile のダイアログに role="dialog" / aria-modal が無い`);
-        const back = pfDialog.querySelector('.pf-head > .pf-back');
-        if (!back || back.getAttribute('aria-label') !== 'Back' || back.textContent !== '‹' || back.hasAttribute('data-norow')) findings.push(`${at}: Profile のダイアログの左上の ‹ を押せない`);
+        const close = pfDialog.querySelector(':scope > .d-close');
+        if (!close || close.getAttribute('aria-label') !== 'Close' || close.textContent !== '\u00d7' || close.hasAttribute('data-norow')) findings.push(`${at}: Profile のダイアログの右上の × を押せない (U64)`);
         const ht = pfDialog.querySelector('.pf-head .d-title').getBoundingClientRect();
-        if (back && back.getBoundingClientRect().right > ht.left) findings.push(`${at}: Profile のダイアログの ‹ が題名の左に無い`);
-        if (pfDialog.querySelectorAll('button').length !== 1 + PROFILE_EMOJIS.length + PROFILE_GREETINGS.length || pfDialog.querySelector('.pf-close, .pf-actions, .btn')) findings.push(`${at}: Profile のダイアログに ‹ と候補のほかのボタン (Save / Cancel / ×) がある`);
-        const note = pfDialog.querySelector('.pf-saved[role="status"]');
-        if (!note || note.textContent !== (current[d + 'ProfileSaved'] ? '✓ Saved' : '')) findings.push(`${at}: "Saved" の表示が ${note && note.textContent}`);
+        const dr = pfDialog.getBoundingClientRect();
+        if (close) {
+          const cr = close.getBoundingClientRect();
+          if (cr.left < ht.right || cr.right > dr.right || dr.right - cr.right > 16 || cr.top > ht.bottom || cr.bottom < ht.top) findings.push(`${at}: Profile のダイアログの × が題名の右 (ダイアログの右上) に無い`);
+        }
+        if (pfDialog.querySelectorAll('button').length !== 1 + PROFILE_EMOJIS.length + PROFILE_GREETINGS.length || pfDialog.querySelector('.pf-close, .pf-actions, .pf-back, .btn')) findings.push(`${at}: Profile のダイアログに × と候補のほかのボタン (Save / Cancel / ‹) がある`);
+        if (pfDialog.querySelector('.pf-saved') || /Saved/.test(pfDialog.textContent)) findings.push(`${at}: Profile のダイアログに "Saved" がある (U64)`);
         if (screen.querySelector('.hdr .back:not([data-norow])')) findings.push(`${at}: Profile のダイアログの後ろの ‹ を押せる`);
         const emojis = [...screen.querySelectorAll('.pf-emoji')];
         const greets = [...screen.querySelectorAll('.pf-greet')];
@@ -453,7 +469,7 @@ function scan(only, wantLang = 'en') {
         if (screen.querySelector('input, textarea, [contenteditable]')) findings.push(`${at}: 自由入力の欄がある`);
         if (pfDialog.querySelector('.pf-emoji[data-norow], .pf-greet[data-norow]')) findings.push(`${at}: Profile のダイアログに押せない部品がある`);
         const sr = screen.getBoundingClientRect();
-        const parts = [...screen.querySelectorAll('.pf-head .d-title, .pf-back, .pf-card, .pf-emojis, .pf-greets, .pf-saved')].map((el) => [el, el.getBoundingClientRect()]);
+        const parts = [...screen.querySelectorAll('.pf-head .d-title, .pf-dialog > .d-close, .pf-card, .pf-emojis, .pf-greets')].map((el) => [el, el.getBoundingClientRect()]);
         parts.forEach(([el, r]) => { if (r.top < sr.top || r.bottom > sr.bottom || r.left < sr.left || r.right > sr.right) findings.push(`${at}: ${el.className} が画面からはみ出している`); });
         for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
           const [a, ra] = parts[i]; const [b, rb] = parts[j];
@@ -489,7 +505,7 @@ function scan(only, wantLang = 'en') {
       // Friend Match トップ (U63): ボタンは New Match と Join Match だけ。Match Code は Join a Match のダイアログに入れる
       if (screen.classList.contains('view-friendTop')) {
         const top = [...screen.querySelectorAll('.body .btn')].map((b) => b.textContent).join(' / ');
-        if (top !== 'New Match / Join Match' || screen.querySelector('.body .input, .body .error, .body .sec-label')) findings.push(`${at}: Friend Match トップが New Match / Join Match だけでない (${top})`);
+        if (top !== 'New Match / Join Match' || screen.querySelector('.body .input, .body .sec-label')) findings.push(`${at}: Friend Match トップが New Match / Join Match だけでない (${top})`);
         const jd = screen.querySelector('.join-dialog');
         const joinState = /^(Host|Client)\.FriendMatch\.Room(\.[A-Za-z]+)?\.Join(\.|$)/.test(state);
         if (!!jd !== joinState) findings.push(`${at}: Join a Match が ${jd ? '開いている' : '無い'}`);
@@ -506,29 +522,32 @@ function scan(only, wantLang = 'en') {
           if ((value ? value.textContent : '') !== (filled ? MATCH_CODE_TEXT : '')) findings.push(`${at}: Match Code の欄が ${value ? value.textContent : '空'}`);
           const join = jd.querySelector('.btn');
           if (join && join.hasAttribute('data-norow') === filled) findings.push(`${at}: Join を ${filled ? '押せない' : 'Match Code を入れる前に押せる'}`);
-          const err = jd.querySelector('.error');
-          const wantErr = /\.Error\.NotFound$/.test(state) ? 'Match not found. The code may be wrong or expired.' : /\.Error\.Full$/.test(state) ? 'The match is already full.' : null;
-          if ((err ? err.textContent : null) !== wantErr) findings.push(`${at}: Join a Match の赤字が ${err ? err.textContent : 'なし'} (期待: ${wantErr || 'なし'})`);
+          // Match Code の誤り・満員はダイアログの中の赤字ではなく、画面の下のトースト (U69、#1891 の FB)
+          if (jd.querySelector('.error, [role="alert"]')) findings.push(`${at}: Join a Match の中に赤字がある (U69: トーストで出す)`);
+          const toastNow = screen.querySelector('.toast');
+          const toastText = toastNow ? [toastNow.firstChild && toastNow.firstChild.textContent, (toastNow.querySelector('.t-sub') || {}).textContent].filter(Boolean).join(' / ') : null;
+          const wantToast = /\.Error\.NotFound$/.test(state) ? 'Match not found / The code may be wrong or expired.' : /\.Error\.Full$/.test(state) ? 'The match is already full.'
+            : /\.ConnectionFailed$/.test(state) ? 'Connection failed / Couldn\u2019t join the match. Try again.' : null;
+          if (toastText !== wantToast) findings.push(`${at}: Join a Match のトーストが ${toastText || 'なし'} (期待: ${wantToast || 'なし'})`);
           // ダイアログは画面に収まり、中の部品は重ならず、× が題名と重ならない
           const sr = screen.getBoundingClientRect();
           const jr = jd.getBoundingClientRect();
           if (jr.top < sr.top || jr.bottom > sr.bottom || jr.left < sr.left || jr.right > sr.right) findings.push(`${at}: Join a Match が画面からはみ出している`);
-          const parts = [title, label, field, err, join].filter(Boolean).map((el) => [el, el.getBoundingClientRect()]);
+          const parts = [title, label, field, join].filter(Boolean).map((el) => [el, el.getBoundingClientRect()]);
           for (let i = 0; i < parts.length; i++) for (let j = i + 1; j < parts.length; j++) {
             const [a, ra] = parts[i]; const [b, rb] = parts[j];
             if (ra.bottom > rb.top + 0.5 && rb.bottom > ra.top + 0.5) findings.push(`${at}: Join a Match の ${a.className || a.tagName} と ${b.className || b.tagName} が重なっている`);
           }
           if (close && title) { const cr = close.getBoundingClientRect(); const tr = title.getBoundingClientRect(); if (cr.left < tr.right && cr.bottom > tr.top && tr.bottom > cr.top) findings.push(`${at}: × が題名と重なっている`); }
-          if (err && err.scrollWidth > err.clientWidth + 1) findings.push(`${at}: Join a Match の赤字がはみ出している`);
           // 接続失敗のトーストはダイアログの暗幕の上に出て押せる (U6)
           const toastEl = screen.querySelector('.toast');
           if (toastEl) {
             toastEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
             const tr = toastEl.getBoundingClientRect();
             const hit = document.elementFromPoint((tr.left + tr.right) / 2, (tr.top + tr.bottom) / 2);
-            if (!hit || !toastEl.contains(hit)) findings.push(`${at}: 接続失敗のトーストが Join a Match の暗幕の下にある`);
+            if (!hit || !toastEl.contains(hit)) findings.push(`${at}: トーストが Join a Match の暗幕の下にある`);
             const jr2 = jd.getBoundingClientRect();
-            if (tr.top < jr2.bottom + 0.5 && jr2.top < tr.bottom) findings.push(`${at}: 接続失敗のトーストが Join a Match と重なっている`);
+            if (tr.top < jr2.bottom + 0.5 && jr2.top < tr.bottom) findings.push(`${at}: トーストが Join a Match と重なっている`);
           }
         }
       }
@@ -550,13 +569,16 @@ function scan(only, wantLang = 'en') {
         const rest = [...screen.querySelectorAll('.rd-rating')].reduce((t, r) => t.replace(r.textContent, ''), text.replace(MATCH_CODE_TEXT, '').replace(timerText, ''));
         if (/\d/.test(rest)) findings.push(`${at}: Match Code・レーティング・カウントダウンのほかに数字がある: ${rest.trim().slice(0, 80)}`);
       }
-      // 画面の下の帯 (トースト): 端末の画面に収まり、ボタンや入力欄・お知らせと重ならない。作り直しに失敗したとき (⚠ createFailed) は "Connection failed" (U6 / U12)
+      // 画面の下の帯 (トースト): 端末の画面に収まり、ボタンや入力欄・お知らせと重ならない。サーバーに届かないときの "Connection failed" (U6)、
+      // Match Code の誤り・満員 (U69) は画面ごと、Match Code をコピーしたときの "Match code copied" (U69) は付属状態の Toast で出す
       const toast = screen.querySelector('.toast');
+      const wantToastKey = SCREENS[current[d]].toast || current[d + 'Toast'];
+      if (!!toast !== !!wantToastKey || (toast && toast.firstChild.textContent !== TOASTS[wantToastKey].text)) findings.push(`${at}: トーストが ${toast ? toast.textContent : 'なし'} (期待: ${wantToastKey ? TOASTS[wantToastKey].text : 'なし'})`);
       if (toast) {
         const sr = screen.getBoundingClientRect();
         const tr = toast.getBoundingClientRect();
         if (tr.top < sr.top || tr.bottom > sr.bottom || tr.left < sr.left || tr.right > sr.right) findings.push(`${at}: 帯が画面からはみ出している`);
-        screen.querySelectorAll('.btn, .input, .room-notice, .error, .menu-item').forEach((el) => {
+        screen.querySelectorAll('.btn, .input, .room-notice, .menu-item').forEach((el) => {
           const r = el.getBoundingClientRect();
           if (r.bottom > tr.top + 0.5 && tr.bottom > r.top + 0.5 && r.right > tr.left && tr.right > r.left) findings.push(`${at}: 帯 "${toast.textContent}" が ${el.textContent.trim() || el.className} と重なっている`);
         });
@@ -565,7 +587,8 @@ function scan(only, wantLang = 'en') {
         if (chev) { const cr = chev.getBoundingClientRect(); if (cr.top < tr.top || cr.bottom > tr.bottom) findings.push(`${at}: 帯の › が帯の外にある (${toast.textContent})`); }
       }
       if (screen.querySelector('[data-ev="leaveApp"], [data-ev="disconnect"]')) findings.push(`${at}: マッチのモック操作が端末の画面の中にある`);
-      if (/\.FriendMatch\.Lobby\.(Ready|Starting|Reconnecting|OpponentDisconnected|FriendJoined|Connecting|ConnectionLost|FriendDisconnected)/.test(state)) {
+      // Back to Friend Match で先に部屋へ戻った側 (FriendReturning / WaitingForHost) も、相手が戻る前から両者のカードを出す (U71、#1891 の FB)
+      if (/\.FriendMatch\.Lobby\.(Ready|Starting|Reconnecting|OpponentDisconnected|FriendJoined|Connecting|ConnectionLost|FriendDisconnected|FriendReturning|WaitingForHost)/.test(state)) {
         const cards = [...screen.querySelectorAll('.rd-card')];
         const states = cards.map((c) => c.querySelector('.rd-state').textContent);
         if (cards.length !== 2 || states.some((t) => !['\u2713 Ready', 'Not ready'].includes(t))) findings.push(`${at}: プレイヤーごとのカードが 2 枚 ("✓ Ready" / "Not ready") でない (${states.join(', ')})`);
@@ -605,8 +628,8 @@ function scan(only, wantLang = 'en') {
         const exits = [...screen.querySelectorAll('.actions .btn')].map((b) => b.textContent).filter((t) => /^(Cancel Match|Leave|Leave Match|(Close|Leave) Room)$/.test(t));
         if (exits.length) findings.push(`${at}: 部屋の画面に ${exits.join(' / ')} のボタンがある (出口は ‹ だけ)`);
         const back = screen.querySelector('.hdr .back');
-        // 確認を開いている間は ‹ に行が無い (確認の Cancel Match / Keep Waiting、Leave / Stay で答える)
-        const wantBack = /🗨 (cancelMatch|leaveMatch)/.test(state) ? 'none'
+        // 確認や Profile (U68) を開いている間は ‹ に行が無い (確認の Cancel Match / Keep Waiting、Leave / Stay で答える。Profile は × で閉じる)
+        const wantBack = /🗨 (cancelMatch|leaveMatch|profile)/.test(state) ? 'none'
           : /\.(Ready\.Confirming|Ready\.OpponentReady\.Confirming|Starting|ConnectionLost|Reconnecting)\b/.test(state) ? 'disabled' : 'button';
         const gotBack = back && back.tagName === 'BUTTON' && !back.hasAttribute('data-norow') ? 'button' : back && back.classList.contains('disabled') ? 'disabled' : 'none';
         if (gotBack !== wantBack) findings.push(`${at}: ‹ が ${gotBack} (期待: ${wantBack})`);
@@ -627,6 +650,18 @@ function scan(only, wantLang = 'en') {
       if (/----/.test(text)) findings.push(`${at}: 値の決まっていない ---- がある`);
       if (screen.querySelector('[data-ev="stampShown"], [data-ev="stampInterval"], [data-ev="disconnect"], [data-ev="win"], [data-ev="draw"]')) findings.push(`${at}: モック操作が端末の画面の中にある`);
       if (screen.querySelector('.result') && /Score/.test(text)) findings.push(`${at}: 結果画面にスコアの行がある`);
+      if (screen.querySelector('.result')) {
+        // Friend Match ではレートの行を出さない (U70、#1891 の FB)
+        if (current.match === 'friend' && (screen.querySelector('.r-stats') || /rating/i.test(text))) findings.push(`${at}: Friend Match の結果画面にレートの行がある (U70)`);
+        // ランダム対戦は勝ち負けによらず Find Next Opponent がある (U67)
+        if (current.match === 'random' && !screen.querySelector('.result-actions [data-ev="findNextOpponent"]')) findings.push(`${at}: ランダム対戦の結果画面に Find Next Opponent が無い (U67)`);
+        // 降参で終わった試合 (U38 / U66): 終わった理由は "You surrendered" / "Your opponent surrendered" で、Friend Match では再戦のボタンがある
+        const reason = screen.querySelector('.r-reason').textContent;
+        if (current.surrendered && !/(You|Your opponent) surrendered/.test(reason)) findings.push(`${at}: 降参で終わった試合の理由が ${reason}`);
+        if (/surrendered/.test(reason) && current.match === 'friend' && !/OpponentLeft/.test(state) && !screen.querySelector('.result-actions [data-ev="rematch"], .result-actions [data-ev="cancelRematch"], .result-actions .is-disabled')) {
+          findings.push(`${at}: 降参で終わった Friend Match の結果画面に再戦のボタンが無い (U66)`);
+        }
+      }
       if (/💬 (gg|thanks|nice)/.test(state)) {
         ['stampShown', 'stampInterval'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]:not([data-norow])`)) findings.push(`${at}: 端末の下のモック操作で ${ev} を押せない`);

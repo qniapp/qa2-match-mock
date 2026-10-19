@@ -76,7 +76,8 @@ var clientNoticeTop = ROOM_NOTICE_KEYS.map(function (k) { return 'Client.FriendM
 var hostNoticeTop = HOST_ROOM_NOTICE_KEYS.map(function (k) { return 'Host.FriendMatch.Room.' + k; });
 // クライアントの Friend Match トップ (決定 U63、#1891 の FB 19): ボタンは New Match と Join Match だけ。Join Match で Join a Match のダイアログを開く。
 // ダイアログを開いている間は .Join (お知らせの帯はその後ろに残る、U52)、Match Code を入れたあとは .Join.CodeEntered。
-// Match Code の誤り (見つからない・期限切れは 1 つにまとめた、FB 20) と満員はダイアログの中の赤字 (.Join.Error.*)、サーバーに届かないときはトースト (.Join.ConnectionFailed、U6)
+// Match Code の誤り (見つからない・期限切れは 1 つにまとめた、FB 20) と満員はダイアログを開いたまま画面の下のトースト (.Join.Error.*、U69)、
+// サーバーに届かないときもトースト (.Join.ConnectionFailed、U6)
 var JOIN_ERRORS = ['NotFound', 'Full'];
 var CLIENT_JOIN = 'Client.FriendMatch.Room.Join';
 var clientTop = ['Client.FriendMatch.Room'].concat(clientNoticeTop);
@@ -88,7 +89,8 @@ var clientJoinAny = clientJoinEmpty.concat(clientJoinFilled);
 var hostTop = ['Host.FriendMatch.Room', 'Host.FriendMatch.Room.ConnectionFailed'].concat(hostNoticeTop);
 
 // 対戦後の結果画面 (決定 U20〜U30、高宮さん 2026-10-07): 勝敗 (Win / Lose / Draw) × 再戦の段階。
-// Friend Match かランダム対戦か、レートが変わる対戦かは状態名ではなくセッション (SESSION_FIELDS の match / rated) で持つ
+// Friend Match かランダム対戦か、レートが変わる対戦か、降参で終わったかは状態名ではなくセッション (SESSION_FIELDS の match / rated / surrendered) で持つ。
+// 降参で終わった試合も、時間切れと同じ結果画面で再戦できる (決定 U66、#1891 の FB 10)
 var OUTCOMES = ['Win', 'Lose', 'Draw'];
 var OPPOSITE = { Win: 'Lose', Lose: 'Win', Draw: 'Draw' };
 // 再戦の申し込みが終わったあとの一行 (決定 U30 / U50)。両者に出し、次の操作 (どちらかがまた申し込む・結果画面を抜ける) まで残る:
@@ -106,8 +108,9 @@ var REMATCH_PHASES = ['', '.RematchRequested', '.RematchIncoming'].concat(ENDED_
 var RESULT_PHASES = REMATCH_PHASES.concat(['.OpponentLeft']);
 function resultState(role, outcome, phase) { return role + '.' + outcome + 'Result' + (phase || ''); }
 function resultStates(role, outcome, phases) { return phases.map(function (ph) { return resultState(role, outcome, ph); }); }
-// 勝敗が決まった理由が降参・切断のもの (決定 U38 / U41 / U28) と、勝敗のない No contest (U28)。どれも再戦は無い (U45)
-var SPECIAL_RESULTS = { Surrendered: 'Lose', OpponentSurrendered: 'Win', Disconnected: 'Lose', OpponentDisconnected: 'Win' };
+// 勝敗が切断で決まったもの (決定 U28) と、勝敗のない No contest (U28)。どちらも再戦は無い (U45)。
+// 降参で決まったもの (U38) は 2026-10-19 の U66 から通常の結果画面 (再戦できる) で、終わった理由はセッションの surrendered で出し分ける
+var SPECIAL_RESULTS = { Disconnected: 'Lose', OpponentDisconnected: 'Win' };
 function specialResults(role) {
   return Object.keys(SPECIAL_RESULTS).map(function (k) { return resultState(role, SPECIAL_RESULTS[k], '.' + k); });
 }
@@ -121,25 +124,19 @@ function isResultState(name) { return /^(Host|Client)\.(Win|Lose|Draw|NoContest)
 function isWithOpponent(name) { return isResultState(name) || /^(Host|Client)\.(Opponent(\.|$)|Game\.)/.test(name); }
 var hostResultAny = resultAny('Host');
 var clientResultAny = resultAny('Client');
-// Find Next Opponent がある結果画面: 降参した側 (U41) と、再戦を申し込める負けた側 (U60、代わりに Rematch) 以外 (戻るボタンはどの結果画面も同じ、U59)
-function resultLeavable(role) {
-  var noNext = [role + '.LoseResult.Surrendered'].concat(resultStates(role, 'Lose', REMATCH_PHASES));
-  return resultAny(role).filter(function (s) { return noNext.indexOf(s) === -1; });
-}
-var hostResultLeavable = resultLeavable('Host');
-var clientResultLeavable = resultLeavable('Client');
+// ランダム対戦の Find Next Opponent は、勝ち負けによらずどの結果画面にもある (決定 U67、#1891 の FB。戻るボタンもどの結果画面も同じ、U59)
 // スタンプを送れる結果画面 (U27): 相手がまだ結果画面にいるもの。相手が抜けた・切断した・接続エラーのときは送れない
 function stampable(role) {
   var list = [];
   OUTCOMES.forEach(function (o) { list = list.concat(resultStates(role, o, REMATCH_PHASES)); });
-  return list.concat([resultState(role, 'Lose', '.Surrendered'), resultState(role, 'Win', '.OpponentSurrendered')]);
+  return list;
 }
 var hostStampable = stampable('Host');
 var clientStampable = stampable('Client');
 
-// 試合が続いている状態 (決定 U37: MATCH MENU や降参の確認を開いていても試合は止まらない)
-var hostInPlay = ['Host.Game.Play', 'Host.Game.MatchMenu', 'Host.Game.SurrenderConfirm'];
-var clientInPlay = ['Client.Game.Play', 'Client.Game.MatchMenu', 'Client.Game.SurrenderConfirm'];
+// 試合が続いている状態 (決定 U37: MATCH MENU を開いていても試合は止まらない。降参の確認は MATCH MENU の 1 回だけ、U65)
+var hostInPlay = ['Host.Game.Play', 'Host.Game.MatchMenu'];
+var clientInPlay = ['Client.Game.Play', 'Client.Game.MatchMenu'];
 // 対戦中の切断 (決定 U28 / U46): 切断した側は再接続を試み、相手は 20 秒 (仮) 待つ。その間サーバーは両者のゲームと得点を止める
 var hostInGame = hostInPlay.concat(['Host.Game.Disconnected', 'Host.Game.OpponentDisconnected']);
 var clientInGame = clientInPlay.concat(['Client.Game.Disconnected', 'Client.Game.OpponentDisconnected']);
@@ -155,24 +152,26 @@ var INLINE_SEARCH_NOTICES = ['Stopped', 'MatchCancelled', 'ReconnectFailed'];
 function always() { return true; }
 function never() { return false; }
 
-// 端末ごとの付属状態。keeps(状態名) が偽の画面へ移ると初期値に戻る (initial は値か、端末 ('host' / 'client') を受け取る関数)
-//   Dialog: ダイアログ (部屋の確認と Profile。画面が変わると閉じる)
+// 端末ごとの付属状態。keeps(状態名, 今の値) が偽の画面へ移ると初期値に戻る (initial は値か、端末 ('host' / 'client') を受け取る関数)
+//   Dialog: ダイアログ (部屋の確認と Profile)。画面が変わると閉じるが、Profile は Profile を開ける画面の間は開いたまま
+//           (部屋で相手が Ready を押しても閉じない。決定 U68)
+//   Toast:  状態によらない画面の下の帯 (Match Code をコピーしたときの 'codeCopied'、決定 U69)。画面が変わるか 2 秒 (仮) たつと消える
 //   Stamp:  自分が送ったスタンプ (U27)。'gg' などは表示中 (3 秒、仮)、'sent' は消えたが次を送れるまでの待ち (送ってから 5 秒、仮)
 //   Emoji / Greeting:           保存した絵文字とあいさつ (U56)。ブラウザの localStorage に残る (読み書きは app.js、自由操作のときだけ)
-//   ProfileSaved: Profile のダイアログで、開いてから何か選んだ (選ぶとすぐ保存するので "Saved" を出す。#1891 の FB 14)。開く・閉じる・画面が変わると消える
 //   ShownEmoji / ShownGreeting: 相手に見せる値。部屋を作る・部屋に入る・相手を探し始めるときに保存した値を写す (行の copy、遷移表の末尾で付ける)
 var DEVICE_FIELDS = {
-  Dialog: { initial: null, keeps: never },
+  Dialog: { initial: null, keeps: function (name, v) { return v === 'profile' && isProfileOpenable(name); } },
+  Toast: { initial: null, keeps: never },
   Stamp: { initial: null, keeps: isResultState },
   Emoji: { initial: function (d) { return PROFILE_INITIAL[d].emoji; }, keeps: always },
   Greeting: { initial: function (d) { return PROFILE_INITIAL[d].greeting; }, keeps: always },
-  ProfileSaved: { initial: false, keeps: never },
   ShownEmoji: { initial: null, keeps: always },
   ShownGreeting: { initial: null, keeps: always },
 };
 // 対戦のセッション (両端末で共通): match = 'friend' | 'random'、rated = レートが変わる対戦か (ランダム対戦の最初の 1 戦だけ、U21)、
-// rematch = 結果画面の Rematch で始まった対戦か (開始前の切断の扱いが変わる、U32 / U54)
-var SESSION_FIELDS = { match: null, rated: false, rematch: false };
+// rematch = 結果画面の Rematch で始まった対戦か (開始前の切断の扱いが変わる、U32 / U54)、
+// surrendered = 負けた側の降参で終わった対戦か (結果画面の終わった理由が "You surrendered" / "Your opponent surrendered" になる。U38 / U66)
+var SESSION_FIELDS = { match: null, rated: false, rematch: false, surrendered: false };
 
 // 遷移表の表示で、配列の代わりにグループ名を出すための一覧
 var STATE_GROUPS = {
@@ -189,8 +188,6 @@ var STATE_GROUPS = {
   'Client.FriendMatch.Room.Join.Any': clientJoinAny,
   'Host.Result.Any': hostResultAny,
   'Client.Result.Any': clientResultAny,
-  'Host.Result.Leavable': hostResultLeavable,
-  'Client.Result.Leavable': clientResultLeavable,
   'Host.Result.Stampable': hostStampable,
   'Client.Result.Stampable': clientStampable,
   'Host.Game.InPlay': hostInPlay,
@@ -266,13 +263,17 @@ function greetingText(id, lang) {
   return g ? g[lang] : '';
 }
 var PROFILE_DEFAULT = { emoji: PROFILE_EMOJIS[0].emoji, greeting: PROFILE_GREETINGS[0].id };
-// Profile のダイアログを開ける画面 (決定 U56、入口は #1891 の FB 12 で変更): Random Match (Ready を待っている画面 (U62) と相手を探している画面。Find Next Opponent から探しているときも) と
-// Friend Match トップ (部屋のお知らせ・Match Code の赤字・トーストを出している間も)。待ち時間に、今の画面のまま変えられる。
-// Online Battle・部屋・対戦中には無く、"No opponent found." (U13) はモーダルなので開けない
+// Profile のダイアログを開ける画面 (決定 U56、入口は #1891 の FB 12 で変更): Random Match (Ready を待っている画面 (U62) と相手を探している画面。Find Next Opponent から探しているときも)、
+// Friend Match トップ (部屋のお知らせ・トーストを出している間も) と、Match Code を出している部屋の画面 (U68)。待ち時間に、今の画面のまま変えられる。
+// Online Battle・対戦中には無く、"No opponent found." (U13) はモーダルなので開けない
 var profileSearching = { Host: hostSearching, Client: clientSearching };
+// 部屋の画面のうち ‹ で確認を出せるもの (決定 U68、#1891 の FB。一つ前の Friend Match トップへ戻ると対戦が閉じるため)。
+// 送っている間・読み込み・自分の再接続中 (‹ を押せない、U53) と期限切れの画面では開けない。選んだものはこの対戦の VS 画面から相手に見える
+var profileLobby = { Host: hostClosable, Client: clientLeavable };
 // 探していない画面 (Random Match で Ready を待っている、Friend Match トップ)。選んだものが相手に見えるのは次に探し始める・部屋を作る・入るときから
 var profileIdle = { Host: ['Host.Matchmake'].concat(hostTop), Client: ['Client.Matchmake'].concat(clientTop) };
-function profileOpenable(R) { return profileSearching[R].concat(profileIdle[R]); }
+function profileOpenable(R) { return profileSearching[R].concat(profileLobby[R], profileIdle[R]); }
+function isProfileOpenable(name) { return profileOpenable(name.split('.')[0]).indexOf(name) !== -1; }
 STATE_GROUPS['Host.Profile.Openable'] = profileOpenable('Host');
 STATE_GROUPS['Client.Profile.Openable'] = profileOpenable('Client');
 // 部屋を作る・部屋に入る・相手を探し始める行で、保存した絵文字とあいさつを相手に見せる値として写す (U56)。
@@ -281,6 +282,9 @@ STATE_GROUPS['Client.Profile.Openable'] = profileOpenable('Client');
 // Random Match の画面を開いただけ (U62) では写さず、Ready で探し始めるときに写す
 var PROFILE_SNAPSHOT_EVENTS = ['createMatch', 'joinMatch', 'startSearch', 'searchAgain', 'findNextOpponent'];
 var PROFILE_SNAPSHOT_TARGET = /^(Host|Client)\.(FriendMatch\.Lobby\.|Matchmake\.Searching$|Matchmake\.NextOpponent$)/;
+// Match Code のコピーのボタンがあるホストの部屋の画面: 期限切れ以外のすべて (#1891 の FB 5)。押すと "Match code copied" のトースト (決定 U69)
+var hostCopyable = hostWaitingForFriend.concat(hostWithClient, ['Host.FriendMatch.Lobby.CouldNotReconnect']);
+STATE_GROUPS['Host.FriendMatch.Lobby.Copyable'] = hostCopyable;
 
 // ---- 遷移表 ---------------------------------------------------------------
 
@@ -325,14 +329,14 @@ var TRANSITIONS = (function () {
     }
   });
   T({ from: { host: '*', client: [CLIENT_JOIN + '.ConnectionFailed'].concat(JOIN_ERRORS.map(function (k) { return CLIENT_JOIN + '.Error.' + k; })) }, event: 'client.closeJoin',
-    to: { host: '*', client: 'Client.FriendMatch.Room' }, note: '決定 (U63): × でダイアログを閉じる (赤字も消える)', decided: ['U63'] });
+    to: { host: '*', client: 'Client.FriendMatch.Room' }, note: '決定 (U63 / U69): × でダイアログを閉じる (トーストも消える)', decided: ['U63', 'U69'] });
   T({ from: { host: '*', client: CLIENT_JOIN + '.ConnectionFailed' }, event: 'client.tapToast', to: { host: '*', client: CLIENT_JOIN + '.CodeEntered' },
     note: '決定 (U6): トーストをタップして閉じる (Join a Match は開いたまま)', decided: ['U6', 'U63'] });
 
   // === Join a Match の Join の結果 ===
-  // "Connection failed" はサーバーに届かないときだけ (決定 U6)。Match Code の誤り・期限切れ・満員の赤字とは別。
-  // 赤字はダイアログの中に出し、見つからない・期限切れは同じ "Match not found. The code may be wrong or expired." (U63、#1891 の FB 20)。
-  // 部屋のお知らせ (U52) を出したまま Join を押したときは、結果 (部屋・赤字・トースト) がお知らせに取って代わる (2026-10-08 に確認)
+  // "Connection failed" はサーバーに届かないときだけ (決定 U6)。Match Code の誤り・期限切れ・満員のトーストとは別。
+  // 誤り・満員はダイアログの中の赤字ではなく画面の下のトーストで出し (U69)、見つからない・期限切れは同じ "Match not found" / "The code may be wrong or expired." (U63、#1891 の FB 20)。
+  // 部屋のお知らせ (U52) を出したまま Join を押したときは、結果 (部屋・トースト) がお知らせに取って代わる (2026-10-08 に確認)
   T({ from: { host: '*', client: clientJoinFilled }, event: 'client.joinMatch', when: { codeResult: 'notFound' },
     to: { host: '*', client: CLIENT_JOIN + '.Error.NotFound' }, note: '図08 / 図09: 無効な Match Code。期限切れも同じ表示 (U63)', decided: ['U63'] });
   T({ from: { host: '*', client: clientJoinFilled }, event: 'client.joinMatch', when: { codeResult: 'full' },
@@ -407,7 +411,7 @@ var TRANSITIONS = (function () {
   // === 読み込み (決定 U32 / U15) ===
   // 両者の Ready がそろったら "Starting match…"。20 秒 (仮) で終わらない (U32) か同期に失敗する (U15) と、両者の Ready を消して Ready 画面に戻る
   T({ from: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, event: 'sys.bothStarted', auto: 1500,
-    to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { match: 'friend', rated: false, rematch: false },
+    to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { match: 'friend', rated: false, rematch: false, surrendered: false },
     note: '合意: マッチ成立時に VS 画面を挟む。決定 (U21): Friend Match はレートが変わらない', decided: ['U21'] });
   T({ from: { host: 'Host.FriendMatch.Lobby.Starting', client: 'Client.FriendMatch.Lobby.Starting' }, event: 'timer.loadTimeout',
     to: { host: 'Host.FriendMatch.Lobby.Ready.StartFailed', client: 'Client.FriendMatch.Lobby.Ready.StartFailed' },
@@ -618,19 +622,18 @@ var TRANSITIONS = (function () {
       note: '決定 (U37 / U38): ☰ で MATCH MENU を開く。試合は続き、相手の端末には何も出ない', decided: ['U37', 'U38'] });
     T({ from: row(R + '.Game.MatchMenu', '*'), event: d + '.matchMenu.continue', to: row(R + '.Game.Play', '*'),
       note: '決定 (U37): CONTINUE でメニューを閉じる (試合はずっと続いている)', decided: ['U37'] });
-    T({ from: row(R + '.Game.MatchMenu', '*'), event: d + '.matchMenu.surrender', to: row(R + '.Game.SurrenderConfirm', '*'),
-      note: '決定 (U40 / U41): SURRENDER (QUIT ではない) で確認を出す。確認中も試合は続く', decided: ['U40', 'U41'] });
-    T({ from: row(R + '.Game.SurrenderConfirm', '*'), event: d + '.surrenderConfirm.continue', to: row(R + '.Game.Play', '*'),
-      note: '決定 (U40): CONTINUE で確認を閉じてプレイに戻る', decided: ['U40'] });
-    T({ from: row(R + '.Game.SurrenderConfirm', other === 'host' ? hostInPlay : clientInPlay), event: d + '.surrenderConfirm.surrender',
-      to: row(resultState(R, 'Lose', '.Surrendered'), resultState(O, 'Win', '.OpponentSurrendered')),
-      note: '決定 (U38 / U40): 降参した側は負け、相手は (メニューを開いていても) 勝ちの結果画面に "Your opponent surrendered"', decided: ['U38', 'U40'] });
+    // 降参の確認は MATCH MENU の 1 回だけ (決定 U65、#1891 の FB 18)。SURRENDER を押すとすぐ負けが決まる
+    T({ from: row(R + '.Game.MatchMenu', other === 'host' ? hostInPlay : clientInPlay), event: d + '.matchMenu.surrender',
+      to: row(resultState(R, 'Lose'), resultState(O, 'Win')), set: { surrendered: true },
+      note: '決定 (U65 / U41): MATCH MENU の SURRENDER (QUIT ではない) を押すとすぐ降参する (確認は MATCH MENU の 1 回だけ、#1891 の FB 18)。' +
+        '決定 (U38): 降参した側は負けの結果画面に "You surrendered"、相手は (メニューを開いていても) 勝ちの結果画面に "Your opponent surrendered"。' +
+        '決定 (U66): 時間切れの決着と同じ結果画面で、再戦できる (#1891 の FB 10)', decided: ['U65', 'U41', 'U38', 'U66'] });
   });
 
   // === ランダム対戦 (決定 U13a: 相手が見つかり次第 VS 画面へ。Friend Match の Ready 画面 (U31) は挟まない。
   //     探し始めるのは Random Match の画面の Ready を押したときだけ、U62) ===
   T({ from: { host: hostSearching, client: clientSearching }, event: 'sys.opponentFound', auto: 2500,
-    to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { match: 'random', rated: true, rematch: false },
+    to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { match: 'random', rated: true, rematch: false, surrendered: false },
     note: '決定 (U13a): 相手が見つかり次第 VS 画面へ。Friend Match の Ready 画面 (U31) は挟まない。' +
       '結果画面の Find Next Opponent から探しているときも同じ (U29)。決定 (U21): レートが変わる対戦 (Elo)', decided: ['U13a', 'U29', 'U21'] });
   // Random Match の画面の操作 (決定 U62、#1891 の FB 16): 開いた直後は Ready を待ち、Ready で探し始め、Cancel で Ready を待つ状態へ戻る。
@@ -718,7 +721,7 @@ var TRANSITIONS = (function () {
       to: { host: resultState('Host', p[1]), client: resultState('Client', OPPOSITE[p[1]]) },
       note: 'モック操作: 時間切れ。押した側が' + mine + '、相手は自動で' + (p[1] === 'Draw' ? '同じく引き分け' : '逆の結果') + '。' +
         '決定 (U44): 終わった理由は ' + (p[1] === 'Draw' ? '"Same score when time ran out"' : '"Time is up"') + '。' +
-        '決定 (U20): 結果画面に勝敗・両者の名前・終わった理由 (スコアは出さない、FB 7)。MATCH MENU や降参の確認を開いていても試合は続いているので、そのまま結果画面へ (U37)',
+        '決定 (U20): 結果画面に勝敗・両者の名前・終わった理由 (スコアは出さない、FB 7)。MATCH MENU を開いていても試合は続いているので、そのまま結果画面へ (U37)',
       decided: ['U44', 'U20', 'U37'] });
   });
   // 決定 (U28): 片方が切断したら 20 秒 (仮) 待ち、戻らなければ切断した側の負け。両者の切断・サービス障害は No contest
@@ -768,7 +771,7 @@ var TRANSITIONS = (function () {
         note: '決定 (U23 / U30 / U60): 押した側は "Waiting for opponent to accept…" と Cancel Request、相手は "Your opponent wants a rematch" と Accept / Decline。' +
           '前の申し込みの一行 (U50) はここで消える。' + (winner ? 'ランダム対戦で勝った側は申し込めない (U60) ので Friend Match だけ' : 'Friend Match でもランダム対戦でも申し込める'),
         decided: ['U23', 'U30', 'U50', 'U60'] }, winner ? { when: { match: 'friend' } } : {}));
-      T({ from: asked, event: other + '.rematch', to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { rated: false, rematch: true },
+      T({ from: asked, event: other + '.rematch', to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { rated: false, rematch: true, surrendered: false },
         note: '決定 (U23 / U60): 相手が Accept で応じたらそのまま VS 画面へ (ロビーの Ready は挟まない)。ランダム対戦の再戦はレートが変わらない (U21)',
         decided: ['U23', 'U21', 'U60'] });
       T({ from: asked, event: d + '.cancelRematch', to: pair(mine('.RematchCancelledByYou.Cooldown'), theirs('.RematchCancelled.Cooldown')),
@@ -781,7 +784,7 @@ var TRANSITIONS = (function () {
         note: '決定 (U30 / U50): 20 秒 (仮) 応答がなければ、申し込んだ側に "No response to rematch request"、申し込まれた側にも "Rematch request expired"。' +
           '両者とも結果画面に残り、3 秒 (仮) は申し込めない', decided: ['U30', 'U50'] });
     });
-    T(Object.assign({ from: { host: idle(H), client: idle(C) }, event: 'sys.rematchSimultaneous', to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { rated: false, rematch: true },
+    T(Object.assign({ from: { host: idle(H), client: idle(C) }, event: 'sys.rematchSimultaneous', to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { rated: false, rematch: true, surrendered: false },
       note: '決定 (U23): 両者が同時に申し込んだら成立 (応じたのと同じ) で VS 画面へ。' +
         (o === 'Draw' ? '引き分けはランダム対戦でも両者が申し込める (U60)' : 'ランダム対戦で勝った側は申し込めない (U60) ので Friend Match だけ'),
       decided: ['U23', 'U21', 'U60'] }, o === 'Draw' ? {} : { when: { match: 'friend' } }));
@@ -795,7 +798,7 @@ var TRANSITIONS = (function () {
 
   // === 結果画面から抜ける (決定 U22 / U25 / U26 / U59 / U60 / U61) ===
   // 自動では次へ進まない (U26)。戻るボタンはホストもクライアントも、降参した側も同じ 1 つ (U59): Friend Match は Back to Friend Match、
-  // ランダム対戦は Back to Random Match (メニューから Random Match を開いたのと同じ)。ランダム対戦にはほかに Find Next Opponent (降参した側と、Rematch を出している負けた側以外、U60)。
+  // ランダム対戦は Back to Random Match (メニューから Random Match を開いたのと同じ)。ランダム対戦にはほかに、勝ち負けによらず Find Next Opponent (U67、#1891 の FB)。
   // 相手がまだ再戦できる結果画面にいれば、相手には "Your opponent left. Rematch is not available." (U25、勝敗とレートは変わらない)。
   // Friend Match の Back to Friend Match は、両者を同じ Match Code の同じ部屋へ戻す (U61、#1891 の FB 11)。先に押した側は部屋で相手を待ち、
   // 相手も押すと入室と同じ流れ ("Friend joined!" / "Connecting…" → Ready 画面) になる
@@ -811,7 +814,6 @@ var TRANSITIONS = (function () {
       return r;
     };
     var any = d === 'host' ? hostResultAny : clientResultAny;
-    var leavable = d === 'host' ? hostResultLeavable : clientResultLeavable;
     var theirAny = d === 'host' ? clientResultAny : hostResultAny;
     var leaveRows = function (b) {
       OUTCOMES.forEach(function (oo) {
@@ -831,7 +833,7 @@ var TRANSITIONS = (function () {
       '。部屋は' + (d === 'host' ? 'ホストが ‹ で閉じるまで残る' : '残り、クライアントの ‹ は自分だけ抜ける');
     leaveRows(['backToFriendMatch', any, waitHere, 'friend', waitNote, friendIds]);
     T({ from: pair(any, theirAny), event: d + '.backToFriendMatch', when: { match: 'friend' }, to: pair(waitHere, '*'),
-      note: waitNote + '。相手は再戦の無い結果画面 (降参・切断・No contest、U45) にいる', decided: friendIds.concat(['U45']) });
+      note: waitNote + '。相手は再戦の無い結果画面 (切断・No contest、U45) にいる', decided: friendIds.concat(['U45']) });
     if (d === 'host') {
       T({ from: pair(any, '*'), event: 'host.backToFriendMatch', when: { match: 'friend' }, to: pair('Host.FriendMatch.Lobby.ClientLeft', '*'),
         note: '決定 (U61 / U34): 友だちはもう部屋を抜けている。同じ部屋に戻り、"Your opponent left the match. Waiting for another friend…" (同じ Match Code)', decided: friendIds.concat(['U34']) });
@@ -845,12 +847,12 @@ var TRANSITIONS = (function () {
 
     // ランダム対戦
     [
-      ['findNextOpponent', leavable, R + '.Matchmake.NextOpponent', 'random', '決定 (U22 / U29): 次の相手を探す (60 秒、仮)', ['U22', 'U29']],
+      ['findNextOpponent', any, R + '.Matchmake.NextOpponent', 'random', '決定 (U22 / U29 / U67): 次の相手を探す (60 秒、仮)。勝った側も負けた側も押せる', ['U22', 'U29', 'U67']],
       ['backToRandomMatch', any, R + '.Matchmake', 'random', '決定 (U59 / U62): Random Match の画面へ。メニューから Random Match を開いたのと同じ (探し始めず Ready を待つ)', ['U22', 'U59', 'U62']],
     ].forEach(function (b) {
       leaveRows(b);
       T({ from: pair(b[1], '*'), event: d + '.' + b[0], when: { match: b[3] }, to: pair(b[2], '*'),
-        note: b[4] + '。相手はすでに結果画面を抜けているか、再戦の無い結果画面 (降参・切断・No contest、U45) にいる', decided: b[5].concat(['U45']) });
+        note: b[4] + '。相手はすでに結果画面を抜けているか、再戦の無い結果画面 (切断・No contest、U45) にいる', decided: b[5].concat(['U45']) });
     });
   });
 
@@ -884,11 +886,18 @@ var TRANSITIONS = (function () {
       note: 'モック操作。決定 (U27): 送ってから 5 秒 (仮) たつと次を送れる (表示中なら同時に消える)', decided: ['U27'] });
   });
 
+  // === Match Code のコピー (決定 U69、#1891 の FB) ===
+  // ホストのコピーのボタン (FB 5) を押すと、画面はそのままで下に "Match code copied" のトーストを出す。画面が変わるか 2 秒 (仮) たつと消える
+  T({ from: { host: hostCopyable, client: '*' }, event: 'host.copyCode', to: { host: '=', client: '*' }, set: { hostToast: 'codeCopied' },
+    note: '決定 (U69): Match Code をコピーしたら、画面の下に "Match code copied" のトーストを出す (画面はそのまま)', decided: ['U69'] });
+  T({ from: { host: '*', client: '*', hostToast: 'codeCopied' }, event: 'toast.hidden', auto: 2000, to: { host: '*', client: '*' }, set: { hostToast: null },
+    note: '自動: 決定 (U69): トーストは 2 秒 (仮) で消える (その前に画面が変わっても消える)', decided: ['U69'] });
+
   // === Profile (決定 U56、高宮さん 2026-10-08。入口は #1891 の FB 12 で、画面からダイアログに変更) ===
-  // Random Match (相手を探している画面) と Friend Match トップの Profile で、今の画面の上にダイアログで開く。上の VS 画面のカードの見本は選ぶたびに変わる。
-  // 選ぶとすぐ保存し (Save / Cancel は無い、#1891 の FB 14)、閉じるのは左上の ‹ だけ (Esc や外側を押しても閉じない)。どちらも画面はそのまま。
-  // 画面が変わる (相手が見つかるなど) とダイアログは閉じる。保存した値が相手に見えるのは、次に部屋を作る・入る・相手を探し始めるときから。
-  // 相手を探している間に選んだものは、見つかる相手にも見える
+  // Random Match・Friend Match トップ・部屋の画面 (U68) の Profile で、今の画面の上にダイアログで開く。上の VS 画面のカードの見本は選ぶたびに変わる。
+  // 選ぶとすぐ保存し (Save / Cancel は無い、#1891 の FB 14。"Saved" も出さない、U64)、閉じるのは右上の × だけ (Esc や外側を押しても閉じない、U64)。どちらも画面はそのまま。
+  // Profile を開けない画面へ変わる (相手が見つかる・読み込みが始まるなど) とダイアログは閉じる。保存した値が相手に見えるのは、次に部屋を作る・入る・相手を探し始めるときから。
+  // 相手を探している間と部屋の画面で選んだものは、この対戦の相手にも見える
   [['host', 'Host', 'client'], ['client', 'Client', 'host']].forEach(function (p) {
     var d = p[0];
     var R = p[1];
@@ -905,36 +914,31 @@ var TRANSITIONS = (function () {
       r[d] = v;
       return r;
     };
-    // 選んだ値を保存した値へ書き、"Saved" を出す。相手を探している間は、見つかる相手に見せる値にも書く
-    var pick = function (field, value, searching) {
+    // 選んだ値を保存した値へ書く。相手を探している間と部屋の画面 (U68) では、相手に見せる値にも書く
+    var pick = function (field, value, shown) {
       var set = {};
       set[d + field] = value;
-      if (searching) set[d + 'Shown' + field] = value;
-      set[d + 'ProfileSaved'] = true;
+      if (shown) set[d + 'Shown' + field] = value;
       return set;
     };
-    var saved = function (v) {
-      var r = {};
-      r[d + 'ProfileSaved'] = v;
-      return r;
-    };
     var openable = profileOpenable(R);
-    T({ from: row(openable), event: d + '.profile', to: row('='), dialog: dialog('profile'), set: saved(false),
-      note: '決定 (U56、#1891 の FB 12): Random Match (Ready を待っている間と相手を探している間、U62) と Friend Match トップの Profile で、今の画面の上にダイアログで開く。' +
-        '保存した絵文字とあいさつが選ばれた状態で始まる。相手を探しているときは探すのが続く', decided: ['U56'] });
-    [[profileSearching[R], true, '相手を探し続ける。まだ相手がいないので、見つかる相手にも新しい値が見える'],
-      [profileIdle[R], false, '相手に見えるのは次に Ready で探し始める・部屋を作る・入るときから']].forEach(function (w) {
+    T({ from: row(openable), event: d + '.profile', to: row('='), dialog: dialog('profile'),
+      note: '決定 (U56 / U68、#1891 の FB 12): Random Match (Ready を待っている間と相手を探している間、U62)、Friend Match トップ、部屋の画面 (U68) の Profile で、今の画面の上にダイアログで開く。' +
+        '保存した絵文字とあいさつが選ばれた状態で始まる。相手を探しているときは探すのが続く', decided: ['U56', 'U68'] });
+    [[profileSearching[R], true, '相手を探し続ける。まだ相手がいないので、見つかる相手にも新しい値が見える', ['U56', 'U64']],
+      [profileLobby[R], true, '部屋の画面 (U68) なので、この対戦の VS 画面から相手に新しい値が見える', ['U56', 'U64', 'U68']],
+      [profileIdle[R], false, '相手に見えるのは次に Ready で探し始める・部屋を作る・入るときから', ['U56', 'U64']]].forEach(function (w) {
       PROFILE_EMOJIS.forEach(function (e) {
         T({ from: row(w[0], 'profile'), event: d + '.dialog.pickEmoji.' + e.id, to: row('='), set: pick('Emoji', e.emoji, w[1]),
-          note: '決定 (U56、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わって "Saved" が出る。' + w[2], decided: ['U56'] });
+          note: '決定 (U56 / U64、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わる ("Saved" は出さない)。' + w[2], decided: w[3] });
       });
       PROFILE_GREETINGS.forEach(function (g) {
         T({ from: row(w[0], 'profile'), event: d + '.dialog.pickGreeting.' + g.id, to: row('='), set: pick('Greeting', g.id, w[1]),
-          note: '決定 (U56、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わって "Saved" が出る。' + w[2], decided: ['U56'] });
+          note: '決定 (U56 / U64、#1891 の FB 14): 1 つだけ選べる。選ぶとすぐ保存し、上の見本が変わる ("Saved" は出さない)。' + w[2], decided: w[3] });
       });
     });
-    T({ from: row(openable, 'profile'), event: d + '.dialog.closeProfile', to: row('='), dialog: dialog(null), set: saved(false),
-      note: '決定 (U56、#1891 の FB 14): 左上の ‹ でダイアログを閉じる (閉じる手段はこれだけ。選んだものは保存済み)', decided: ['U56'] });
+    T({ from: row(openable, 'profile'), event: d + '.dialog.closeProfile', to: row('='), dialog: dialog(null),
+      note: '決定 (U64): 右上の × でダイアログを閉じる (閉じる手段はこれだけ。選んだものは保存済み)', decided: ['U56', 'U64'] });
   });
 
   rows.forEach(function (r, i) {
@@ -974,9 +978,8 @@ var EVENT_LABELS = {
   'host.tapToast': 'ホスト: 画面の下の帯 (トースト) をタップ',
   'host.matchMenu': 'ホスト: メニューボタン (☰) を押す',
   'host.matchMenu.continue': 'ホスト: MATCH MENU の CONTINUE を押す',
-  'host.matchMenu.surrender': 'ホスト: MATCH MENU の SURRENDER を押す',
-  'host.surrenderConfirm.continue': 'ホスト: 降参の確認で CONTINUE を押す',
-  'host.surrenderConfirm.surrender': 'ホスト: 降参の確認で SURRENDER を押す',
+  'host.matchMenu.surrender': 'ホスト: MATCH MENU の SURRENDER を押す (すぐ降参する)',
+  'host.copyCode': 'ホスト: Match Code のコピーのボタンを押す',
   'host.backToOnlineBattle': 'ホスト: Back to Online を押す',
   'host.findNextOpponent': 'ホスト: Find Next Opponent を押す',
   'host.win': 'ホスト: 時間切れで勝つ (得点が上、モック操作)',
@@ -1014,9 +1017,7 @@ var EVENT_LABELS = {
   'client.tapToast': 'クライアント: 画面の下の帯 (トースト) をタップ',
   'client.matchMenu': 'クライアント: メニューボタン (☰) を押す',
   'client.matchMenu.continue': 'クライアント: MATCH MENU の CONTINUE を押す',
-  'client.matchMenu.surrender': 'クライアント: MATCH MENU の SURRENDER を押す',
-  'client.surrenderConfirm.continue': 'クライアント: 降参の確認で CONTINUE を押す',
-  'client.surrenderConfirm.surrender': 'クライアント: 降参の確認で SURRENDER を押す',
+  'client.matchMenu.surrender': 'クライアント: MATCH MENU の SURRENDER を押す (すぐ降参する)',
   'client.backToOnlineBattle': 'クライアント: Back to Online を押す',
   'client.findNextOpponent': 'クライアント: Find Next Opponent を押す',
   'client.win': 'クライアント: 時間切れで勝つ (得点が上、モック操作)',
@@ -1041,6 +1042,7 @@ var EVENT_LABELS = {
   'sys.opponentFound': '自動: 対戦相手が見つかる',
   'vs.done': '自動: VS 画面が終わる',
   'game.countdownDone': '自動: ゲーム本体のカウントダウンが終わる',
+  'toast.hidden': '自動: トーストが 2 秒 (仮) で消える',
   'net.recovered': '環境: 通信が回復する',
   'net.bothDisconnected': '環境: 対戦中に両者の接続が切れる',
   'net.serviceFailure': '環境: 対戦中にサービス障害が起きる',
@@ -1056,7 +1058,7 @@ var EVENT_LABELS = {
 // Profile (決定 U56) の操作
 [['host', 'ホスト'], ['client', 'クライアント']].forEach(function (p) {
   EVENT_LABELS[p[0] + '.profile'] = p[1] + ': Profile を押す';
-  EVENT_LABELS[p[0] + '.dialog.closeProfile'] = p[1] + ': Profile を左上の ‹ で閉じる';
+  EVENT_LABELS[p[0] + '.dialog.closeProfile'] = p[1] + ': Profile を右上の × で閉じる';
   PROFILE_EMOJIS.forEach(function (e) { EVENT_LABELS[p[0] + '.dialog.pickEmoji.' + e.id] = p[1] + ': Profile で絵文字 ' + e.emoji + ' を選ぶ'; });
   PROFILE_GREETINGS.forEach(function (g) { EVENT_LABELS[p[0] + '.dialog.pickGreeting.' + g.id] = p[1] + ': Profile であいさつ "' + g.en + '" を選ぶ'; });
 });
@@ -1066,24 +1068,27 @@ var EVENT_LABELS = {
 // ボタンの event はデバイス名を除いたもの (例: 'ready' → 'host.ready')
 
 // 画面の下の帯 (トースト)。tap があるものはタップで操作できる。sub は 2 行目 (決定 U6 の "Connection failed" の説明)。
-// 離席中のホストの帯 (以前の U1 / U16 / U19 / U55) は、部屋を残して離れられなくなったので無い (決定 U57)
+// 離席中のホストの帯 (以前の U1 / U16 / U19 / U55) は、部屋を残して離れられなくなったので無い (決定 U57)。
+// Join a Match の Match Code の誤り・満員 (U63) もダイアログの中の赤字ではなくトーストで出す (決定 U69、#1891 の FB)。
+// codeCopied は状態ではなく付属状態の Toast で出す (Match Code をコピーしたとき、U69)
 var CONNECTION_FAILED = { create: 'Couldn\u2019t create a match. Try again.', join: 'Couldn\u2019t join the match. Try again.' };
 var TOASTS = {
   failedCreate: { kind: 'grey', text: 'Connection failed', sub: CONNECTION_FAILED.create, tap: 'tapToast' },
   failedJoin: { kind: 'grey', text: 'Connection failed', sub: CONNECTION_FAILED.join, tap: 'tapToast' },
+  // 見つからない・期限切れは同じ文言 (U63、#1891 の FB 20)
+  joinNotFound: { kind: 'grey', text: 'Match not found', sub: 'The code may be wrong or expired.' },
+  joinFull: { kind: 'grey', text: 'The match is already full.' },
+  codeCopied: { kind: 'grey', text: 'Match code copied' },
 };
 
-// オンライン対戦の MATCH MENU (決定 U37〜U42) と降参の確認。ボタンの event はデバイス名を除いたもの。
-// 対戦中に REMATCH / RETRY は出さず (U39)、QUIT ではなく SURRENDER (U41)
+// オンライン対戦の MATCH MENU (決定 U37〜U42)。ボタンの event はデバイス名を除いたもの。
+// 対戦中に REMATCH / RETRY は出さず (U39)、QUIT ではなく SURRENDER (U41)。SURRENDER を押すとすぐ降参する (確認は MATCH MENU の 1 回だけ、U65)
 var MATCH_MENU = {
   title: 'MATCH MENU', body: 'The match continues while the menu is open.',
   buttons: [{ label: 'CONTINUE', event: 'matchMenu.continue', kind: 'continue' }, { label: 'SURRENDER', event: 'matchMenu.surrender', kind: 'surrender' }],
 };
-var SURRENDER_CONFIRM = {
-  title: 'Surrender?', body: 'You will lose.',
-  buttons: [{ label: 'CONTINUE', event: 'surrenderConfirm.continue', kind: 'continue' }, { label: 'SURRENDER', event: 'surrenderConfirm.surrender', kind: 'surrender' }],
-};
-// 結果画面の終わった理由の行 (決定 U20 / U28 / U38 / U44)。時間切れで得点の高いほうが勝ち、同点なら引き分け (U44)
+// 結果画面の終わった理由の行 (決定 U20 / U28 / U38 / U44)。時間切れで得点の高いほうが勝ち、同点なら引き分け (U44)。
+// 降参で終わった試合 (セッションの surrendered) は "You surrendered" / "Your opponent surrendered" (resultReason)
 var END_REASONS = {
   timeUp: 'Time is up',
   timeUpTie: 'Same score when time ran out',
@@ -1108,6 +1113,7 @@ var REMATCH_STATUS = {
   FriendReturned: { text: 'Your friend went back to Friend Match. Rematch is not available.', kind: 'info' },
 };
 // レーティング (決定 U21): ランダム対戦の最初の 1 戦だけ Elo で変わる。Friend Match と、同じ相手との再戦では変わらない。
+// Friend Match ではレートが変わらないのは明らかなので、何も出さない (決定 U70、#1891 の FB)。
 // 初期値 1000・K=24 は QA² 側の仮の値 (モックでは両者とも初期値から)
 var ELO = { initial: 1000, k: 24 };
 var OUTCOME_SCORE = { Win: 1, Lose: 0, Draw: 0.5 };
@@ -1115,21 +1121,24 @@ function eloDelta(mine, theirs, score) {
   return Math.round(ELO.k * (score - 1 / (1 + Math.pow(10, (theirs - mine) / 400))));
 }
 function ratingText(outcome, session) {
-  if (session.match === 'friend') return 'No rating change (friend match)';
   if (session.match !== 'random') return null;
   if (outcome === 'NoContest') return 'No rating change (no contest)';
   if (!session.rated) return 'No rating change (rematch)';
   var delta = eloDelta(ELO.initial, ELO.initial, OUTCOME_SCORE[outcome]);
   return ELO.initial + ' \u2192 ' + (ELO.initial + delta) + ' (' + (delta > 0 ? '+' + delta : delta < 0 ? '\u2212' + -delta : '\u00B10') + ')';
 }
-// 結果画面のボタン (決定 U22 / U24 / U41 / U59 / U60)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める。
-// 戻るボタンはどちらの対戦でも 1 つだけで、ホストとクライアント、降参した側と勝った側で同じ (U59)。
-// ランダム対戦は勝った側に Find Next Opponent、負けた側に Rematch (U60)。引き分けと再戦の無い結果画面 (切断・No contest) は Find Next Opponent があり、引き分けは Rematch も。
-// 勝った側も、負けた側からの申し込みには Accept / Decline で応じられる
+// 結果画面の終わった理由 (END_REASONS のキー)。降参で終わったかはセッションの surrendered で決まる (決定 U38 / U66)
+function resultReason(spec, session) {
+  if (session.surrendered && spec.reason === 'timeUp') return spec.outcome === 'Lose' ? 'surrendered' : 'opponentSurrendered';
+  return spec.reason;
+}
+// 結果画面のボタン (決定 U22 / U24 / U41 / U59 / U60 / U67)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める。
+// 戻るボタンはどちらの対戦でも 1 つだけで、ホストとクライアント、降参した側と勝った側で同じ (U59)。降参で終わったときも同じボタン (U66)。
+// ランダム対戦は勝ち負けによらず Find Next Opponent があり (U67)、負けた側と引き分けには Rematch も (勝った側からは申し込めない、U60)。
+// 再戦の無い結果画面 (切断・No contest) は Find Next Opponent と戻るボタンだけ。勝った側も、負けた側からの申し込みには Accept / Decline で応じられる
 function resultButtons(spec, match) {
   var random = match === 'random';
   var back = random ? { label: 'Back to Random Match', event: 'backToRandomMatch' } : { label: 'Back to Friend Match', event: 'backToFriendMatch' };
-  if (spec.reason === 'surrendered') return [Object.assign(back, { primary: true })];
   var ph = spec.phase;
   var rematch = [];
   if (spec.rematch && ph === 'RematchRequested') rematch = [{ label: 'Cancel Request', event: 'cancelRematch' }];
@@ -1137,12 +1146,11 @@ function resultButtons(spec, match) {
     rematch = [{ label: 'Accept', event: 'rematch', primary: true, half: true }, { label: 'Decline', event: 'declineRematch', half: true }];
   } else if (random && spec.outcome === 'Win') rematch = [];
   else if (spec.rematch && /\.Cooldown$/.test(ph)) rematch = [{ label: 'Rematch', disabled: true }];
-  else if (spec.rematch && ph !== 'OpponentLeft') rematch = [{ label: 'Rematch', event: 'rematch', primary: !random || spec.outcome === 'Lose' }];
+  else if (spec.rematch && ph !== 'OpponentLeft') rematch = [{ label: 'Rematch', event: 'rematch', primary: !random }];
   var invited = rematch.some(function (b) { return b.primary; }) || ph === 'RematchRequested';
   if (!random) return rematch.concat([Object.assign(back, { primary: !rematch.length })]);
-  // 負けた側は再戦のボタンがある間は Find Next Opponent を出さない (U60)。相手が抜けた・切断で負けたときは再戦できないので出す
-  var next = spec.outcome === 'Lose' && rematch.length ? [] : [{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: !invited }];
-  return next.concat(rematch, [Object.assign(back, { primary: !next.length && !invited })]);
+  // 勝ち負けによらず同じ流れ (U67): いちばん上の Find Next Opponent が主のボタン。再戦を申し込んだ・申し込まれた間は再戦のボタンが主
+  return [{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: !invited }].concat(rematch, [back]);
 }
 // 片方が切断して 20 秒 (仮) 待っている間の表示 (決定 U46)。対戦中 (U28) と、ランダム対戦・再戦の開始前 (U54) で同じ。残りの秒数は timer で別に出す
 var DISCONNECT_OVERLAYS = {
@@ -1174,9 +1182,10 @@ var GAME_CONTEXT = 'プレイ中のゲーム画面 (プレースホルダー)。
 // 結果画面の説明。端末の画面には出さず、右パネルに出す。秒数・Elo の値が QA² 側の仮の値であることもここと README にだけ書く
 var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両者の名前・終わった理由とレーティングの変化を出す。スコアは出さない (qniapp/qa2#1891 FB 7)。' +
   '時間切れで終わったときの理由は "Time is up"、同点の引き分けは "Same score when time ran out" (U44)。' +
-  'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
-  'ボタンは Friend Match なら Rematch / Back to Friend Match。ランダム対戦は勝った側が Find Next Opponent / Back to Random Match、負けた側が Rematch / Back to Random Match、' +
-  '引き分けは Find Next Opponent / Rematch / Back to Random Match (U60)。' +
+  '降参で終わったときも同じ結果画面で、理由は降参した側が "You surrendered"、相手が "Your opponent surrendered" (U38)。時間切れと同じく再戦できる (U66、#1891 の FB 10)。' +
+  'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Friend Match では何も出さない (U70)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
+  'ボタンは Friend Match なら Rematch / Back to Friend Match。ランダム対戦は勝ち負けによらず Find Next Opponent があり (U67)、勝った側が Find Next Opponent / Back to Random Match、' +
+  '負けた側と引き分けが Find Next Opponent / Rematch / Back to Random Match (U60 / U67)。' +
   '戻るボタンはホストとクライアントで同じ 1 つだけ (U59)。Back to Friend Match は両者を同じ Match Code の同じ部屋へ戻す (U61)。自動では次へ進まない (U26)。';
 var RESULT_COOLDOWN_CONTEXT = '3 秒 (仮) は Rematch を押せない (右パネルの環境イベント「3 秒たつ」で進める)。3 秒たっても一行は残り、どちらかがまた申し込むか結果画面を抜けるまで出しておく (U50)。';
 var RESULT_PHASE_CONTEXT = {
@@ -1213,12 +1222,10 @@ var START_CANCELLED_CONTEXT = {
     'Online Battle の中に "Could not reconnect. The match did not start." (U52) と Search again / Close (U43 と同じくモーダルではない)。',
 };
 var MATCH_MENU_CONTEXT = 'MATCH MENU (決定 U37)。試合は止まらない: Time.timeScale = 0 にせず、暗幕も薄くしてゲームが見えたまま。メニュー中に試合が終われば (時間切れ) そのまま結果画面へ。' +
+  'SURRENDER (QUIT ではない、U41) を押すとすぐ降参する。降参の確認はこのメニューの 1 回だけで、"Surrender?" の確認は出さない (U65、#1891 の FB 18)。' +
   '開いただけでは相手の端末には何も出ない (U38)。対戦中に REMATCH / RETRY は無い (U39、再戦は結果画面だけ)。BGM も下げない (U42、モックには音が無い)。' +
   '試合が止まるのは片方の切断を待つ 20 秒 (仮) の間だけ (U46)。';
-var SURRENDER_CONFIRM_CONTEXT = '降参の確認 (決定 U40)。確認中も試合は続く。CONTINUE でプレイに戻り、SURRENDER で負けが決まって相手は勝ちの結果画面に "Your opponent surrendered" (U38)。ボタンは QUIT ではなく SURRENDER (U41)。';
 var SPECIAL_RESULT_CONTEXT = {
-  Surrendered: '降参した側の負けの結果画面 (決定 U38)。戻るボタンは勝った側と同じで、Friend Match なら Back to Friend Match、ランダム対戦なら Back to Random Match (決定 U59)。再戦と Find Next Opponent は無い (U28 / U45)。',
-  OpponentSurrendered: '相手が降参したので勝ち。"Your opponent surrendered" を出す (決定 U38)。降参で終わった試合のあとは、どちらからも再戦できない (U45)。',
   Disconnected: '自分の接続が切れ、20 秒 (仮) のうちに戻れなかったので負け (決定 U28)。ランダム対戦ではレートも変わる。切断で終わった試合のあとは再戦できない (U45)。',
   OpponentDisconnected: '相手の接続が切れ、20 秒 (仮) のうちに戻らなかったので勝ち (決定 U28)。切断で終わった試合のあとは再戦できない (U45)。',
   NoContest: '両者の切断かサービス障害で、勝敗なし (決定 U28)。"No contest due to a connection error"、レートは変わらない。再戦はできない (U45)。',
@@ -1275,7 +1282,9 @@ var READY_TIMERS = { reconnect: 20 }; // 秒。QA² 側の仮の値 (U5 / U32 / 
 var ROOM_RULES_CONTEXT = 'Match Code の期限は 30 分 (QA² 側の仮の値) で、サーバーが数え、画面には出さない (決定 U7 / U58)。読み込み・VS 画面・カウントダウン・U32 の再接続待ちの間は時計が止まり、部屋での切断 (U5) の再接続待ちの間は止まらない (U7)。' +
   'ホストにだけ、Match Code の下に "Share this code with your friend!" を出す (U58)。' +
   '部屋の画面の出口は左上の \u2039 だけで、部屋を出るボタンは無い (決定 U57、#1891 の FB 1・2)。ホストの \u2039 は確認 "Cancel this match?" のあと部屋を閉じ (U51)、' +
-  'クライアントの \u2039 は確認 "Leave this match?" のあと部屋を抜ける (U9)。ホストは Keep Waiting (U11)、クライアントは Stay (U63) で部屋に残る。部屋を残したまま別の画面へは移れない。';
+  'クライアントの \u2039 は確認 "Leave this match?" のあと部屋を抜ける (U9)。ホストは Keep Waiting (U11)、クライアントは Stay (U63) で部屋に残る。部屋を残したまま別の画面へは移れない。' +
+  '\u2039 を押せる間は、右上の Profile で今の画面のまま Profile を変えられ、選んだものはこの対戦の VS 画面から相手に見える (U68。一つ前の Friend Match トップへ戻ると対戦が閉じるため)。' +
+  'ホストの Match Code のコピーのボタンを押すと、画面の下に "Match code copied" のトースト (U69)。';
 var READY_CONTEXT = 'Ready 画面 (決定 U31 変更 / U36)。プレイヤーごとのカードに "\u2713 Ready" / "Not ready"。両者が Ready を押したら "Starting match\u2026" → VS 画面 → ゲーム本体のカウントダウン。' +
   'Ready を取り消せるのは届いたあとの Ready 画面だけで、送っている間と読み込み・VS 画面から先は取り消せない (U53)。3-2-1 のあとサーバーが確認するまでは試合開始ではなく、勝敗は記録しない (U32)。' + ROOM_RULES_CONTEXT +
   '端末の下のモック操作「アプリを離れる」でその人の Ready が消え (U35)、「切断する」で部屋での切断になる (U5)。';
@@ -1311,8 +1320,10 @@ var ROOM_NOTICE_CONTEXT = '部屋のお知らせは画面の上の帯で、モ�
 var ROOM_CONTEXT = {
   Waiting: '部屋を作った (図01)。Match Code の下に "Share this code with your friend!" (決定 U58。ホストにだけ出す)。Match Code の期限 (U7。30 分は QA² 側の仮の値) は画面に出さない。' + ROOM_RULES_CONTEXT,
   FriendReturning: '結果画面の Back to Friend Match で、同じ Match Code の同じ部屋に戻った (決定 U61、#1891 の FB 11)。友だちはまだ結果画面にいる。' +
+    '友だちが戻る前から、Ready 画面と同じ両者のカード (名前とレーティング、"Not ready") を出す (U71)。Ready は友だちが戻って同期が終わるまで押せない (U4)。' +
     '友だちも Back to Friend Match を押すと "Friend joined!" → Ready 画面 (U4)。部屋は \u2039 の確認 "Cancel this match?" で閉じるまで残る (U57)。' + ROOM_RULES_CONTEXT,
   WaitingForHost: '結果画面の Back to Friend Match で、同じ Match Code の同じ部屋に戻った (決定 U61、#1891 の FB 11)。ホストはまだ結果画面にいる。' +
+    'ホストが戻る前から、Ready 画面と同じ両者のカード (名前とレーティング、"Not ready") を出す (U71)。Ready はホストが戻って同期が終わるまで押せない (U4)。' +
     'ホストも Back to Friend Match を押すと "Connecting\u2026" → Ready 画面 (U4)。\u2039 の確認 "Leave this match?" で抜けるのはクライアントだけで、部屋は残る (U9 / U57)。',
   ClientLeft: '友だちが抜けた (決定 U34)。"Your opponent left the match." (U63、#1891 の FB 19) と出し、同じ Match Code のまま次の友だちを待つ。図05 の "left the match." → 自動で待機に戻る流れを、この 1 画面にまとめた。',
   MatchCancelled: 'VS 画面・カウントダウン中に切断した友だちが 20 秒 (仮) のうちに戻らなかった (決定 U32)。結果は無く、同じ Match Code のまま部屋に残って次の友だちを待つ。',
@@ -1326,16 +1337,18 @@ var ROOM_CONTEXT = {
     'Friend Match トップに "Match cancelled. Opponent did not reconnect." (行き先と文言は当時の Back to Friend Match (U24) と U32 にそろえた。2026-10-08 に確認)。' + ROOM_NOTICE_CONTEXT,
   CodeExpired: 'Match Code の期限 (30 分、QA² 側の仮の値) が切れた (決定 U7)。両者に "Match code expired."。Ready は出さず、ホストは New Match で新しい部屋を作り、クライアントは Join Match (Join a Match を開く、U63) で新しい Match Code を入れる (決定 U10)。' +
     'クライアントは別の画面へ移されず、今の画面のまま (決定 U18)。部屋での切断を待っている間に切れたときは、戻った側もこの画面。',
-  ConnectionFailed: 'New Match / Join a Match の Join がサーバーに届かなかった (決定 U6)。"Connection failed" はこのときだけで、Match Code の誤り・期限切れ・満員の赤字や閉じた部屋の帯とは別。タップで閉じる (クライアントの Join a Match は開いたまま、U63)。',
+  ConnectionFailed: 'New Match / Join a Match の Join がサーバーに届かなかった (決定 U6)。"Connection failed" はこのときだけで、Match Code の誤り・期限切れ・満員のトースト (U69) や閉じた部屋の帯とは別。タップで閉じる (クライアントの Join a Match は開いたまま、U63)。',
   Join: 'Join a Match のダイアログ (決定 U63、#1891 の FB 19)。Friend Match トップには New Match と Join Match のボタンだけを置き、Match Code は Join Match で開いたこのダイアログに入れて Join で入る。' +
-    'Match Code の誤りと満員の赤字はダイアログの中に出し、見つからない・期限切れは同じ "Match not found. The code may be wrong or expired." (FB 20)。\u00d7 で閉じると入れた Match Code は捨てる。' +
+    'Match Code の誤りと満員は、ダイアログの中の赤字ではなく画面の下のトーストで出す (U69)。見つからない・期限切れは同じ "Match not found" / "The code may be wrong or expired." (FB 20)。' +
+    'ダイアログは開いたままで、トーストはもう一度 Join を押す・ダイアログを閉じると消える。\u00d7 で閉じると入れた Match Code は捨てる。' +
     'モーダルなので、開いている間は \u2039 と部屋のお知らせの Close は押せない (お知らせの帯は後ろに残る、U52)。',
 };
 
-var PROFILE_CONTEXT = 'Profile (決定 U56。入口は #1891 の FB 12 で、専用の画面から今の画面の上のダイアログに変えた)。Random Match (Ready を待っている間と相手を探している間、U62) と Friend Match トップの Profile で開き、待ち時間に今の画面のまま変えられる。' +
+var PROFILE_CONTEXT = 'Profile (決定 U56。入口は #1891 の FB 12 で、専用の画面から今の画面の上のダイアログに変えた)。Random Match (Ready を待っている間と相手を探している間、U62)、Friend Match トップ、部屋の画面 (U68) の Profile で開き、待ち時間に今の画面のまま変えられる。' +
   '上の見本は、相手の VS 画面に出る自分のカード。絵文字とあいさつを 1 つずつ選ぶと見本がすぐ変わる。名前は変えられない。' +
-  '選ぶとすぐ保存して "Saved" を出し、Save / Cancel は無い (#1891 の FB 14)。閉じるのは左上の ‹ だけで、Esc やダイアログの外を押しても閉じない。相手が見つかるなど画面が変わるとダイアログは閉じる。' +
-  '保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから。相手を探している間に選んだものは、まだ相手がいないので見つかる相手にも見える。' +
+  '選ぶとすぐ保存し、Save / Cancel は無い (#1891 の FB 14)。"Saved" も出さない (保存しない操作が無いため、U64)。閉じるのは右上の × だけで (U64)、Esc やダイアログの外を押しても閉じない。' +
+  '相手が見つかる・読み込みが始まるなど Profile を開けない画面へ変わるとダイアログは閉じる (部屋で相手が Ready を押しただけでは閉じない、U68)。' +
+  '保存した値が相手に見えるのは、次に部屋を作る・部屋に入る・相手を探し始めるときから。相手を探している間と部屋の画面で選んだものは、この対戦の相手にも見える (U68)。' +
   '10 個ずつの候補と既定値 (\u{1F44B} "Hello!") は QA² 側の仮の値。あいさつは日本語と英語の 2 つで、それを見る端末の言語で出す (#1891 FB 13、右パネルの「あいさつの言語」の JA / EN で切り替える)。英語のアポストロフィはどれも \u2019。相手 (ogwssk) も変えられ、最初の値は \u{1F60E} "Let\u2019s go!"。' +
   '値はブラウザの localStorage にだけ残し、モックでは自由操作のときだけ読み書きする (シナリオはいつも最初の値から始まり、読みも書きもしない。2026-10-08 に確認)。' +
   '同じ相手との再戦では値を固定し直さない (2026-10-08 に確認)。';
@@ -1395,10 +1408,7 @@ var SCREENS = (function () {
     return { view: 'vs', overlay: DISCONNECT_OVERLAYS[who], timer: READY_TIMERS.reconnect, decided: ['U54', 'U46'], context: START_DISCONNECT_CONTEXT[who] };
   }
   function matchMenu() {
-    return { view: 'game', menu: MATCH_MENU, decided: ['U37', 'U38', 'U39', 'U42'], context: MATCH_MENU_CONTEXT };
-  }
-  function surrenderConfirm() {
-    return { view: 'game', menu: SURRENDER_CONFIRM, decided: ['U37', 'U40', 'U41'], context: SURRENDER_CONFIRM_CONTEXT };
+    return { view: 'game', menu: MATCH_MENU, decided: ['U37', 'U38', 'U39', 'U41', 'U42', 'U65'], context: MATCH_MENU_CONTEXT };
   }
   // Online Battle。Profile は Random Match と Friend Match の画面の右上にある (決定 U56、#1891 の FB 12)
   function online(dev) {
@@ -1410,9 +1420,9 @@ var SCREENS = (function () {
   function top(extra) {
     return Object.assign({ view: 'friendTop', title: 'Friend Match', back: 'back', profile: true }, extra);
   }
-  // Join a Match のダイアログ: Match Code の入力欄、Join、× (閉じる)。赤字 (error) はダイアログの中に出す
-  function joinDialog(input, error) {
-    return { input: input || '', error: error || null };
+  // Join a Match のダイアログ: Match Code の入力欄、Join、× (閉じる)。Match Code の誤り・満員はダイアログの中ではなくトーストで出す (決定 U69)
+  function joinDialog(input) {
+    return { input: input || '' };
   }
   // Friend Match トップの部屋のお知らせ (決定 U52)。モーダルではない帯で、Close で閉じる
   function roomNotice(key, decided) {
@@ -1467,11 +1477,8 @@ var SCREENS = (function () {
     S[L('CodeExpired')] = lobby(R, { status: ROOM_TEXT.codeExpired, codeHint: false, copyCode: false, buttons: [R === 'Host' ? B.createMatch : B.joinMatch],
       decided: ['U7', 'U10'].concat(R === 'Client' ? ['U18'] : []), context: ROOM_CONTEXT.CodeExpired });
   }
-  // Join a Match の中の赤字 (決定 U63)。見つからない・期限切れは同じ文言 (#1891 の FB 20)
-  var errMsg = {
-    NotFound: 'Match not found. The code may be wrong or expired.',
-    Full: 'The match is already full.',
-  };
+  // Join a Match の Match Code の誤り・満員のトースト (決定 U63 / U69)。見つからない・期限切れは同じ文言 (#1891 の FB 20)
+  var errToast = { NotFound: 'joinNotFound', Full: 'joinFull' };
 
   // --- ホスト ---
   S['Host.MultiModeSelection'] = online('host');
@@ -1483,8 +1490,9 @@ var SCREENS = (function () {
   readyScreens('Host');
   S['Host.FriendMatch.Lobby.ClientLeft'] = lobby('Host', { status: 'Your opponent left the match.\nWaiting for another friend\u2026',
     decided: ['U34', 'U7', 'U57', 'U58', 'U63'], context: ROOM_CONTEXT.ClientLeft });
-  S['Host.FriendMatch.Lobby.FriendReturning'] = lobby('Host', { status: ROOM_TEXT.friendReturning,
-    decided: ['U61', 'U7', 'U57', 'U58'], context: ROOM_CONTEXT.FriendReturning });
+  // 先に部屋へ戻った側は、相手が戻る前から両者のカードを出す (決定 U71、#1891 の FB)。Ready は相手が戻って同期が終わるまで押せない (U4)
+  S['Host.FriendMatch.Lobby.FriendReturning'] = readyLobby('Host', false, false, null, { status: ROOM_TEXT.friendReturning, buttons: [B.readyOff],
+    decided: ['U61', 'U71', 'U4'], context: ROOM_CONTEXT.FriendReturning });
   S['Host.FriendMatch.Lobby.MatchCancelled'] = lobby('Host', { status: 'Match cancelled.\nOpponent did not reconnect.',
     decided: ['U32', 'U7', 'U57', 'U58'], context: ROOM_CONTEXT.MatchCancelled });
   S['Host.Matchmake'] = matchmakeIdle();
@@ -1498,11 +1506,10 @@ var SCREENS = (function () {
   S['Host.Opponent'] = { view: 'vs', decided: ['U32', 'U48', 'U54', 'U56'], context: VS_CONTEXT };
   S['Host.Opponent.Disconnected'] = startDisconnectWait('self');
   S['Host.Opponent.OpponentDisconnected'] = startDisconnectWait('opponent');
-  // ゲーム画面: カウントダウン中 (メニューボタンなし・Win / Lose は押せない) → プレイ中 ⇄ MATCH MENU → 降参の確認
+  // ゲーム画面: カウントダウン中 (メニューボタンなし・Win / Lose は押せない) → プレイ中 ⇄ MATCH MENU (SURRENDER ですぐ降参、U65)
   S['Host.Game.Countdown'] = { view: 'game', countdown: true, decided: ['U2', 'U32'], context: GAME_COUNTDOWN_CONTEXT };
   S['Host.Game.Play'] = { view: 'game', context: GAME_CONTEXT };
   S['Host.Game.MatchMenu'] = matchMenu();
-  S['Host.Game.SurrenderConfirm'] = surrenderConfirm();
   S['Host.Game.Disconnected'] = disconnectWait('self');
   S['Host.Game.OpponentDisconnected'] = disconnectWait('opponent');
 
@@ -1520,12 +1527,13 @@ var SCREENS = (function () {
     S['Client.FriendMatch.Room.' + k + '.Join'] = top(Object.assign({}, spec, { join: joinDialog() }));
     S['Client.FriendMatch.Room.' + k + '.Join.CodeEntered'] = top(Object.assign({}, spec, { join: joinDialog('QWERTY123') }));
   });
-  Object.keys(errMsg).forEach(function (k) {
-    S[CLIENT_JOIN + '.Error.' + k] = top({ join: joinDialog('QWERTY123', errMsg[k]), decided: ['U63'], context: ROOM_CONTEXT.Join });
+  Object.keys(errToast).forEach(function (k) {
+    S[CLIENT_JOIN + '.Error.' + k] = top({ join: joinDialog('QWERTY123'), toast: errToast[k], decided: ['U63', 'U69'], context: ROOM_CONTEXT.Join });
   });
   S[CLIENT_JOIN + '.ConnectionFailed'] = top({ join: joinDialog('QWERTY123'), toast: 'failedJoin', decided: ['U6', 'U63'], context: ROOM_CONTEXT.ConnectionFailed });
   readyScreens('Client');
-  S[CLIENT_WAITING_FOR_HOST] = lobby('Client', { status: ROOM_TEXT.waitingForHost, decided: ['U61', 'U9', 'U57'], context: ROOM_CONTEXT.WaitingForHost });
+  S[CLIENT_WAITING_FOR_HOST] = readyLobby('Client', false, false, null, { status: ROOM_TEXT.waitingForHost, buttons: [B.readyOff],
+    decided: ['U61', 'U71', 'U4', 'U9'], context: ROOM_CONTEXT.WaitingForHost });
   S['Client.Matchmake'] = matchmakeIdle();
   S['Client.Matchmake.Searching'] = matchmake();
   S['Client.Matchmake.Stopped'] = inlineSearchNotice(SEARCH_NOTICES.stopped, { context: SEARCH_STOPPED_CONTEXT });
@@ -1540,7 +1548,6 @@ var SCREENS = (function () {
   S['Client.Game.Countdown'] = { view: 'game', countdown: true, decided: ['U2', 'U32'], context: GAME_COUNTDOWN_CONTEXT };
   S['Client.Game.Play'] = { view: 'game', context: GAME_CONTEXT };
   S['Client.Game.MatchMenu'] = matchMenu();
-  S['Client.Game.SurrenderConfirm'] = surrenderConfirm();
   S['Client.Game.Disconnected'] = disconnectWait('self');
   S['Client.Game.OpponentDisconnected'] = disconnectWait('opponent');
 
@@ -1556,28 +1563,39 @@ var SCREENS = (function () {
     var stamps = phase !== 'OpponentLeft' && (!extra || extra.stamps !== false);
     var spec = { view: 'result', title: 'RESULT', back: null, outcome: outcome, phase: phase, status: status,
       reason: outcome === 'Draw' ? 'timeUpTie' : 'timeUp', rematch: rematch, stamps: stamps,
-      decided: ['U20', 'U21', 'U22', 'U24', 'U26'].concat(rematch ? ['U23', 'U30'] : [], ended ? ['U50'] : [], stamps ? ['U27', 'U49'] : [],
+      decided: ['U20', 'U21', 'U22', 'U24', 'U26', 'U67', 'U70'].concat(rematch ? ['U23', 'U30'] : [], ended ? ['U50'] : [], stamps ? ['U27', 'U49'] : [],
         phase === 'OpponentLeft' ? ['U25'] : [], !extra || !extra.reason ? ['U44'] : []),
       context: [RESULT_CONTEXT].concat(RESULT_PHASE_CONTEXT[status] || [], cooldown ? [RESULT_COOLDOWN_CONTEXT] : [], stamps ? [STAMP_CONTEXT] : []) };
     return Object.assign(spec, extra);
   }
   ['Host', 'Client'].forEach(function (role) {
+    // 勝ち・負けの結果画面は、降参で終わったときにも使う (終わった理由はセッションの surrendered で出し分ける、決定 U38 / U66)
     OUTCOMES.forEach(function (o) {
-      RESULT_PHASES.forEach(function (ph) { S[resultState(role, o, ph)] = result(o, ph.slice(1)); });
+      RESULT_PHASES.forEach(function (ph) {
+        var spec = result(o, ph.slice(1));
+        if (o !== 'Draw') spec.decided = spec.decided.concat(['U38', 'U66']);
+        S[resultState(role, o, ph)] = spec;
+      });
     });
     var special = function (key, reason, decided) {
-      var spec = result(SPECIAL_RESULTS[key], '', { rematch: false, stamps: /Surrendered$/.test(key), reason: reason });
+      var spec = result(SPECIAL_RESULTS[key], '', { rematch: false, stamps: false, reason: reason });
       spec.decided = spec.decided.concat(decided, ['U45']);
-      spec.context = [RESULT_CONTEXT, SPECIAL_RESULT_CONTEXT[key]].concat(spec.stamps ? [STAMP_CONTEXT] : []);
+      spec.context = [RESULT_CONTEXT, SPECIAL_RESULT_CONTEXT[key]];
       S[resultState(role, SPECIAL_RESULTS[key], '.' + key)] = spec;
     };
-    // 降参 (決定 U38 / U41) と切断 (決定 U28) で決まった結果。どちらからも再戦は無い (U45)
-    special('Surrendered', 'surrendered', ['U38', 'U41', 'U28']);
-    special('OpponentSurrendered', 'opponentSurrendered', ['U38']);
+    // 切断 (決定 U28) で決まった結果。どちらからも再戦は無い (U45)
     special('Disconnected', 'disconnected', ['U28']);
     special('OpponentDisconnected', 'opponentDisconnected', ['U28']);
     S[role + '.NoContestResult'] = Object.assign(result('NoContest', '', { rematch: false, stamps: false, reason: 'connectionError' }), {
-      decided: ['U20', 'U21', 'U22', 'U24', 'U26', 'U28', 'U45'], context: [RESULT_CONTEXT, SPECIAL_RESULT_CONTEXT.NoContest] });
+      decided: ['U20', 'U21', 'U22', 'U24', 'U26', 'U28', 'U45', 'U67'], context: [RESULT_CONTEXT, SPECIAL_RESULT_CONTEXT.NoContest] });
+  });
+
+  // 部屋の画面のうち \u2039 で確認を出せるもの (決定 U68) は、右上の Profile で今の画面のまま Profile を変えられる
+  ['Host', 'Client'].forEach(function (R) {
+    profileLobby[R].forEach(function (n) {
+      S[n].profile = true;
+      S[n].decided = (S[n].decided || []).concat(['U68']);
+    });
   });
 
   Object.keys(S).forEach(function (k) {
@@ -1598,8 +1616,8 @@ var DIALOGS = {
   // クライアントの ‹ (決定 U57 / U9 / U63)。部屋を抜ける。本文は U34
   leaveMatch: { title: 'Leave this match?', body: ROOM_LEAVE_BODY,
     buttons: [{ label: 'Leave', event: 'dialog.leaveMatch', danger: true }, { label: 'Stay', event: 'dialog.stay' }] },
-  // Profile (決定 U56、#1891 の FB 12)。Random Match と Friend Match トップの上に開く。中身 (‹・見本・絵文字・あいさつ・"Saved") は app.js が描く。
-  // 選ぶとすぐ保存し、閉じるのは左上の ‹ だけ (#1891 の FB 14)
+  // Profile (決定 U56、#1891 の FB 12)。Random Match・Friend Match トップ・部屋の画面 (U68) の上に開く。中身 (×・見本・絵文字・あいさつ) は app.js が描く。
+  // 選ぶとすぐ保存し (#1891 の FB 14)、"Saved" は出さない。閉じるのは右上の × だけ (U64)
   profile: { title: 'Profile', profile: true, close: 'dialog.closeProfile', context: PROFILE_CONTEXT },
 };
 
@@ -1737,7 +1755,7 @@ var UNDECIDED = [
       '通常の決着のときの終わった理由の文言と引き分けになる条件は U44 で決まった (2026-10-08: 時間切れで "Time is up"、同点なら "Same score when time ran out")。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U21', title: 'レーティング: Friend Match は変わらない。ランダム対戦は Elo (初期値 1000、K=24)。同じ相手との再戦は変わらない',
-    desc: 'Friend Match の結果画面には "No rating change (friend match)" を出す。ランダム対戦は Elo (初期値 1000、K=24) で変わり、例えば "1000 → 1012 (+12)" と出す。' +
+    desc: 'Friend Match の結果画面には "No rating change (friend match)" を出す (2026-10-19 の U70 で、Friend Match では何も出さないことにした)。ランダム対戦は Elo (初期値 1000、K=24) で変わり、例えば "1000 → 1012 (+12)" と出す。' +
       'ランダム対戦で同じ相手と続けて再戦したときはレートが変わらない (モックでは "No rating change (rematch)")。No contest も変わらない ("No rating change (no contest)")。' +
       '初期値 1000 と K=24 は QA² 側の仮の値 (変わりうる)。モックでは両者とも初期値 1000 から計算する。VS 画面は "Rank" をやめて "Rating {n}" を出す (U48、2026-10-08)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
@@ -1746,7 +1764,8 @@ var UNDECIDED = [
       '再戦を申し込んだ側には Cancel Request、申し込まれた側には Rematch と Decline を出す (U30)。降参した側は Back to Online だけ (U41)。' +
       'Online Battle へ戻るボタンは、降参後のものも含めてすべて "Back to Online" にそろえた。' +
       '2026-10-17 の U59 で、ランダム対戦の Back to Online は Back to Random Match に、降参した側のボタンは勝った側と同じ戻るボタン (Back to Friend Match / Back to Random Match) になった。' +
-      '同日の U60 で、ランダム対戦の勝った側は Find Next Opponent (Rematch なし)、負けた側は Rematch (Find Next Opponent なし) になった。',
+      '同日の U60 で、ランダム対戦の勝った側は Find Next Opponent (Rematch なし)、負けた側は Rematch (Find Next Opponent なし) になった。' +
+      '2026-10-19 の U67 で、負けた側にも Find Next Opponent を出すようになり、U66 で降参した側にも勝った側と同じボタン (Rematch を含む) を出すようになった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U23', title: '再戦: どちらからでも申し込め、相手が応じたらそのまま VS 画面へ。同時に申し込んだら成立',
     desc: '結果画面の Rematch で、どちらのプレイヤーからでも再戦を申し込める。相手が応じたら (Rematch を押したら)、ロビーの Ready を挟まずにそのまま VS 画面へ進む。' +
@@ -1774,7 +1793,7 @@ var UNDECIDED = [
     desc: '片方が切断したら 20 秒待ち、戻らなければ切断した側の負け (ランダム対戦ではレートも変わる)。' +
       '両者が切断した場合とサービス障害の場合は "No contest due to a connection error" で、レートは変わらない。降参した側は再戦を申し込めない。' +
       '20 秒は QA² 側の仮の値 (変わりうる)。待っている間は両者のゲームと得点を止め、両者に残りの秒数を出す (U46、2026-10-08)。引き分けは U20 で結果の 1 つになり、なる条件は U44 で決まった。' +
-      '降参・切断・No contest のあとは、どちらからも再戦できない (U45)。',
+      '降参・切断・No contest のあとは、どちらからも再戦できない (U45)。2026-10-19 の U66 で、降参のあとは再戦できるようになった (切断・No contest は変わらない)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U29', title: 'ランダム対戦の Find Next Opponent: 60 秒探して見つからなければ "No opponent found."',
     desc: 'ランダム対戦の結果画面の Find Next Opponent で、次の相手を探す (見た目と Cancel / ‹ は Random Match から探すとき (U13) と同じ)。' +
@@ -1831,19 +1850,22 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U38', title: 'メニューを開いても相手には何も見えない。降参すると相手は勝ち + "Your opponent surrendered"',
     desc: 'MATCH MENU を開いただけでは、相手の端末には何も出さない (相手はそのままプレイを続ける)。' +
-      '降参すると降参した側は負けの結果画面 ("You surrendered")、相手は勝ちの結果画面に "Your opponent surrendered" を出す。相手がメニューや降参の確認を開いていても同じ。',
+      '降参すると降参した側は負けの結果画面 ("You surrendered")、相手は勝ちの結果画面に "Your opponent surrendered" を出す。相手がメニューや降参の確認を開いていても同じ。' +
+      '2026-10-19 の U65 で降参の確認は MATCH MENU の 1 回だけになり、U66 で降参のあとも時間切れと同じく再戦できるようになった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U39', title: '対戦中に REMATCH / RETRY は出さない (再戦は結果画面だけ)',
     desc: '実機のポーズポップアップの 2 番目のボタン (VsAI では REMATCH、ソロでは RETRY) は、オンライン対戦の MATCH MENU には置かない。再戦は結果画面の Rematch だけ (進め方は U23)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U40', title: '降参の前に確認を出す ("Surrender?" / "You will lose.")',
     desc: 'MATCH MENU の SURRENDER を押すと、すぐには降参せず確認を出す: 「降参しますか？ 負けになります」(画面の英語は "Surrender?" / "You will lose.")。' +
-      'ボタンは CONTINUE (続ける、プレイに戻る) と SURRENDER (降参する)。確認を開いている間も試合は続く。',
+      'ボタンは CONTINUE (続ける、プレイに戻る) と SURRENDER (降参する)。確認を開いている間も試合は続く。' +
+      '2026-10-19 の U65 で、この確認は無くなった (MATCH MENU の SURRENDER ですぐ降参する。MATCH MENU と確認で 2 回確かめていたため、#1891 の FB 18)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U41', title: 'ボタンは SURRENDER (QUIT ではない)。負けの結果画面のあと Online Battle へ',
     desc: 'MATCH MENU のボタンの文言は QUIT ではなく SURRENDER。降参して負けの結果画面を見たあとは、Online Battle (Host.MultiModeSelection / Client.MultiModeSelection) に戻る。' +
       'モックでは負けの結果画面の Back to Online で戻る (ボタンの文言は U22 で決定、2026-10-07)。' +
-      '2026-10-17 の U59 で、負けの結果画面の戻るボタンは勝った側と同じ (Back to Friend Match / Back to Random Match) になった。',
+      '2026-10-17 の U59 で、負けの結果画面の戻るボタンは勝った側と同じ (Back to Friend Match / Back to Random Match) になった。' +
+      '2026-10-19 の U66 / U67 で、降参した側の結果画面も時間切れの負けと同じボタン (Rematch、ランダム対戦は Find Next Opponent も) になった。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U42', title: 'MATCH MENU 中も BGM を下げない',
     desc: '実ゲームのポーズは BGM を -5dB 下げる (ダッキング) が、オンライン対戦の MATCH MENU では試合が続くので BGM を下げない。モックには音が無いので、決定の記録だけ。',
@@ -1860,7 +1882,8 @@ var UNDECIDED = [
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U45', title: '降参・切断・No contest で終わった試合のあとは、どちらからも再戦できない',
     desc: '降参・切断で勝敗が決まった試合と、No contest の試合のあとは、どちらの側にも Rematch を出さない (降参で勝った側からも申し込めない)。これまでのモックのとおり。' +
-      'そのため、これらの結果画面では相手が抜けても "Your opponent left. Rematch is not available." (U25) を出さない。',
+      'そのため、これらの結果画面では相手が抜けても "Your opponent left. Rematch is not available." (U25) を出さない。' +
+      '2026-10-19 の U66 で、降参で終わった試合のあとは再戦できるようになった (切断・No contest のあとは今までどおり再戦できない)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U46', title: '対戦中の片方の切断: サーバーが両者のゲームと得点を 20 秒止め、両者の画面に残りの秒数',
     desc: '対戦中に片方が切断したら、サーバーが両者のゲームと得点を 20 秒止める (待っている間に試合は進まない)。両者の画面に残りの秒数を出す。' +
@@ -1916,6 +1939,7 @@ var UNDECIDED = [
     desc: 'Random Match (相手を探している画面) と Friend Match トップの右上に Profile を置き (両端末)、押すと今の画面の上にダイアログで開く (#1891 の YoshiyukiN さんの FB 12 番目で、' +
       'Online Battle の Profile と専用の Profile 画面をやめた。待ち時間に設定でき、画面を戻る必要がない)。ダイアログの上には VS 画面のカードの見本 (名前・絵文字・あいさつ) を出し、選ぶたびにすぐ変える。' +
       '選ぶとすぐ保存して "Saved" を出し、Save / Cancel は無い。閉じるのは左上の ‹ だけで、Esc やダイアログの外を押しても閉じない (#1891 の FB 14)。' +
+      '2026-10-19 の U64 で、‹ の代わりに右上の × で閉じ、"Saved" は出さないことにした。同日の U68 で、部屋の画面でも開けるようになった。' +
       '絵文字は ' + PROFILE_EMOJIS.map(function (e) { return e.emoji; }).join(' ') + ' から 1 つ、あいさつは ' +
       PROFILE_GREETINGS.map(function (g) { return '"' + g.en + '"'; }).join(' / ') + ' から 1 つ。自由入力と二つ組みの称号は無く、名前は変えられない。' +
       '全員の既定値は \u{1F44B} "Hello!"。部屋 (Friend Match の部屋・Ready 画面など)・対戦中は開けない。' +
@@ -1955,7 +1979,8 @@ var UNDECIDED = [
       '相手 (勝った側) には "Your opponent wants a rematch" と Accept / Decline を出す。相手が Accept したときだけ再戦が始まる (VS 画面へ、U23)。' +
       '断られたとき・20 秒 (仮) 応答がないときは結果画面に残り、"Your opponent declined the rematch" / "No response to rematch request" の一行を出す (U30 / U50)。' +
       '引き分けは勝ち負けが無いので、今までどおり両者に Find Next Opponent と Rematch。Back to Random Match (U59) はどの結果画面にも残す。' +
-      'Friend Match の再戦は変えないが、申し込んだ側の文言 ("Waiting for opponent to accept…") と応じるボタン (Accept) はランダム対戦とそろえる。',
+      'Friend Match の再戦は変えないが、申し込んだ側の文言 ("Waiting for opponent to accept…") と応じるボタン (Accept) はランダム対戦とそろえる。' +
+      '2026-10-19 の U67 で、負けた側にも Find Next Opponent を出すようになった (Rematch と並べる)。',
     decided: { by: '#1891 の FB (10 番目)', date: '2026-10-17' } },
   { id: 'U61', title: 'Back to Friend Match は両者を同じ部屋 (同じ Match Code) へ戻す。部屋を閉じるのはホストの ‹ だけ',
     desc: '#1891 の FB の 11 番目。Friend Match の結果画面の Back to Friend Match は、Friend Match トップではなく、対戦した部屋へ同じ Match Code のまま戻す (U24 を変更)。' +
@@ -1964,6 +1989,7 @@ var UNDECIDED = [
       '相手も押すと、入室と同じく "Friend joined!" / "Connecting…" のあと Ready 画面 (U4)。相手に見せる絵文字とあいさつは同じ部屋なので固定し直さない (U56、再戦と同じ)。' +
       '部屋が閉じるのはホストが ‹ を押して "Cancel this match?" で閉じたときだけ (U57)。クライアントの ‹ は "Leave this match?" のあとクライアントだけが抜け、部屋は残る (U9 / U34)。' +
       'ホストが先に部屋を閉じていたら、あとから押したクライアントは Friend Match トップに "The host canceled the match." (U34 / U52)。 ' +
+      '2026-10-19 の U71 で、先に戻った側にも相手が戻る前から両者のカード (名前とレーティング) を出すようになった。 ' +
       '確認・帯・一行の文言は 2026-10-17 の U63 で変えた (以前は "Close this room?" / "Leave this room?"、"Room closed. The host left."、"Your friend went back to the room. Rematch is not available.")。',
     decided: { by: '#1891 の FB (11 番目)', date: '2026-10-17' } },
   { id: 'U62', title: 'Random Match の画面は開いただけでは探さない。Ready で探し始め、探している間は同じボタンが Cancel になる',
@@ -1977,7 +2003,8 @@ var UNDECIDED = [
     decided: { by: '#1891 の FB (16・17 番目)', date: '2026-10-17' } },
   { id: 'U63', title: 'Friend Match トップは New Match / Join Match だけ。Match Code は Join a Match のダイアログで入れる。画面に "Room" と書かない',
     desc: '#1891 の FB の 19・20 番目。Friend Match トップのボタンは New Match (以前の Create Match) と Join Match の 2 つだけにし、Match Code の入力欄とその下の Join Match は置かない。' +
-      'Join Match を押すと Join a Match のダイアログ (Match Code の入力欄、Join、× で閉じる) が開き、Match Code を入れて Join で入る。Match Code の誤りと満員の赤字はダイアログの中に出す。' +
+      'Join Match を押すと Join a Match のダイアログ (Match Code の入力欄、Join、× で閉じる) が開き、Match Code を入れて Join で入る。Match Code の誤りと満員の赤字はダイアログの中に出す ' +
+      '(2026-10-19 の U69 で、赤字ではなく画面の下のトーストにした)。' +
       '見つからないときと期限切れのときは分けず、どちらも "Match not found. The code may be wrong or expired." (FB 20。以前の "Match not found. Check the Match Code and try again." と "The match has expired." をまとめた)。' +
       '画面の "Room" はやめる: ホストの \u2039 の確認は "Cancel this match?" と Cancel Match / Keep Waiting (以前の "Close this room?" と Close Room、U51 / U57)、' +
       'クライアントの \u2039 の確認は "Leave this match?" と Leave / Stay (以前の "Leave this room?" と Leave Room / Keep Waiting、U9 / U11 / U57)。本文 "No match has started. No win or loss will be recorded." (U34) は変えない。' +
@@ -1986,4 +2013,42 @@ var UNDECIDED = [
       '"Couldn\u2019t create a match. Try again." / "Couldn\u2019t join the match. Try again." (U6)、"Your friend went back to Friend Match. Rematch is not available." (U61)、Match Code のコピーのボタンの名前 "Copy match code" (FB 5)。' +
       'Retry でつながったが部屋がもう無いとき (U5) は、赤字がダイアログの中に移ったので、Friend Match トップに "The match was canceled." の帯を出す。',
     decided: { by: '#1891 の FB (19・20 番目)', date: '2026-10-17' } },
+  { id: 'U64', title: 'Profile のダイアログは右上の × で閉じる。"Saved" は出さない',
+    desc: '#1891 の 2026-10-19 の FB。Profile のダイアログの左上の Back (\u2039) をやめ、Join a Match (U63) と同じく右上の × (Close) で閉じる。' +
+      '選ぶとすぐ保存するのはそのまま (FB 14) で、保存しない操作が無いので "\u2713 Saved" は出さない。Esc やダイアログの外を押しても閉じないのもそのまま。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U65', title: '降参の確認は MATCH MENU の 1 回だけ。SURRENDER を押すとすぐ降参する',
+    desc: '#1891 の FB 18 (2026-10-19 の FB で、まだ 2 回確認していると指摘)。MATCH MENU の SURRENDER を押すとすぐ降参し、"Surrender?" / "You will lose." の確認 (U40) は出さない。' +
+      'MATCH MENU を開くことが 1 回目の確認になる。MATCH MENU の CONTINUE、メニュー中も試合が続くこと (U37)、ボタンの名前が SURRENDER であること (U41) は変えない。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U66', title: '降参で終わった試合のあとも再戦できる (時間切れの決着と同じ結果画面)',
+    desc: '#1891 の FB 10 (2026-10-19 の FB で、Rematch が出ていないと指摘)。原因は、降参で終わった試合の結果画面が U45 で再戦の無い特別な画面になっていたこと。' +
+      'モックのゲーム画面で試合を終える操作は降参だけ (時間切れは端末の下のモック操作) なので、降参のあとに Rematch が出ないことが目立っていた。' +
+      '降参で終わった試合も時間切れと同じ結果画面にし、Friend Match では両者に Rematch、ランダム対戦では負けた側 (降参した側) と勝った側に U60 / U67 と同じボタンを出す。' +
+      '終わった理由 ("You surrendered" / "Your opponent surrendered"、U38)・レーティング (U21)・スタンプ (U27) は変えない。切断・No contest のあとは今までどおり再戦できない (U45)。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U67', title: 'ランダム対戦の結果画面は、勝ち負けによらず Find Next Opponent を出す',
+    desc: '#1891 の 2026-10-19 の FB。勝ち負けによらず流れは変わらないので、負けた側にも Find Next Opponent を出す (U60 では負けた側は Rematch だけだった)。' +
+      'ボタンは引き分けと同じく Find Next Opponent / Rematch / Back to Random Match で、Find Next Opponent を主のボタンにする。勝った側は今までどおり Find Next Opponent / Back to Random Match (勝った側からは申し込めない、U60)。' +
+      '再戦を申し込んだ・申し込まれた間は、再戦のボタン (Cancel Request / Accept) を主にする。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U68', title: 'Match Code を出している部屋の画面でも Profile を変えられる',
+    desc: '#1891 の 2026-10-19 の FB。部屋の画面 (友だちを待っている間・Ready 画面など、Match Code を出している画面) の右上にも Profile を置き、今の画面の上にダイアログで開く。' +
+      'Profile は一つ前の Friend Match トップにもあるが、戻ると対戦が閉じるため。開けるのは \u2039 で確認を出せる間で、Ready を送っている間・読み込み・自分の再接続中・期限切れの画面では開けない。' +
+      '部屋で選んだものは、この対戦の VS 画面から相手に見える (U56 の「次の部屋から」の例外)。相手が Ready を押すなど部屋の中で画面が変わってもダイアログは閉じず、読み込みが始まるなど Profile を開けない画面へ変わると閉じる。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U69', title: 'Match Code をコピーしたら "Match code copied" のトースト。Join a Match の Match Code の誤り・満員もトーストで出す',
+    desc: '#1891 の 2026-10-19 の FB。ホストの Match Code のコピーのボタン (FB 5) を押すと、画面の下に "Match code copied" のトーストを出す (画面はそのまま。2 秒 (仮) か画面が変わると消える)。' +
+      'Join a Match の Match Code の誤りと満員 (U63) は、ダイアログの中の赤字ではなく画面の下のトーストで出す: "Match not found" / "The code may be wrong or expired."、"The match is already full."。' +
+      'ダイアログは開いたままで、もう一度 Join を押すかダイアログを閉じるとトーストは消える。トーストは "Connection failed" (U6) と同じ見た目で、タップでは何もしない。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U70', title: 'Friend Match の結果画面には "No rating change (friend match)" を出さない',
+    desc: '#1891 の 2026-10-19 の FB。Friend Match でレートが変わらないのは明らかなので、結果画面の "No rating change (friend match)" の行をやめ、Rating の行ごと出さない。' +
+      'ランダム対戦の "No rating change (rematch)" / "No rating change (no contest)" と Elo の変化 (U21) は変えない。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U71', title: 'Back to Friend Match で先に部屋へ戻った側にも、相手が戻る前から両者の名前を出す',
+    desc: '#1891 の 2026-10-19 の FB。結果画面の Back to Friend Match で先に部屋へ戻った側 (U61) は、これまで "Waiting for your friend to return…" / "Waiting for the host to return…" だけで、' +
+      '相手が戻って初めて自分と相手の名前 (カード) が出ていた。分ける必要がないので、相手が戻る前から Ready 画面と同じ両者のカード (名前とレーティング、"Not ready") を出す。' +
+      '状況の一行はそのまま。Ready は相手が戻って同期が終わるまで押せない (U4) ので、無効表示の Ready を出す。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
 ];

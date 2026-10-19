@@ -80,6 +80,8 @@ var SCENARIOS = (function () {
       steps: ['host.randomMatch', 'host.startSearch', 'host.searchTimeout', 'host.closeNotice'] },
     { id: '12', title: 'VS 画面中にクライアントが切断 → 戻らない → 同じ Match Code で入り直す', diagram: 'なし (10-07 の決定 U32)',
       steps: toReady.concat(bothStart, ['client.disconnect', 'timer.disconnectTimeout'], joinCode) },
+    { id: '13b', title: 'ホストが Match Code をコピー → "Match code copied" のトースト → 2 秒で消える', diagram: 'なし (10-19 の決定 U69)', clientNote: hostOnly,
+      steps: hostCreates.concat(['host.copyCode', 'toast.hidden']) },
     { id: '13', title: 'New Match / Join がサーバーに届かない (Connection failed)', diagram: '00 (トーストのみ、10-07 の決定 U6)', ctx: { createResult: 'connFailed', codeResult: 'connFailed' },
       steps: hostCreates.concat(clientJoins, ['host.tapToast', 'client.tapToast']) },
     { id: '15', title: 'Friend Match の対戦後 (ホスト勝利 → 両者が同じ部屋へ戻る → クライアントが抜ける)', diagram: 'なし (10-07 の決定 U20〜U26、10-17 の U61)',
@@ -100,13 +102,12 @@ var SCENARIOS = (function () {
       steps: toMatchEnd.concat(['host.win', 'host.stamp.gg', 'client.stamp.thanks', 'host.stampShown', 'host.stampInterval', 'host.stamp.nice']) },
     { id: '16', title: '対戦中に MATCH MENU → CONTINUE (試合は続く)', diagram: 'なし (10-07 の決定、案A)',
       steps: toMatchEnd.concat(['host.matchMenu', 'client.matchMenu', 'host.matchMenu.continue', 'client.matchMenu.continue']) },
-    { id: '16b', title: '対戦中に降参 (SURRENDER → 確認 → 負け)', diagram: 'なし (10-07 の決定、案A)',
-      steps: toMatchEnd.concat(['host.matchMenu', 'host.matchMenu.surrender', 'host.surrenderConfirm.continue',
-        'host.matchMenu', 'host.matchMenu.surrender', 'host.surrenderConfirm.surrender', 'host.backToFriendMatch']) },
+    { id: '16b', title: '対戦中に降参 (MATCH MENU の SURRENDER ですぐ負け) → 降参した側が Rematch → 応じる', diagram: 'なし (10-07 の決定、案A、10-19 の U65 / U66)',
+      steps: toMatchEnd.concat(['host.matchMenu', 'host.matchMenu.continue', 'host.matchMenu', 'host.matchMenu.surrender', 'host.rematch', 'client.rematch'], toGame) },
     { id: '16c', title: 'MATCH MENU を開いている間に試合が終わる', diagram: 'なし (10-07 の決定、案A)',
       steps: toMatchEnd.concat(['host.matchMenu', 'client.win']) },
-    { id: '16d', title: 'ランダム対戦で降参 (レートが変わる、再戦なし)', diagram: 'なし (10-07 の決定 U21 / U28 / U41)',
-      steps: toRandomGame.concat(['client.matchMenu', 'client.matchMenu.surrender', 'client.surrenderConfirm.surrender', 'host.findNextOpponent', 'client.backToRandomMatch']) },
+    { id: '16d', title: 'ランダム対戦で降参 (レートが変わる) → 降参した側も勝った側も Find Next Opponent', diagram: 'なし (10-07 の決定 U21 / U28 / U41、10-19 の U65〜U67)',
+      steps: toRandomGame.concat(['client.matchMenu', 'client.matchMenu.surrender', 'client.findNextOpponent', 'host.findNextOpponent']) },
     { id: '17', title: 'ランダム対戦の対戦後 (Elo → 負けた側の Rematch に応じる → レートが変わらない → 次の相手)', diagram: 'なし (10-07 の決定 U21 / U22 / U29、10-17 の U60)',
       steps: toRandomGame.concat(['host.win', 'client.rematch', 'host.rematch'], toGame,
         ['host.win', 'host.findNextOpponent', 'client.backToRandomMatch', 'client.startSearch', 'sys.opponentFound']) },
@@ -146,13 +147,16 @@ var SCENARIOS = (function () {
       steps: randomSearch.concat(['sys.opponentFound', 'vs.done', 'host.disconnect', 'timer.disconnectTimeout', 'host.searchAgain', 'client.searchAgain', 'sys.opponentFound']) },
     { id: '21c', title: 'Friend Match の再戦の VS 画面中に切断 → 戻らない → Friend Match トップ', diagram: 'なし (10-08 の決定 U52 / U54)',
       steps: toMatchEnd.concat(['host.win', 'client.rematch', 'host.rematch', 'client.disconnect', 'timer.disconnectTimeout', 'host.closeNotice', 'client.closeNotice']) },
-    // Profile (決定 U56、入口は #1891 の FB 12): Random Match と Friend Match トップの上にダイアログで開く。選ぶとすぐ保存し、左上の ‹ で閉じる (#1891 の FB 14)。
-    // 相手を探している間に選ぶと、見つかった相手に見える
+    // Profile (決定 U56、入口は #1891 の FB 12): Random Match・Friend Match トップ・部屋の画面 (U68) の上にダイアログで開く。選ぶとすぐ保存し、右上の × で閉じる (#1891 の FB 14、U64)。
+    // 相手を探している間と部屋の画面で選ぶと、この対戦の相手に見える
     { id: '22', title: 'Random Match で相手を探している間に Profile を開いて選ぶ → 見つかった相手の VS 画面に出る', diagram: 'なし (10-08 の決定 U56、#1891 の FB 12 / FB 14)',
       steps: ['host.randomMatch', 'host.startSearch', 'host.profile', 'host.dialog.pickEmoji.rocket', 'host.dialog.pickGreeting.bringItOn', 'host.dialog.closeProfile',
         'client.randomMatch', 'client.startSearch', 'sys.opponentFound'].concat(toGame, ['client.win', 'host.rematch', 'client.rematch']) },
-    { id: '22b', title: 'Friend Match で Profile を開いて選ぶとすぐ保存され、‹ で閉じても開き直しても残る', diagram: 'なし (10-08 の決定 U56、#1891 の FB 12 / FB 14)', clientNote: hostOnly,
+    { id: '22b', title: 'Friend Match で Profile を開いて選ぶとすぐ保存され、× で閉じても開き直しても残る', diagram: 'なし (10-08 の決定 U56、#1891 の FB 12 / FB 14、10-19 の U64)', clientNote: hostOnly,
       steps: ['host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.robot', 'host.dialog.pickGreeting.goodLuck', 'host.dialog.closeProfile',
         'host.profile', 'host.dialog.pickEmoji.star', 'host.dialog.closeProfile'] },
+    { id: '22c', title: 'Ready 画面で Profile を開いて選ぶ → 相手が Ready を押しても閉じない → × で閉じて Ready → VS 画面に出る', diagram: 'なし (10-19 の決定 U68)',
+      steps: toReady.concat(['host.profile', 'host.dialog.pickEmoji.rocket', 'client.ready', 'sys.readyConfirmed', 'host.dialog.pickGreeting.bringItOn',
+        'host.dialog.closeProfile', 'host.ready', 'sys.readyConfirmed', 'sys.bothStarted']) },
   ];
 })();

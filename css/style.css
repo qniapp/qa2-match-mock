@@ -197,7 +197,6 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 }
 .input .value { font-size: 24px; letter-spacing: 0.06em; }
 .input .placeholder { color: #4D566F; font-size: 14px; }
-.error { color: #FF6B6B; font-size: 13px; margin: 10px 2px 0; }
 
 .code-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; color: #B9C0D0; margin-bottom: 6px; }
 .code-head .copy {
@@ -262,15 +261,9 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .actions { flex: none; display: flex; flex-direction: column; gap: 10px; padding: 0 28px 76px; }
 .view-random .actions, .view-lobby .actions { padding-bottom: 76px; }
 
-/* Profile のダイアログ (決定 U56、#1891 の FB 12 / FB 14): 左上の ‹ と題名、VS 画面のカードの見本、絵文字 5 x 2、あいさつ 2 列 x 5、下に "Saved" */
-.dialog.pf-dialog { width: 340px; padding: 12px 14px 10px; gap: 0; }
-.pf-head { position: relative; display: flex; align-items: center; justify-content: center; height: 32px; margin-bottom: 10px; }
-/* 画面の左上の ‹ (.hdr .back) と同じ形 */
-.pf-back {
-  position: absolute; left: -4px; top: -2px; width: 36px; height: 36px; padding: 0; border: 0; border-radius: 8px; cursor: pointer;
-  background: none; color: var(--text); font-size: 30px; line-height: 30px;
-}
-.pf-back:hover { background: rgba(255, 255, 255, 0.06); }
+/* Profile のダイアログ (決定 U56、#1891 の FB 12 / FB 14): 題名と右上の × (Join a Match と同じ .d-close、U64)、VS 画面のカードの見本、絵文字 5 x 2、あいさつ 2 列 x 5 */
+.dialog.pf-dialog { position: relative; width: 340px; padding: 12px 14px 14px; gap: 0; }
+.pf-head { display: flex; align-items: center; justify-content: center; height: 32px; margin-bottom: 10px; }
 /* 見本は選ぶたびに描き直すので、VS 画面の滑り込みのアニメーションはしない */
 .vs-card.pf-card { flex: none; padding: 10px 14px; margin-bottom: 14px; animation: none; }
 .pf-card .vs-emoji { font-size: 30px; }
@@ -285,8 +278,6 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .pf-greet { min-height: 36px; padding: 6px 4px; font-family: var(--game); font-size: 12px; font-weight: 600; line-height: 1.2; letter-spacing: 0; }
 .pf-emoji:hover, .pf-greet:hover { border-color: var(--h); }
 .pf-emoji.selected, .pf-greet.selected { border-color: var(--h); background: rgba(95, 201, 250, 0.18); box-shadow: 0 0 12px rgba(95, 201, 250, 0.35); }
-.pf-saved { height: 16px; margin: 10px 0 0; text-align: center; font-size: 12px; line-height: 16px; color: #8FD9A8; opacity: 0; }
-.pf-saved.shown { opacity: 1; }
 
 /* 手順実行中はアニメーションを止める */
 .static .screen *, .static .screen *::before { animation: none !important; }
@@ -495,7 +486,7 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .d-body { margin: 0 0 6px; text-align: center; font-size: 13px; color: #B9C0D0; }
 /* ランダム対戦で相手を探すのをやめたときの通知 (決定 U13)。文だけで本文は無いので、ボタンとの間を少し空ける */
 .d-title.notice { margin-bottom: 6px; line-height: 1.4; text-wrap: balance; }
-/* Join a Match (決定 U63): 右上の × で閉じる。Match Code の入力欄、赤字、Join */
+/* Join a Match (決定 U63): 右上の × で閉じる。Match Code の入力欄と Join (Match Code の誤り・満員は画面の下のトースト、U69) */
 .join-dialog { position: relative; padding-top: 22px; }
 .join-dialog .d-title { margin: 0 28px 4px; }
 .d-close {
@@ -505,7 +496,6 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .d-close:hover:not([data-norow]) { background: rgba(255, 255, 255, 0.08); color: var(--text); }
 .d-label { font-size: 13px; color: #B9C0D0; }
 .join-dialog .input { margin-bottom: 0; }
-.join-dialog .error { margin: 0 2px; text-align: center; line-height: 1.4; text-wrap: balance; }
 .join-dialog .btn { margin-top: 4px; }
 
 /* ---- 右パネル ---------------------------------------------------------- */

@@ -6,10 +6,9 @@
   'use strict';
 
   var MATCH_CODE = 'QWERTY123';
-  // Match Code のコピーのボタン。ふつうのコピーのアイコン (重なった 2 枚の紙) で、ホストにだけ出す (#1891 の FB 5)
-  var COPY_BUTTON = '<button type="button" class="copy" aria-label="Copy match code" title="Copy match code">' +
-    '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>';
+  // Match Code のコピーのボタン。ふつうのコピーのアイコン (重なった 2 枚の紙) で、ホストにだけ出す (#1891 の FB 5)。押すと "Match code copied" のトースト (決定 U69)
+  var COPY_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>';
   var MOCK_SEARCH_CONTROLS = ['leaveApp', 'searchTimeout'];
   var RESULT_HEADLINES = { Win: ['WIN!', 'win'], Lose: ['LOSE', 'lose'], Draw: ['DRAW', 'draw'], NoContest: ['NO CONTEST', 'nocontest'] };
   // ゲーム画面のプレースホルダー: 列ごとに下から積んだブロック ('+' は丸いブロック)
@@ -178,7 +177,7 @@
     if (spec.back === 'disabled') back = '<span class="back disabled" aria-disabled="true">‹</span>';
     else if (spec.back) back = '<button type="button" class="back"' + attrs(dev, spec.back) + ' aria-label="Back">‹</button>';
     else back = '<span class="back hidden-back">‹</span>';
-    // Random Match と Friend Match トップの右上の Profile (決定 U56、#1891 の FB 12)。保存した絵文字を添え、押すと今の画面の上にダイアログで開く
+    // Random Match・Friend Match トップ・部屋の画面 (U68) の右上の Profile (決定 U56、#1891 の FB 12)。保存した絵文字を添え、押すと今の画面の上にダイアログで開く
     var profile = spec.profile ? '<button type="button" class="hdr-profile" aria-haspopup="dialog"' + attrs(dev, 'profile') + '>' +
       '<span class="hp-emoji" aria-hidden="true">' + esc(app.state[dev + 'Emoji']) + '</span>Profile</button>' : '';
     return '<div class="hdr">' + back + '<div class="title">' + esc(title || '') + '</div>' + profile + '</div>';
@@ -198,7 +197,7 @@
     return html ? '<div class="actions">' + html + '</div>' : '';
   }
 
-  // 画面の下の帯 ("Connection failed"、決定 U6)
+  // 画面の下の帯 ("Connection failed"、決定 U6。Match Code の誤り・満員とコピーしたとき、U69)
   function toastHtml(dev, key) {
     if (!key) return '';
     var t = TOASTS[key];
@@ -228,7 +227,8 @@
     lobby: function (dev, s) {
       return header(dev, s, s.title) +
         '<div class="body">' +
-        '<div class="code-head"><span>Match Code</span>' + (s.copyCode ? COPY_BUTTON : '') + '</div>' +
+        '<div class="code-head"><span>Match Code</span>' + (s.copyCode ? '<button type="button" class="copy" aria-label="Copy match code" title="Copy match code"' +
+          attrs(dev, 'copyCode') + '>' + COPY_ICON + '</button>' : '') + '</div>' +
         '<div class="code">' + MATCH_CODE + '</div>' +
         (s.codeHint ? '<div class="code-hint">' + esc(CODE_HINT) + '</div>' : '') +
         (s.cards ? readyHtml(dev, s) : '<div class="status-block">' +
@@ -254,7 +254,7 @@
         '<div class="vs-bar"><i></i></div></div>' + (s.overlay ? overlayHtml(s) : '');
     },
     // ゲーム画面のプレースホルダー。HUD・カウントダウンは実機 (VsAI) の画面にならう。
-    // メニューボタン (☰) はプレイ中だけ出る (カウントダウン中と、MATCH MENU・降参の確認を開いている間は隠す)
+    // メニューボタン (☰) はプレイ中だけ出る (カウントダウン中と、MATCH MENU を開いている間は隠す)
     game: function (dev, s) {
       var opp = PLAYERS[dev === 'host' ? 'client' : 'host'];
       var me = '<div class="g-me">' +
@@ -291,7 +291,7 @@
         (rating && !/^No /.test(rating) ? '<div class="r-row"><span>Rating</span><b>' + esc(rating) + '</b></div>' : '');
       return header(dev, s, s.title) + '<div class="result">' +
         '<div class="r-outcome ' + head[1] + '">' + head[0] + '</div>' +
-        '<div class="r-reason">' + esc(END_REASONS[s.reason]) + '</div>' +
+        '<div class="r-reason">' + esc(END_REASONS[resultReason(s, app.state)]) + '</div>' +
         '<div class="r-players">' + player(dev, true) + '<span class="r-vs">vs</span>' + player(other, false) + '</div>' +
         (stats ? '<div class="r-stats">' + stats + '</div>' : '') +
         '<div class="r-status ' + (status ? status.kind : '') + '">' + (status ? esc(status.text) : '') + '</div>' +
@@ -392,7 +392,7 @@
       '<div class="rd-timer m-timer" aria-label="' + s.timer + ' seconds left"><b>' + s.timer + '</b>s</div></div></div>';
   }
 
-  // Join a Match のダイアログ (決定 U63)。右上の × で閉じる。Match Code の誤り・満員の赤字は入力欄の下に出す
+  // Join a Match のダイアログ (決定 U63)。右上の × で閉じる。Match Code の誤り・満員はダイアログの中ではなく画面の下のトーストで出す (U69)
   function joinDialogHtml(dev, j) {
     var value = j.input ? '<span class="value">' + esc(j.input) + '</span>' : '<span class="placeholder">Enter code</span>';
     var field = Engine.canFire(app.state, dev + '.enterCode')
@@ -402,7 +402,6 @@
       '<button type="button" class="d-close" aria-label="Close"' + attrs(dev, 'closeJoin') + '>\u00d7</button>' +
       '<div class="d-title">Join a Match</div>' +
       '<div class="d-label" aria-hidden="true">Match Code</div>' + field +
-      (j.error ? '<p class="error" role="alert">' + esc(j.error) + '</p>' : '') +
       '<button type="button" class="btn primary"' + attrs(dev, 'joinMatch') + '>Join</button></div></div>';
   }
 
@@ -414,7 +413,7 @@
     }).join('') + '</div>';
   }
 
-  // MATCH MENU と降参の確認 (決定 U37 / U40)。パネルとボタンは実機のポーズポップアップ (Menu_Pause) にならうが、
+  // MATCH MENU (決定 U37。SURRENDER ですぐ降参し、別の確認は出さない、U65)。パネルとボタンは実機のポーズポップアップ (Menu_Pause) にならうが、
   // 試合は止まらないので暗幕は薄くし、ゲーム画面が見えたままにする
   function matchMenuHtml(dev, m) {
     return '<div class="m-dim"><div class="p-panel m-panel" role="dialog" aria-label="' + esc(m.title) + '">' +
@@ -479,29 +478,26 @@
       }).join('') + '</div></div>';
   }
 
-  // Profile のダイアログ (決定 U56、#1891 の FB 12): 今の画面の上に、左上の ‹ と題名、VS 画面のカードの見本、絵文字とあいさつを 1 つずつ。
-  // 選ぶとすぐ保存し、下に "Saved" を出す。閉じるのは ‹ だけ (Save / Cancel・×・Esc・外側を押して閉じるは無い、#1891 の FB 14)
+  // Profile のダイアログ (決定 U56、#1891 の FB 12): 今の画面の上に、題名と右上の ×、VS 画面のカードの見本、絵文字とあいさつを 1 つずつ。
+  // 選ぶとすぐ保存する (#1891 の FB 14。"Saved" は出さない、U64)。閉じるのは Join a Match と同じ右上の × だけ (U64。Save / Cancel・Esc・外側を押して閉じるは無い)
   function profileDialogHtml(dev, d) {
     var emoji = app.state[dev + 'Emoji'];
     var greeting = app.state[dev + 'Greeting'];
-    var saved = app.state[dev + 'ProfileSaved'];
     var choice = function (cls, ev, selected, label, content) {
       return '<button type="button" class="' + cls + (selected ? ' selected' : '') + '" aria-pressed="' + selected + '"' +
         (label ? ' aria-label="' + esc(label) + '"' : '') + attrs(dev, ev) + '>' + content + '</button>';
     };
     var titleId = 'pf-title-' + dev;
     return '<div class="dim"><div class="dialog pf-dialog" role="dialog" aria-modal="true" aria-labelledby="' + titleId + '">' +
-      '<div class="pf-head"><button type="button" class="pf-back" aria-label="Back"' + attrs(dev, d.close) + '>‹</button>' +
-      '<div class="d-title" id="' + titleId + '">' + esc(d.title) + '</div></div>' +
+      '<button type="button" class="d-close" aria-label="Close"' + attrs(dev, d.close) + '>\u00d7</button>' +
+      '<div class="pf-head"><div class="d-title" id="' + titleId + '">' + esc(d.title) + '</div></div>' +
       '<div class="vs-card pf-card ' + dev + '">' + vsCardBody(dev, PLAYERS[dev].name, emoji, greeting) + '</div>' +
       '<div class="sec-label">Emoji</div><div class="pf-emojis" role="group" aria-label="Emoji">' + PROFILE_EMOJIS.map(function (e) {
         return choice('pf-emoji', 'dialog.pickEmoji.' + e.id, e.emoji === emoji, e.name, e.emoji);
       }).join('') + '</div>' +
       '<div class="sec-label">Greeting</div><div class="pf-greets" role="group" aria-label="Greeting">' + PROFILE_GREETINGS.map(function (g) {
         return choice('pf-greet', 'dialog.pickGreeting.' + g.id, g.id === greeting, null, esc(g[app.lang[dev]]));
-      }).join('') + '</div>' +
-      // 何も選んでいないうちも場所を取っておき、"Saved" が出てもダイアログの高さを変えない
-      '<p class="pf-saved' + (saved ? ' shown' : '') + '" role="status">' + (saved ? '\u2713 Saved' : '') + '</p></div></div>';
+      }).join('') + '</div></div></div>';
   }
 
   function dialogHtml(dev, key) {
@@ -523,17 +519,18 @@
     $('.state-name', root).innerHTML = stateName(name) + esc(Engine.extrasLabel(app.state, dev));
 
     var screen = $('.screen', root);
-    var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast) + noticeHtml(dev, spec.notice) + dialogHtml(dev, dlg);
+    // トーストは画面のもの (spec.toast) か、画面によらないもの (付属状態の Toast、Match Code をコピーしたとき、U69)
+    var html = VIEWS[spec.view](dev, spec) + toastHtml(dev, spec.toast || app.state[dev + 'Toast']) + noticeHtml(dev, spec.notice) + dialogHtml(dev, dlg);
     // 同じ内容なら差し替えない (VS やカウントダウンのアニメーションを最初からやり直させない)
     if (screen.dataset.html !== html) {
       // 差し替える前にフォーカスしていたボタンへ、差し替えたあともフォーカスを戻す (キーボードで Profile の候補を続けて選べるように)。
-      // Profile のダイアログを開いたとき (前のフォーカスがダイアログの外) は、フォーカスをダイアログの中 (‹) へ移す
+      // Profile のダイアログを開いたとき (前のフォーカスがダイアログの外) は、フォーカスをダイアログの中 (×) へ移す
       var focused = screen.contains(document.activeElement) && document.activeElement.dataset.ev;
       screen.className = 'screen view-' + spec.view;
       screen.innerHTML = html;
       screen.dataset.html = html;
       var pfDialog = dlg && $('.pf-dialog', screen);
-      var target = (focused && $((pfDialog ? '.pf-dialog ' : '') + '[data-ev="' + focused + '"]', screen)) || (pfDialog && $('.pf-back', pfDialog));
+      var target = (focused && $((pfDialog ? '.pf-dialog ' : '') + '[data-ev="' + focused + '"]', screen)) || (pfDialog && $('.d-close', pfDialog));
       if (target) target.focus({ preventScroll: true });
     }
     $('.mock-controls', root).innerHTML = mockControlsHtml(dev);
@@ -641,12 +638,14 @@
       contextHtml() + decidedHtml();
   }
 
-  // 対戦のセッション (Friend Match かランダム対戦か、レートが変わるか)。どちらかの端末が対戦相手といる間だけ出す
+  // 対戦のセッション (Friend Match かランダム対戦か、レートが変わるか、降参で終わったか)。どちらかの端末が対戦相手といる間だけ出す
   function sessionHtml() {
     var s = app.state;
     if (!s.match || !Engine.DEVICES.some(function (d) { return isWithOpponent(s[d]); })) return '';
     var text = s.match === 'friend' ? 'Friend Match (レートは変わらない)' : s.rated ? 'ランダム対戦 (レートが変わる、Elo)' : 'ランダム対戦の再戦 (レートは変わらない)';
-    return '<div class="cs-session">対戦: <code>match=' + esc(s.match) + ', rated=' + s.rated + '</code> ' + esc(text) + '</div>';
+    // 降参で終わった試合 (決定 U38 / U66) は、結果画面の終わった理由が "You surrendered" / "Your opponent surrendered" になる
+    if (s.surrendered) text += '。負けた側の降参で終わった (U66: 時間切れと同じ結果画面で、再戦できる)';
+    return '<div class="cs-session">対戦: <code>match=' + esc(s.match) + ', rated=' + s.rated + (s.surrendered ? ', surrendered=true' : '') + '</code> ' + esc(text) + '</div>';
   }
 
   // 今の画面の説明 (SCREENS の context。文字列か、行ごとの配列) とシナリオの端末ごとの注記 (hostNote / clientNote)。
@@ -795,11 +794,9 @@
       flash($('#row-' + rowLink.dataset.row));
       return;
     }
+    // Match Code のコピーのボタンは、クリップボードに書いたうえで遷移表の copyCode も発火する ("Match code copied" のトースト、決定 U69)
     var copy = t.closest('.device .copy');
-    if (copy) {
-      if (navigator.clipboard) navigator.clipboard.writeText(MATCH_CODE).catch(function () {});
-      return;
-    }
+    if (copy && !copy.hasAttribute('data-norow') && navigator.clipboard) navigator.clipboard.writeText(MATCH_CODE).catch(function () {});
     var langEl = t.closest('.lang-toggle [data-lang]');
     if (langEl) {
       app.lang[langEl.closest('.lang-toggle').dataset.dev] = langEl.dataset.lang;
@@ -827,7 +824,7 @@
 
   document.addEventListener('keydown', function (e) {
     if (e.target.closest('input, select, textarea')) return;
-    // Esc では Profile のダイアログを閉じない (閉じるのは左上の ‹ だけ、#1891 の FB 14)
+    // Esc では Profile のダイアログを閉じない (閉じるのは右上の × だけ、#1891 の FB 14、決定 U64)
     if (e.key === 'ArrowRight') nextStep();
     else if (e.key === 'ArrowLeft' && app.scenario) rebuild(app.step - 1);
   });

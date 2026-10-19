@@ -11,7 +11,7 @@ for (const f of ['transitions.js', 'engine.js', 'profile-store.js', 'scenarios.j
   vm.runInContext(fs.readFileSync(path.join(__dirname, '..', 'js', f), 'utf8'), ctx, { filename: f });
 }
 const eachSideAll = [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']];
-const { TRANSITIONS, SCREENS, DIALOGS, UNDECIDED, SCENARIOS, EVENT_LABELS, TOASTS, GAME_COUNTDOWN_MS, MATCH_MENU, SURRENDER_CONFIRM, Engine } = ctx;
+const { TRANSITIONS, SCREENS, DIALOGS, UNDECIDED, SCENARIOS, EVENT_LABELS, TOASTS, GAME_COUNTDOWN_MS, MATCH_MENU, Engine } = ctx;
 const read = (...p) => fs.readFileSync(path.join(__dirname, '..', ...p), 'utf8');
 
 const errors = [];
@@ -337,10 +337,31 @@ for (const [name, s] of Object.entries(SCREENS)) {
   const want = name.startsWith('Host.') && !/\.CodeExpired$/.test(name);
   if (!!s.copyCode !== want) fail(`${name} の Match Code のコピーのボタンが ${s.copyCode ? 'ある' : '無い'} (#1891 FB 5: ホストにだけ。期限切れには無い)`);
 }
-if (!/class="copy" aria-label="Copy match code" title="Copy match code">' \+\s*'<svg/.test(appJs) || />Copy</.test(appJs)) fail('Match Code のコピーのボタンが "Copy match code" の名前付きのアイコンでない (#1891 FB 5)');
+if (!/class="copy" aria-label="Copy match code" title="Copy match code"' \+\s*attrs\(dev, 'copyCode'\) \+ '>' \+ COPY_ICON/.test(appJs) || !/var COPY_ICON = '<svg/.test(appJs) || />Copy</.test(appJs)) {
+  fail('Match Code のコピーのボタンが "Copy match code" の名前付きのアイコンでないか、押しても copyCode を発火しない (#1891 FB 5 / U69)');
+}
+// U69 (#1891 の FB): コピーのボタンを押すと、画面はそのままで "Match code copied" のトースト。2 秒 (仮) か画面が変わると消える
+{
+  const copyable = Object.keys(SCREENS).filter((n) => SCREENS[n].copyCode);
+  for (const name of Object.keys(SCREENS).filter((n) => n.startsWith('Host.'))) {
+    const st = at(name, 'Client.MultiModeSelection');
+    const res = Engine.fire(st, 'host.copyCode');
+    if (!!res !== copyable.includes(name)) fail(`${name} で Match Code のコピーの行が${res ? 'ある' : '無い'} (コピーのボタンと合わない)`);
+    if (res && (res.state.host !== name || res.state.hostToast !== 'codeCopied')) fail(`${name} のコピーで画面が変わるか、トーストが出ない`);
+  }
+  if (TOASTS.codeCopied.text !== 'Match code copied' || TOASTS.codeCopied.tap) fail('コピーのトーストが "Match code copied" (タップでは何もしない) でない');
+  const copied = Engine.fire(at('Host.FriendMatch.Lobby.Waiting', 'Client.MultiModeSelection'), 'host.copyCode').state;
+  const hidden = Engine.nextAuto(copied);
+  if (!hidden || hidden.event !== 'toast.hidden' || hidden.auto !== 2000) fail('コピーのトーストが 2 秒 (仮) の自動遷移で消えない');
+  else if (Engine.fire(copied, 'toast.hidden').state.hostToast !== null) fail('toast.hidden でトーストが消えない');
+  const joined = Engine.fire(Engine.fire(copied, 'client.friendMatch').state, 'client.openJoin');
+  const moved = joined && Engine.fire(Engine.fire(joined.state, 'client.enterCode').state, 'client.joinMatch');
+  if (!moved || moved.state.host !== 'Host.FriendMatch.Lobby.FriendJoined' || moved.state.hostToast !== null) fail('画面が変わってもコピーのトーストが消えない');
+  if (!/spec\.toast \|\| app\.state\[dev \+ 'Toast'\]/.test(appJs)) fail('app.js が画面によらないトースト (付属状態の Toast) を描かない');
+}
 console.log('ok  U31 / U33〜U36 / U4 / U9 / U11 / U57: Ready (Confirming → Waiting for opponent / Opponent is ready)、Cancel Ready、アプリを離れる、60 秒のタイムアウト (秒数は出さず待っている印だけ、FB 6)、‹ の確認 (Cancel this match? / Leave this match?) (両端末)');
 console.log('ok  U58: 部屋の画面に Match Code の期限を出さず、ホストにだけ "Share this code with your friend!" (クライアント・期限切れ・Could not reconnect. には無い)');
-console.log('ok  #1891 FB 5: Match Code のコピーのボタンはホストにだけ (アイコン、"Copy match code")。クライアントと期限切れの画面には無い');
+console.log('ok  #1891 FB 5 / U69: Match Code のコピーのボタンはホストにだけ (アイコン、"Copy match code")。クライアントと期限切れの画面には無く、押すと "Match code copied" のトースト (2 秒か画面が変わると消える)');
 
 // 決定 (U4): Ready を押せるのは参加の確認・両者が部屋の画面・同期の 3 つがそろってから。決まった待ち時間は置かない
 {
@@ -443,7 +464,7 @@ console.log('ok  U32 / U15: VS 画面・カウントダウン中の切断は Rea
   for (const id of ['U1', 'U9', 'U12', 'U14', 'U16', 'U19', 'U34', 'U55']) if (!/U57/.test(UNDECIDED.find((u) => u.id === id).desc)) fail(`${id} の説明に、U57 で変わったことが無い`);
   // 部屋を残す離席が無い: 状態・帯・グループ・ステージ選択の画面・クライアントのカードの "Away"
   for (const name of Object.keys(SCREENS).concat(Object.keys(STATE_GROUPS))) if (/\.Away(\.|$)/.test(name)) fail(`離席の ${name} が残っている (U57)`);
-  if (Object.keys(TOASTS).join() !== 'failedCreate,failedJoin') fail(`離席中の帯が残っている (${Object.keys(TOASTS)})`);
+  if (Object.keys(TOASTS).join() !== 'failedCreate,failedJoin,joinNotFound,joinFull,codeCopied') fail(`離席中の帯が残っている (${Object.keys(TOASTS)})`);
   for (const [name, s] of Object.entries(SCREENS)) if (s.view === 'stage') fail(`${name} がステージ選択 (離席の行き先) を描く`);
   if (/peerAway|'Away'|STAGE_TILES|stage:/.test(appJs) || /\.rd-card\.away|\.stage-grid|\.tile \{/.test(read('css', 'style.css'))) fail('app.js / style.css に離席 ("Away"・ステージ選択) が残っている');
   if ('Failed' in ctx.DEVICE_FIELDS || /Failed'\] === 'create'/.test(appJs)) fail('離席中の作り直しの失敗 (付属状態 Failed) が残っている');
@@ -500,7 +521,10 @@ console.log('ok  U57 / U63: 部屋の画面の出口は ‹ だけ (部屋を出
   for (const r of TRANSITIONS) {
     if ([].concat(r.to.host, r.to.client).some((s) => /ConnectionFailed$/.test(s)) && !(r.when && (r.when.createResult === 'connFailed' || r.when.codeResult === 'connFailed'))) fail(`${r.id}: サーバーに届かないとき以外に "Connection failed" になる (U6)`);
   }
-  for (const k of ['NotFound', 'Full']) if (SCREENS[`Client.FriendMatch.Room.Join.Error.${k}`].toast) fail(`Client.FriendMatch.Room.Join.Error.${k} にトーストがある (U6: 赤字とは別)`);
+  // U69: Match Code の誤り・満員もトーストだが、"Connection failed" (U6) とは別の文言で、タップでは何もしない
+  for (const [k, toast] of [['NotFound', 'joinNotFound'], ['Full', 'joinFull']]) {
+    if (SCREENS[`Client.FriendMatch.Room.Join.Error.${k}`].toast !== toast || TOASTS[toast].tap || /Connection failed/.test(TOASTS[toast].text)) fail(`Client.FriendMatch.Room.Join.Error.${k} のトーストが ${toast} でない (U69)`);
+  }
   if (!/t-sub/.test(appJs)) fail('app.js がトーストの 2 行目 (U6 の説明) を描かない');
   // U7 / U10 / U18: 期限切れ。両者に "Match code expired."、ホストは Create Match、クライアントは今の画面のまま Join Match
   for (const [h, c] of [[L('Host', 'Ready'), L('Client', 'Ready')], [L('Host', 'Ready.OpponentReady'), L('Client', 'Ready.WaitingForOpponent')], [L('Host', 'FriendJoined'), L('Client', 'Connecting')]]) {
@@ -600,8 +624,8 @@ expectFire(inGame, 'client.win', 'Host.LoseResult', 'Client.WinResult');
 expectFire(inGame, 'client.lose', 'Host.WinResult', 'Client.LoseResult');
 expectFire(inGame, 'host.draw', 'Host.DrawResult', 'Client.DrawResult');
 expectFire(inGame, 'client.draw', 'Host.DrawResult', 'Client.DrawResult');
-const hostInPlay = ['Host.Game.Play', 'Host.Game.MatchMenu', 'Host.Game.SurrenderConfirm'];
-const clientInPlay = ['Client.Game.Play', 'Client.Game.MatchMenu', 'Client.Game.SurrenderConfirm'];
+const hostInPlay = ['Host.Game.Play', 'Host.Game.MatchMenu'];
+const clientInPlay = ['Client.Game.Play', 'Client.Game.MatchMenu'];
 const hostStates = Object.keys(SCREENS).filter((k) => k.startsWith('Host.'));
 const clientStates = Object.keys(SCREENS).filter((k) => k.startsWith('Client.'));
 if (hostStates.length + clientStates.length !== Object.keys(SCREENS).length) fail('Host. / Client. で始まらない状態がある');
@@ -619,10 +643,12 @@ for (const ev of ['host.win', 'host.lose', 'host.draw', 'client.win', 'client.lo
 }
 
 // U20: 結果画面の中身 (勝敗・両者の名前・終わった理由)。スコアはどの結果画面にも出さない (qniapp/qa2#1891 FB 7)
-const { END_REASONS, REMATCH_STATUS, ELO, STAMPS, DISCONNECT_OVERLAYS, ratingText, resultButtons, isResultState } = ctx;
+const { END_REASONS, REMATCH_STATUS, ELO, STAMPS, DISCONNECT_OVERLAYS, ratingText, resultButtons, resultReason, isResultState } = ctx;
 const resultNames = Object.keys(SCREENS).filter((k) => SCREENS[k].view === 'result');
 if (resultNames.some((k) => !isResultState(k)) || Object.keys(SCREENS).some((k) => isResultState(k) && SCREENS[k].view !== 'result')) fail('isResultState と結果画面の一覧が合わない');
-if (resultNames.length !== 106) fail(`結果画面が ${resultNames.length} 状態 (期待: 106 = 2 端末 × (Win / Lose / Draw × 16 段階 + 降参・切断 4 + No contest))`);
+if (resultNames.length !== 102) fail(`結果画面が ${resultNames.length} 状態 (期待: 102 = 2 端末 × (Win / Lose / Draw × 16 段階 + 切断 2 + No contest))`);
+// U66 (#1891 の FB 10): 降参で終わった試合は再戦の無い特別な結果画面ではなく、時間切れと同じ結果画面 (理由はセッションの surrendered で出し分ける)
+if (resultNames.some((k) => /Surrendered/.test(k))) fail('降参の特別な結果画面 (.Surrendered / .OpponentSurrendered) が残っている (U66)');
 for (const name of resultNames) {
   const s = SCREENS[name];
   if (!['Win', 'Lose', 'Draw', 'NoContest'].includes(s.outcome)) fail(`${name}: 勝敗 ${s.outcome}`);
@@ -635,16 +661,26 @@ const reasons = { timeUp: 'Time is up', timeUpTie: 'Same score when time ran out
   disconnected: 'You were disconnected', opponentDisconnected: 'Your opponent disconnected', connectionError: 'No contest due to a connection error' };
 if (JSON.stringify(END_REASONS) !== JSON.stringify(reasons)) fail('終わった理由の文言が違う');
 for (const [name, outcome, reason] of [['Host.NoContestResult', 'NoContest', 'connectionError'], ['Client.LoseResult.Disconnected', 'Lose', 'disconnected'],
-  ['Host.WinResult.OpponentDisconnected', 'Win', 'opponentDisconnected'], ['Client.LoseResult.Surrendered', 'Lose', 'surrendered'], ['Host.WinResult.OpponentSurrendered', 'Win', 'opponentSurrendered']]) {
+  ['Host.WinResult.OpponentDisconnected', 'Win', 'opponentDisconnected']]) {
   const s = SCREENS[name];
   if (!s || s.outcome !== outcome || s.reason !== reason) fail(`${name} が ${outcome} / ${reason} の結果画面でない`);
 }
+// 降参で終わった試合 (U38 / U66): 負けた側は "You surrendered"、勝った側は "Your opponent surrendered"。再戦の段階が進んでも同じ。時間切れのときは "Time is up"
+for (const [name, surrendered, want] of [['Client.LoseResult', true, 'surrendered'], ['Host.WinResult', true, 'opponentSurrendered'],
+  ['Host.LoseResult.RematchDeclined', true, 'surrendered'], ['Client.WinResult.RematchIncoming', true, 'opponentSurrendered'],
+  ['Client.LoseResult', false, 'timeUp'], ['Host.DrawResult', false, 'timeUpTie'], ['Host.LoseResult.Disconnected', false, 'disconnected']]) {
+  const got = resultReason(SCREENS[name], { surrendered });
+  if (got !== want) fail(`${name} (surrendered=${surrendered}) の終わった理由 ${got} (期待: ${want})`);
+}
+if (!/resultReason\(s, app\.state\)/.test(appJs)) fail('app.js が結果画面の終わった理由をセッションの surrendered で出し分けていない (U66)');
 if (!/r-outcome/.test(appJs) || !/NO CONTEST/.test(appJs) || !/DRAW/.test(appJs)) fail('app.js に DRAW / NO CONTEST の見出しが無い');
 
-// U21: レーティング。Friend Match は変わらない、ランダム対戦は Elo (初期値 1000、K=24)、同じ相手との再戦と No contest は変わらない
+// U21: レーティング。Friend Match は変わらない、ランダム対戦は Elo (初期値 1000、K=24)、同じ相手との再戦と No contest は変わらない。
+// U70 (#1891 の FB): Friend Match では変わらないのが明らかなので、Rating の行ごと出さない
 if (ELO.initial !== 1000 || ELO.k !== 24) fail('Elo が初期値 1000・K=24 でない');
+if (/friend match\)/.test(read('js', 'transitions.js').split('var UNDECIDED')[0] + appJs)) fail('"No rating change (friend match)" が決定の一覧の外に残っている (U70)');
 const ratings = [
-  ['Win', friend, 'No rating change (friend match)'], ['Lose', friend, 'No rating change (friend match)'], ['NoContest', friend, 'No rating change (friend match)'],
+  ['Win', friend, null], ['Lose', friend, null], ['Draw', friend, null], ['NoContest', friend, null],
   ['Win', random, '1000 \u2192 1012 (+12)'], ['Lose', random, '1000 \u2192 988 (\u221212)'], ['Draw', random, '1000 \u2192 1000 (\u00B10)'],
   ['NoContest', random, 'No rating change (no contest)'], ['Win', { match: 'random', rated: false }, 'No rating change (rematch)'],
 ];
@@ -655,21 +691,22 @@ for (const [id, n, want] of [['15', 14, 'friend/false'], ['15c', 19, 'friend/fal
   if (sessionAt(id, n) !== want) fail(`シナリオ ${id} の手順 ${n} のセッション ${sessionAt(id, n)} (期待: ${want})`);
 }
 
-// U22 / U24 / U59 / U60: ボタン。Friend Match は Rematch / Back to Friend Match。ランダム対戦は勝った側が Find Next Opponent / Back to Random Match、
-// 負けた側が Rematch / Back to Random Match、引き分けは Find Next Opponent / Rematch / Back to Random Match。申し込まれた側は Accept / Decline。
-// 降参した側は戻るボタン (Back to Friend Match / Back to Random Match) だけ
+// U22 / U24 / U59 / U60 / U67: ボタン。Friend Match は Rematch / Back to Friend Match。ランダム対戦は勝った側が Find Next Opponent / Back to Random Match、
+// 負けた側と引き分けが Find Next Opponent / Rematch / Back to Random Match (U67: 負けた側にも Find Next Opponent)。申し込まれた側は Accept / Decline。
+// 降参で終わった試合も同じ結果画面なので、同じボタン (U66)
 const labels = (name, match) => resultButtons(SCREENS[name], match).map((b) => b.label + (b.disabled ? '(無効)' : '')).join(' / ');
 const wantButtons = [
   ['Host.WinResult', 'friend', 'Rematch / Back to Friend Match'],
   ['Host.WinResult', 'random', 'Find Next Opponent / Back to Random Match'],
-  ['Host.LoseResult', 'random', 'Rematch / Back to Random Match'],
+  ['Host.LoseResult', 'random', 'Find Next Opponent / Rematch / Back to Random Match'],
+  ['Host.LoseResult', 'friend', 'Rematch / Back to Friend Match'],
   ['Host.DrawResult', 'random', 'Find Next Opponent / Rematch / Back to Random Match'],
   ['Host.WinResult.RematchRequested', 'friend', 'Cancel Request / Back to Friend Match'],
-  ['Client.LoseResult.RematchRequested', 'random', 'Cancel Request / Back to Random Match'],
+  ['Client.LoseResult.RematchRequested', 'random', 'Find Next Opponent / Cancel Request / Back to Random Match'],
   ['Client.WinResult.RematchIncoming', 'random', 'Find Next Opponent / Accept / Decline / Back to Random Match'],
   ['Client.LoseResult.RematchIncoming', 'friend', 'Accept / Decline / Back to Friend Match'],
-  ['Host.LoseResult.RematchDeclined.Cooldown', 'random', 'Rematch(無効) / Back to Random Match'],
-  ['Host.LoseResult.RematchExpired', 'random', 'Rematch / Back to Random Match'],
+  ['Host.LoseResult.RematchDeclined.Cooldown', 'random', 'Find Next Opponent / Rematch(無効) / Back to Random Match'],
+  ['Host.LoseResult.RematchExpired', 'random', 'Find Next Opponent / Rematch / Back to Random Match'],
   ['Host.WinResult.RematchDeclinedByYou', 'random', 'Find Next Opponent / Back to Random Match'],
   ['Host.LoseResult.OpponentLeft', 'random', 'Find Next Opponent / Back to Random Match'],
   ['Host.LoseResult.Disconnected', 'random', 'Find Next Opponent / Back to Random Match'],
@@ -679,13 +716,16 @@ const wantButtons = [
   ['Client.DrawResult.RematchExpiredIncoming.Cooldown', 'random', 'Find Next Opponent / Rematch(無効) / Back to Random Match'],
   ['Host.WinResult.OpponentLeft', 'friend', 'Back to Friend Match'],
   ['Host.WinResult.OpponentLeft', 'random', 'Find Next Opponent / Back to Random Match'],
-  ['Host.LoseResult.Surrendered', 'friend', 'Back to Friend Match'],
-  ['Client.LoseResult.Surrendered', 'random', 'Back to Random Match'],
-  ['Host.WinResult.OpponentSurrendered', 'friend', 'Back to Friend Match'],
-  ['Host.WinResult.OpponentSurrendered', 'random', 'Find Next Opponent / Back to Random Match'],
   ['Host.NoContestResult', 'random', 'Find Next Opponent / Back to Random Match'],
 ];
 for (const [name, match, want] of wantButtons) if (labels(name, match) !== want) fail(`${name} (${match}) のボタン ${labels(name, match)} (期待: ${want})`);
+// U67: ランダム対戦は勝ち負けによらず Find Next Opponent が主のボタン (再戦を申し込んだ・申し込まれた間は再戦のボタンが主)
+for (const [name, want] of [['Host.WinResult', 'Find Next Opponent'], ['Host.LoseResult', 'Find Next Opponent'], ['Host.DrawResult', 'Find Next Opponent'],
+  ['Host.LoseResult.RematchExpired', 'Find Next Opponent'], ['Client.WinResult.RematchIncoming', 'Accept'], ['Client.LoseResult.RematchRequested', '']]) {
+  const got = resultButtons(SCREENS[name], 'random').filter((b) => b.primary).map((b) => b.label).join();
+  if (got !== want) fail(`${name} (random) の主のボタン ${got} (期待: ${want || 'なし'})`);
+}
+for (const name of resultNames) if (!resultButtons(SCREENS[name], 'random').some((b) => b.event === 'findNextOpponent')) fail(`${name} (random) に Find Next Opponent が無い (U67)`);
 // U59: 結果画面のボタンはホストとクライアントで同じで、戻るボタンはどの結果画面でも 1 つだけ (Online Battle へ戻るボタンは無い)
 {
   const u59 = UNDECIDED.find((u) => u.id === 'U59');
@@ -741,31 +781,35 @@ for (const [dev, R, other, O] of eachSide) {
     const theirs = `${O}.${opposite[o]}Result`;
     for (const [ev, session, dest] of [['backToFriendMatch', friend, returnedTo(R)], ['findNextOpponent', random, `${R}.Matchmake.NextOpponent`], ['backToRandomMatch', random, `${R}.Matchmake`]]) {
       for (const ph of ['', '.RematchRequested', '.RematchIncoming', '.RematchDeclinedByYou.Cooldown', '.RematchCancelled']) {
-        // U60: Rematch を出している負けた側には Find Next Opponent が無い
-        if (ev === 'findNextOpponent' && o === 'Lose') {
-          if (Engine.canFire(at(...sides(dev, mine + ph, theirs), session), `${dev}.${ev}`)) fail(`${mine}${ph} (random) で ${ev} の行がある (U60)`);
-          continue;
-        }
+        // U67: 負けた側にも Find Next Opponent がある (勝ち・負け・引き分けで同じ)
         const theirPh = { '': '', '.RematchRequested': '.RematchIncoming', '.RematchIncoming': '.RematchRequested', '.RematchDeclinedByYou.Cooldown': '.RematchDeclined.Cooldown',
           '.RematchCancelled': '.RematchCancelledByYou' }[ph];
         expectFire(at(...sides(dev, mine + ph, theirs + theirPh), session), `${dev}.${ev}`, ...sides(dev, dest, `${theirs}.OpponentLeft`));
       }
       // Friend Match のボタンはランダム対戦に無く、その逆も無い
-      if (ev === 'findNextOpponent' && o === 'Lose') {
-        expectFire(at(...sides(dev, `${mine}.OpponentLeft`, `${O}.MultiModeSelection`), session), `${dev}.${ev}`, ...sides(dev, dest, `${O}.MultiModeSelection`));
-        continue;
-      }
       const wrong = session === friend ? random : friend;
       if (Engine.canFire(at(...sides(dev, mine, theirs), wrong), `${dev}.${ev}`)) fail(`${mine} (${wrong.match}) で ${ev} の行がある`);
     }
   }
-  // U59: 降参した側も勝った側と同じ戻るボタン。Find Next Opponent と Online Battle へ戻るボタンは無い
-  const surrendered = (session) => at(...sides(dev, `${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), session);
-  expectFire(surrendered(friend), `${dev}.backToFriendMatch`, ...sides(dev, returnedTo(R), `${O}.WinResult.OpponentSurrendered`));
-  expectFire(surrendered(random), `${dev}.backToRandomMatch`, ...sides(dev, `${R}.Matchmake`, `${O}.WinResult.OpponentSurrendered`));
-  for (const [session, ev] of [[random, 'findNextOpponent'], [friend, 'backToOnlineBattle'], [random, 'backToOnlineBattle']]) {
-    if (Engine.canFire(surrendered(session), `${dev}.${ev}`)) fail(`${R}.LoseResult.Surrendered (${session.match}) に ${ev} の行がある`);
+  // U59 / U66 / U67: 降参した側も時間切れの負けと同じ結果画面で、Rematch・Find Next Opponent・戻るボタンがある。Online Battle へ戻るボタンは無い
+  for (const session of [friend, random]) {
+    const res = Engine.fire(Engine.fire(at(...sides(dev, `${R}.Game.Play`, `${O}.Game.Play`), session), `${dev}.matchMenu`).state, `${dev}.matchMenu.surrender`);
+    if (!res || pair(res.state) !== pair({ [dev]: `${R}.LoseResult`, [other]: `${O}.WinResult` }) || !res.state.surrendered) {
+      fail(`${R} の降参 (${session.match}) が ${res && pair(res.state)} (surrendered=${res && res.state.surrendered}) になる (期待: 時間切れと同じ結果画面と surrendered=true、U66)`);
+      continue;
+    }
+    expectFire(res.state, `${dev}.rematch`, ...sides(dev, `${R}.LoseResult.RematchRequested`, `${O}.WinResult.RematchIncoming`));
+    if (session === friend) expectFire(res.state, `${other}.rematch`, ...sides(dev, `${R}.LoseResult.RematchIncoming`, `${O}.WinResult.RematchRequested`));
+    else if (Engine.canFire(res.state, `${other}.rematch`)) fail(`ランダム対戦で降参した相手 (勝った側) から ${other}.rematch を申し込める (U60)`);
+    if (session === random) expectFire(res.state, `${dev}.findNextOpponent`, ...sides(dev, `${R}.Matchmake.NextOpponent`, `${O}.WinResult.OpponentLeft`));
+    for (const ev of ['backToOnlineBattle']) if (Engine.canFire(res.state, `${dev}.${ev}`)) fail(`${R} の降参の結果画面 (${session.match}) に ${ev} の行がある`);
+    // 再戦が始まると surrendered は消え、次の試合は時間切れの理由に戻る
+    const again = Engine.fire(Engine.fire(res.state, `${dev}.rematch`).state, `${other}.rematch`);
+    if (!again || again.state.surrendered !== false) fail(`${R} の降参のあとの再戦で surrendered が残る`);
   }
+  // 時間切れの決着では surrendered にならない
+  const timeUp = Engine.fire(at(...sides(dev, `${R}.Game.Play`, `${O}.Game.Play`), random), `${dev}.lose`);
+  if (!timeUp || timeUp.state.surrendered) fail('時間切れの決着で surrendered になる');
   // U59 (#1891 の FB 17): Back to Random Match で着く Random Match の画面は、メニューから Random Match を開いたときと同じ最初の状態
   // (端末の付属状態・相手に見せる絵文字とあいさつも同じ)
   for (const name of resultNames.filter((k) => k.startsWith(R + '.'))) {
@@ -788,11 +832,18 @@ if (REMATCH_STATUS.OpponentLeft.text !== 'Your opponent left. Rematch is not ava
   const clientBack = 'Client.FriendMatch.Lobby.WaitingForHost';
   if (SCREENS[hostBack].view !== 'lobby' || SCREENS[hostBack].status !== 'Waiting for your friend to return\u2026' || !SCREENS[hostBack].codeHint) fail(`${hostBack} の画面が違う`);
   if (SCREENS[clientBack].view !== 'lobby' || SCREENS[clientBack].status !== 'Waiting for the host to return\u2026' || SCREENS[clientBack].codeHint) fail(`${clientBack} の画面が違う`);
+  // U71 (#1891 の FB): 先に戻った側にも、相手が戻る前から両者のカード (どちらも Not ready) と、押せない Ready を出す
+  for (const name of [hostBack, clientBack]) {
+    const sc = SCREENS[name];
+    if (!sc.cards || sc.cards.me !== false || sc.cards.them !== false) fail(`${name} に両者のカードが無い (U71)`);
+    if ((sc.buttons || []).map((b) => b.label + (b.disabled ? '(無効)' : '')).join() !== 'Ready(無効)') fail(`${name} のボタンが押せない Ready でない (U71 / U4)`);
+    if (!sc.decided.includes('U71')) fail(`${name} に決定 U71 が無い`);
+  }
   // 後から押した側は、待っている相手の部屋に入る (入室と同じく "Friend joined!" / "Connecting…" → Ready 画面)
   const joined = ['Host.FriendMatch.Lobby.FriendJoined', 'Client.FriendMatch.Lobby.Connecting'];
   expectFire(at('Host.WinResult.OpponentLeft', clientBack, friend), 'host.backToFriendMatch', ...joined);
   expectFire(at(hostBack, 'Client.LoseResult.OpponentLeft', friend), 'client.backToFriendMatch', ...joined);
-  expectFire(at('Host.LoseResult.Surrendered', clientBack, friend), 'host.backToFriendMatch', ...joined);
+  expectFire(Object.assign(at('Host.LoseResult', clientBack, friend), { surrendered: true }), 'host.backToFriendMatch', ...joined);
   // ホストの ‹ は確認のあと部屋を閉じる。あとから押したクライアントは Friend Match トップに "The host canceled the match."
   const closing = Engine.fire(at(hostBack, 'Client.LoseResult.OpponentLeft', friend), 'host.back');
   if (!closing || closing.state.host !== hostBack || closing.state.hostDialog !== 'cancelMatch') fail(`${hostBack} の ‹ で "Cancel this match?" が出ない`);
@@ -922,7 +973,7 @@ for (const [dev, R, , O] of eachSide) {
     if (!s || s.view !== 'game' || s.overlay !== DISCONNECT_OVERLAYS[who] || s.timer !== 20 || !s.decided.includes('U46')) fail(`${name} が残りの秒数付きの切断を待つゲーム画面 (決定 U46) になっていない`);
   }
 }
-expectFire(at('Host.Game.MatchMenu', 'Client.Game.SurrenderConfirm'), 'net.bothDisconnected', 'Host.NoContestResult', 'Client.NoContestResult');
+expectFire(at('Host.Game.MatchMenu', 'Client.Game.MatchMenu'), 'net.bothDisconnected', 'Host.NoContestResult', 'Client.NoContestResult');
 expectFire(at('Host.Game.Play', 'Client.Game.Play'), 'net.serviceFailure', 'Host.NoContestResult', 'Client.NoContestResult');
 for (const o of Object.values(DISCONNECT_OVERLAYS)) if (/\d/.test(o.title + o.body)) fail(`切断を待つ表示に数字 (20 秒) がある: ${o.title} / ${o.body}`);
 
@@ -971,7 +1022,7 @@ const flows = {
   '15f': [[17, 'Host.WinResult.RematchExpired.Cooldown / Client.LoseResult.RematchExpiredIncoming.Cooldown'], [18, 'Host.WinResult.RematchExpired / Client.LoseResult.RematchExpiredIncoming'],
     [20, 'Host.Opponent / Client.Opponent']],
   '15g': [[15, 'Host.DrawResult / Client.DrawResult'], [16, 'Host.Opponent / Client.Opponent'], [18, 'Host.Game.Play / Client.Game.Play']],
-  '16d': [[10, 'Host.WinResult.OpponentSurrendered / Client.LoseResult.Surrendered'], [12, 'Host.Matchmake.NextOpponent / Client.Matchmake']],
+  '16d': [[9, 'Host.WinResult / Client.LoseResult'], [10, 'Host.WinResult.OpponentLeft / Client.Matchmake.NextOpponent'], [11, 'Host.Matchmake.NextOpponent / Client.Matchmake.NextOpponent']],
   '17': [[8, 'Host.WinResult / Client.LoseResult'], [9, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [10, 'Host.Opponent / Client.Opponent'],
     [13, 'Host.WinResult / Client.LoseResult'], [14, 'Host.Matchmake.NextOpponent / Client.LoseResult.OpponentLeft'],
     [15, 'Host.Matchmake.NextOpponent / Client.Matchmake'], [16, 'Host.Matchmake.NextOpponent / Client.Matchmake.Searching'], [17, 'Host.Opponent / Client.Opponent']],
@@ -1001,51 +1052,50 @@ const stampWantFlow = 'null,null → gg,null → gg,thanks → sent,thanks → n
 if (stampFlow !== stampWantFlow) fail(`シナリオ 15h のスタンプ ${stampFlow} (期待: ${stampWantFlow})`);
 console.log('ok  対戦後 (U20〜U30): 結果画面の中身・レート・ボタン・戻り先・再戦・スタンプ・切断・次の相手 (両端末)');
 
-// 対戦中の MATCH MENU (決定 U37〜U42、案A): ☰ で開いても相手の端末は変わらない。CONTINUE で閉じ、SURRENDER は確認を挟む。
-// 降参すると自分は負け、相手は (メニューを開いていても) 勝ち + "Your opponent surrendered"。負けの結果画面から Online Battle へ
+// 対戦中の MATCH MENU (決定 U37〜U42、案A): ☰ で開いても相手の端末は変わらない。CONTINUE で閉じ、SURRENDER ですぐ降参する (確認は MATCH MENU の 1 回だけ、U65)。
+// 降参すると自分は負け、相手は (メニューを開いていても) 勝ち + "Your opponent surrendered" (U38)。どちらも時間切れと同じ結果画面 (U66)
 for (const id of ['U37', 'U38', 'U39', 'U40', 'U41', 'U42']) {
   const u = UNDECIDED.find((x) => x.id === id);
   if (!u || !u.decided || u.decided.by !== '高宮さん' || u.decided.date !== '2026-10-07') fail(`${id} が 高宮さん 2026-10-07 の決定になっていない`);
 }
 if (/降参/.test(UNDECIDED.find((u) => u.id === 'U28').title)) fail('U28 の題名に決定済みの降参が残っている');
+for (const [id, later] of [['U40', 'U65'], ['U45', 'U66'], ['U60', 'U67'], ['U56', 'U64'], ['U56', 'U68'], ['U63', 'U69'], ['U21', 'U70'], ['U61', 'U71']]) {
+  if (!new RegExp(later).test(UNDECIDED.find((u) => u.id === id).desc)) fail(`${id} の説明に、${later} で変わったことが無い`);
+}
+for (const id of ['U64', 'U65', 'U66', 'U67', 'U68', 'U69', 'U70', 'U71']) {
+  const u = UNDECIDED.find((x) => x.id === id);
+  if (!u || !u.decided || u.decided.date !== '2026-10-19' || !/高宮さん/.test(u.decided.by) || !/#1891/.test(u.desc)) fail(`${id} が 高宮さん 2026-10-19 (#1891 の FB) の決定になっていない`);
+}
 for (const [dev, R, other, O] of [['host', 'Host', 'client', 'Client'], ['client', 'Client', 'host', 'Host']]) {
   const pair2 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
   const st = (mine, theirs) => at(...pair2(mine, theirs));
-  const [play, menu, confirm] = [`${R}.Game.Play`, `${R}.Game.MatchMenu`, `${R}.Game.SurrenderConfirm`];
+  const [play, menu] = [`${R}.Game.Play`, `${R}.Game.MatchMenu`];
   for (const theirs of clientInPlay.concat(hostInPlay).filter((s) => s.startsWith(O + '.'))) {
     const m = expectFire(st(play, theirs), `${dev}.matchMenu`, ...pair2(menu, theirs));
     if (!m) continue;
     if (Engine.canFire(m, `${dev}.matchMenu`)) fail(`${menu} でもう一度メニューを開ける`);
     for (const ev of ['pause', 'quit', 'continue', 'pauseRematch', 'rematch']) if (Engine.canFire(m, `${dev}.${ev}`)) fail(`${menu} で ${dev}.${ev} の行がある`);
     expectFire(m, `${dev}.matchMenu.continue`, ...pair2(play, theirs));
-    const c = expectFire(m, `${dev}.matchMenu.surrender`, ...pair2(confirm, theirs));
-    if (!c) continue;
-    expectFire(c, `${dev}.surrenderConfirm.continue`, ...pair2(play, theirs));
-    expectFire(c, `${dev}.surrenderConfirm.surrender`, ...pair2(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`));
+    // U65 (#1891 の FB 18): SURRENDER ですぐ負け。"Surrender?" の確認は挟まない
+    const c = expectFire(m, `${dev}.matchMenu.surrender`, ...pair2(`${R}.LoseResult`, `${O}.WinResult`));
+    if (c && !c.surrendered) fail(`${menu} の SURRENDER で surrendered にならない`);
   }
-  expectFire(Object.assign(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), friend), `${dev}.backToFriendMatch`,
-    ...pair2(R === 'Host' ? 'Host.FriendMatch.Lobby.FriendReturning' : 'Client.FriendMatch.Lobby.WaitingForHost', `${O}.WinResult.OpponentSurrendered`));
-  expectFire(Object.assign(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), random), `${dev}.backToRandomMatch`,
-    ...pair2(`${R}.Matchmake`, `${O}.WinResult.OpponentSurrendered`));
-  expectFire(Object.assign(st(`${R}.LoseResult.Surrendered`, `${O}.WinResult.OpponentSurrendered`), friend), `${other}.backToFriendMatch`,
-    ...pair2(`${R}.LoseResult.Surrendered`, O === 'Host' ? 'Host.FriendMatch.Lobby.FriendReturning' : 'Client.FriendMatch.Lobby.WaitingForHost'));
+  const surrendered = (session) => Object.assign(st(`${R}.LoseResult`, `${O}.WinResult`), session, { surrendered: true });
+  expectFire(surrendered(friend), `${dev}.backToFriendMatch`,
+    ...pair2(R === 'Host' ? 'Host.FriendMatch.Lobby.FriendReturning' : 'Client.FriendMatch.Lobby.WaitingForHost', `${O}.WinResult.OpponentLeft`));
+  expectFire(surrendered(random), `${dev}.backToRandomMatch`, ...pair2(`${R}.Matchmake`, `${O}.WinResult.OpponentLeft`));
+  expectFire(surrendered(friend), `${other}.backToFriendMatch`,
+    ...pair2(`${R}.LoseResult.OpponentLeft`, O === 'Host' ? 'Host.FriendMatch.Lobby.FriendReturning' : 'Client.FriendMatch.Lobby.WaitingForHost'));
   if (Engine.canFire(at('Host.Game.Countdown', 'Client.Game.Countdown'), `${dev}.matchMenu`)) fail(`カウントダウン中に ${dev}.matchMenu の行がある`);
-  for (const name of [menu, confirm]) {
-    const s = SCREENS[name];
-    if (s.view !== 'game' || !s.menu) fail(`${name} がメニュー付きのゲーム画面になっていない`);
-  }
-  for (const [name, reason] of [[`${R}.LoseResult.Surrendered`, 'surrendered'], [`${R}.WinResult.OpponentSurrendered`, 'opponentSurrendered']]) {
-    const s = SCREENS[name];
-    if (!s || s.reason !== reason) { fail(`${name} が降参の結果画面になっていない`); continue; }
-    for (const match of ['friend', 'random']) if (resultButtons(s, match).some((b) => b.event === 'rematch')) fail(`${name} (${match}) に Rematch がある`);
-  }
+  const s = SCREENS[menu];
+  if (s.view !== 'game' || !s.menu) fail(`${menu} がメニュー付きのゲーム画面になっていない`);
 }
+if (Object.keys(SCREENS).some((k) => /SurrenderConfirm/.test(k)) || 'SURRENDER_CONFIRM' in ctx || TRANSITIONS.some((r) => /surrenderConfirm/.test(r.event))) fail('降参の確認 (2 回目の確認) が残っている (U65)');
+if (/降参の確認/.test(appJs)) fail('app.js に降参の確認の描画・説明が残っている (U65)');
 if (MATCH_MENU.title !== 'MATCH MENU' || !/continues while the menu is open/.test(MATCH_MENU.body)) fail('MATCH MENU のタイトルか「試合は続く」の一文が無い');
 if (MATCH_MENU.buttons.map((b) => b.label).join() !== 'CONTINUE,SURRENDER') fail('MATCH MENU のボタンが CONTINUE / SURRENDER でない (REMATCH / QUIT は無い)');
-if (SURRENDER_CONFIRM.title !== 'Surrender?' || SURRENDER_CONFIRM.body !== 'You will lose.') fail('降参の確認の文言が "Surrender?" / "You will lose." でない');
-if (SURRENDER_CONFIRM.buttons.map((b) => b.label).join() !== 'CONTINUE,SURRENDER') fail('降参の確認のボタンが CONTINUE / SURRENDER でない');
 if (END_REASONS.opponentSurrendered !== 'Your opponent surrendered' || END_REASONS.surrendered !== 'You surrendered') fail('降参の結果画面の "You surrendered" / "Your opponent surrendered" が無い');
-for (const r of TRANSITIONS) if (/\.(pause|quit|continue|pauseRematch)$/.test(r.event) && !/(matchMenu|surrenderConfirm)\./.test(r.event)) fail(`${r.id}: ポーズの ${r.event} が残っている`);
+for (const r of TRANSITIONS) if (/\.(pause|quit|continue|pauseRematch)$/.test(r.event) && !/matchMenu\./.test(r.event)) fail(`${r.id}: ポーズの ${r.event} が残っている`);
 for (const k of Object.keys(SCREENS)) if (/\.Game\.Pause$/.test(k)) fail(`ポーズの状態 ${k} が残っている`);
 if (/timeScale|g-pause|p-dim/.test(read('js', 'app.js') + read('css', 'style.css'))) fail('app.js / style.css にポーズ (試合を止める表示) が残っている');
 // モック専用の "Game in progress (mock)" は無くなった
@@ -1054,7 +1104,7 @@ if (/Game in progress/.test(read('js', 'app.js'))) fail('app.js にモック専�
 // [手順の途中, 最後] の状態
 const menuScenarios = {
   '16': [16, 'Host.Game.MatchMenu / Client.Game.MatchMenu', 'Host.Game.Play / Client.Game.Play'],
-  '16b': [20, 'Host.LoseResult.Surrendered / Client.WinResult.OpponentSurrendered', 'Host.FriendMatch.Lobby.FriendReturning / Client.WinResult.OpponentSurrendered'],
+  '16b': [18, 'Host.LoseResult / Client.WinResult', 'Host.Game.Play / Client.Game.Play'],
   '16c': [15, 'Host.Game.MatchMenu / Client.Game.Play', 'Host.LoseResult / Client.WinResult'],
 };
 for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
@@ -1063,7 +1113,7 @@ for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
   const got = [pair(Engine.replay(sc, n).state), pair(Engine.replay(sc).state)];
   if (got.join() !== [mid, last].join()) fail(`シナリオ ${id} の状態 ${got.join(' → ')} (期待: ${mid} → ${last})`);
 }
-console.log('ok  MATCH MENU: 開いても相手は変わらない / CONTINUE / SURRENDER → 確認 → 負け + 相手に "Your opponent surrendered" (両端末)、メニュー中も Win / Lose');
+console.log('ok  MATCH MENU: 開いても相手は変わらない / CONTINUE / SURRENDER ですぐ負け (確認は 1 回だけ、U65) + 相手に "Your opponent surrendered"、降参のあとも再戦できる (U66) (両端末)、メニュー中も Win / Lose');
 
 // 決定 (U13a): ランダム対戦は相手が見つかり次第 VS 画面へ。Ready 画面 / Starting match… を挟まない (U31 は Friend Match だけ)。
 // 相手を探す画面は "Searching for an opponent…" と大きな Cancel (Ready を押してから、U62)
@@ -1332,7 +1382,7 @@ for (const k of Object.keys(ROOM_NOTICES_WANT)) {
     if (!sc || sc.view !== 'friendTop' || !sc.roomNotice || sc.roomNotice.text !== ROOM_NOTICES_WANT[k] || sc.roomNotice.buttons.map((b) => `${b.label}:${b.event}`).join() !== 'Close:closeNotice') {
       fail(`${name} が "${ROOM_NOTICES_WANT[k]}" と Close の帯の Friend Match トップでない`);
     }
-    const want = name === top ? undefined : JSON.stringify({ input: name.endsWith('.CodeEntered') ? 'QWERTY123' : '', error: null });
+    const want = name === top ? undefined : JSON.stringify({ input: name.endsWith('.CodeEntered') ? 'QWERTY123' : '' });
     if (sc && JSON.stringify(sc.join) !== want) fail(`${name} の Join a Match が ${JSON.stringify(sc.join)} (期待: ${want})`);
   }
   expectFire(at('Host.MultiModeSelection', top), 'client.openJoin', 'Host.MultiModeSelection', `${top}.Join`);
@@ -1353,7 +1403,7 @@ for (const k of ['ReconnectFailed', 'MatchCancelled']) {
 }
 if (!/roomNoticeHtml/.test(appJs) || !/\.room-notice \{ display: flex/.test(read('css', 'style.css'))) fail('部屋のお知らせが Close 付きの帯で描かれていない (U52)');
 // U63 (#1891 の FB 19・20): Friend Match トップは New Match / Join Match の 2 つのボタンだけ。Match Code は Join Match で開く Join a Match に入れる。
-// 赤字はダイアログの中に出し、見つからない・期限切れは同じ "Match not found. The code may be wrong or expired."
+// 誤り・満員はダイアログの中の赤字ではなく画面の下のトースト (U69) で、見つからない・期限切れは同じ "Match not found" / "The code may be wrong or expired."
 {
   const u62 = UNDECIDED.find((u) => u.id === 'U63');
   if (!u62 || !u62.decided || u62.decided.date !== '2026-10-17' || !/#1891/.test(u62.desc) || !/19/.test(u62.decided.by) || !/20/.test(u62.decided.by)) fail('U63 が #1891 の FB 19・20 (2026-10-17) の決定になっていない');
@@ -1362,15 +1412,17 @@ if (!/roomNoticeHtml/.test(appJs) || !/\.room-notice \{ display: flex/.test(read
   if (labels.join() !== 'New Match,Join Match' || /class="input"|sec-label/.test(ft)) fail(`Friend Match トップのボタンが New Match / Join Match だけでない (${labels.join(' / ')})、または入力欄が残っている (U63)`);
   if (!/attrs\(dev, 'createMatch'\) \+ '>New Match</.test(ft) || !/attrs\(dev, 'openJoin'\) \+ '>Join Match</.test(ft)) fail('New Match / Join Match のイベントが createMatch / openJoin でない (U63)');
   const jd = appJs.slice(appJs.indexOf('function joinDialogHtml'), appJs.indexOf('function roomNoticeHtml'));
-  for (const want of ['aria-label="Join a Match"', '<div class="d-title">Join a Match</div>', '>Match Code</div>', "attrs(dev, 'enterCode')", "attrs(dev, 'joinMatch') + '>Join</button>", "attrs(dev, 'closeJoin')", 'class="error"']) {
+  for (const want of ['aria-label="Join a Match"', '<div class="d-title">Join a Match</div>', '>Match Code</div>', "attrs(dev, 'enterCode')", "attrs(dev, 'joinMatch') + '>Join</button>", "attrs(dev, 'closeJoin')"]) {
     if (!jd.includes(want)) fail(`Join a Match のダイアログに ${want} が無い (U63)`);
   }
+  if (/class="error"|j\.error/.test(jd) || /\.error \{|\.join-dialog \.error/.test(read('css', 'style.css'))) fail('Join a Match のダイアログの中に赤字が残っている (U69: トーストで出す)');
   const J = 'Client.FriendMatch.Room.Join';
-  const want = { [J]: ['', null], [`${J}.CodeEntered`]: ['QWERTY123', null], [`${J}.Error.NotFound`]: ['QWERTY123', 'Match not found. The code may be wrong or expired.'],
-    [`${J}.Error.Full`]: ['QWERTY123', 'The match is already full.'], [`${J}.ConnectionFailed`]: ['QWERTY123', null] };
-  for (const [name, [input, error]] of Object.entries(want)) {
+  const want = { [J]: ['', null], [`${J}.CodeEntered`]: ['QWERTY123', null], [`${J}.Error.NotFound`]: ['QWERTY123', 'Match not found|The code may be wrong or expired.'],
+    [`${J}.Error.Full`]: ['QWERTY123', 'The match is already full.|'], [`${J}.ConnectionFailed`]: ['QWERTY123', 'Connection failed|Couldn\u2019t join the match. Try again.'] };
+  for (const [name, [input, toast]] of Object.entries(want)) {
     const sc = SCREENS[name];
-    if (!sc || sc.view !== 'friendTop' || !sc.join || sc.join.input !== input || sc.join.error !== error) fail(`${name} の Join a Match が ${JSON.stringify(sc && sc.join)} (期待: ${input} / ${error})`);
+    const got = sc && sc.toast ? `${TOASTS[sc.toast].text}|${TOASTS[sc.toast].sub || ''}` : null;
+    if (!sc || sc.view !== 'friendTop' || !sc.join || sc.join.input !== input || 'error' in sc.join || got !== toast) fail(`${name} の Join a Match が ${JSON.stringify(sc && sc.join)} / トースト ${got} (期待: ${input} / ${toast})`);
   }
   for (const name of Object.keys(SCREENS)) if (SCREENS[name].error || 'input' in SCREENS[name]) fail(`${name} にダイアログの外の入力欄・赤字がある (U63)`);
   if (Object.keys(SCREENS).some((n) => /\.Error\.Expired$|Room\.CodeEntered$|Room\.ConnectionFailed$/.test(n) && n.startsWith('Client.'))) fail('ダイアログの外の .CodeEntered / .ConnectionFailed か、期限切れの赤字 (.Error.Expired) が残っている (U63)');
@@ -1501,8 +1553,8 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   }
   if (/PLAYERS\[[^\]]+\]\.(emoji|greeting)|\bp\.(emoji|greeting)/.test(appJs)) fail('app.js が絵文字とあいさつを PLAYERS から読んでいる (保存した値・固定した値を使う)');
 
-  // 開けるのは Random Match (Ready を待っている画面 (U62) と相手を探している画面) と Friend Match トップだけ (#1891 の FB 12。Join a Match を開いている間は除く、U63)。今の画面の上にダイアログで開く。
-  // Online Battle・部屋・対戦中には行もボタンも無く、専用の Profile 画面は無い
+  // 開けるのは Random Match (Ready を待っている画面 (U62) と相手を探している画面)、Friend Match トップ (#1891 の FB 12。Join a Match を開いている間は除く、U63)、
+  // ‹ を押せる部屋の画面 (期限切れを除く、U68)。今の画面の上にダイアログで開く。Online Battle・対戦中には行もボタンも無く、専用の Profile 画面は無い
   if (Object.keys(SCREENS).some((n) => /\.Profile$/.test(n)) || Object.values(SCREENS).some((sp) => sp.view === 'profile')) fail('専用の Profile 画面が残っている');
   if (/\.Profile\b/.test(read('js', 'scenarios.js'))) fail('シナリオに Profile 画面が残っている');
   if (!/FB 12/.test(u56.desc) || !/#1891/.test(u56.desc)) fail('U56 の説明に #1891 の FB 12 (入口をダイアログに変えた) が無い');
@@ -1511,7 +1563,10 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     // Join a Match のダイアログ (U63) を開いている間はモーダルなので、Profile のボタンは後ろに見えるが押せない (‹ と同じ)
     const friendTopAll = Object.keys(SCREENS).filter((n) => n.startsWith(`${R}.FriendMatch.Room`));
     const friendTop = friendTopAll.filter((n) => !SCREENS[n].join);
-    const openable = searching.concat([`${R}.Matchmake`], friendTop);
+    // U68 (#1891 の FB): Match Code を出している部屋の画面のうち、‹ を押せるもの (送っている間・読み込み・自分の再接続中は ‹ を押せない) と期限切れ以外
+    const lobby = Object.keys(SCREENS).filter((n) => n.startsWith(`${R}.FriendMatch.Lobby.`) && SCREENS[n].back === 'back' && !/\.CodeExpired$/.test(n));
+    if (lobby.length < (R === 'Host' ? 15 : 12) || !lobby.includes(L(R, 'Ready')) || !lobby.includes(L(R, 'Ready.WaitingForOpponent'))) fail(`${R} の Profile を開ける部屋の画面が ${lobby.join(', ')}`);
+    const openable = searching.concat([`${R}.Matchmake`], friendTop, lobby);
     if (friendTop.length < (R === 'Host' ? 4 : 6)) fail(`${R} の Friend Match トップの状態が ${friendTop.length} 個しかない`);
     if (R === 'Client' && friendTopAll.length - friendTop.length < 15) fail('Client の Join a Match を開いた状態が少ない');
     const others = [`${O}.MultiModeSelection`, L(O, 'Ready'), `${O}.Game.Play`, `${O}.Matchmake.Searching`];
@@ -1530,38 +1585,56 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     }
     if (!SCREENS[`${R}.Matchmake`].profile || !SCREENS[`${R}.Matchmake.Searching`].profile || SCREENS[`${R}.Matchmake`].title !== 'Random Match' || SCREENS[`${R}.FriendMatch.Room`].title !== 'Friend Match') fail(`${R} の Random Match / Friend Match の画面に Profile が無い`);
     if (Engine.canFire(at(`${R}.MultiModeSelection`, `${O}.MultiModeSelection`), `${d}.profile`)) fail(`${R}: Online Battle から Profile を開ける`);
-    // ダイアログの中の操作は、絵文字 10 個・あいさつ 10 個 (相手を探している間と、探していない間 (Ready を待っている・Friend Match トップ) で 1 行ずつ)・‹ で閉じるだけ。
+    // ダイアログの中の操作は、絵文字 10 個・あいさつ 10 個 (相手を探している間、部屋の画面 (U68)、探していない間 (Ready を待っている・Friend Match トップ) で 1 行ずつ)・× で閉じるだけ。
     // Save / Cancel は無い (#1891 の FB 14)。どれも画面はそのまま
     const inDialog = TRANSITIONS.filter((r) => r.from[d + 'Dialog'] === 'profile');
     const picks = PROFILE_EMOJIS.map((e) => `dialog.pickEmoji.${e.id}`).concat(PROFILE_GREETINGS.map((g) => `dialog.pickGreeting.${g.id}`));
-    const want = picks.concat(picks, ['dialog.closeProfile']);
+    const want = picks.concat(picks, picks, ['dialog.closeProfile']);
     if (inDialog.map((r) => r.event.slice(d.length + 1)).join() !== want.join()) fail(`${R} の Profile のダイアログの操作が ${inDialog.map((r) => r.event).join(', ')}`);
     for (const r of inDialog.concat(TRANSITIONS.filter((x) => x.event === `${d}.profile`))) {
       if (r.to[d] !== '=' || states(r.from[d]).some((n) => !openable.includes(n))) fail(`${r.id}: Profile の行が ${states(r.from[d]).join()} → ${r.to[d]}`);
     }
-    if (DIALOGS.profile.close !== 'dialog.closeProfile') fail('Profile のダイアログの ‹ が closeProfile でない');
-    if (/Escape[\s\S]{0,80}Profile|pf-close|saveProfile|Cancel<\/button>/.test(appJs.slice(appJs.indexOf('function profileDialogHtml')))) fail('Profile のダイアログに Save / Cancel / × か、Esc で閉じる処理が残っている');
-    // 選ぶとすぐ保存し、見本が変わって "Saved" が出る (#1891 の FB 14)。‹ で閉じても保存した値のまま、次に開くとその値から。どちらでも画面はそのまま
-    for (const where of [`${R}.Matchmake.Searching`, `${R}.Matchmake`, `${R}.FriendMatch.Room`]) {
+    if (DIALOGS.profile.close !== 'dialog.closeProfile') fail('Profile のダイアログの × が closeProfile でない');
+    if (/Escape[\s\S]{0,80}Profile|pf-close|saveProfile|Cancel<\/button>/.test(appJs.slice(appJs.indexOf('function profileDialogHtml')))) fail('Profile のダイアログに Save / Cancel か、Esc で閉じる処理が残っている');
+    // U64 (#1891 の FB): 閉じるのは Join a Match と同じ右上の × (Close)。左上の ‹ (Back) と "Saved" は無い
+    const pfHtml = appJs.slice(appJs.indexOf('function profileDialogHtml'), appJs.indexOf('function dialogHtml'));
+    if (!pfHtml.includes(`'<button type="button" class="d-close" aria-label="Close"' + attrs(dev, d.close) + '>\\u00d7</button>'`)) fail('Profile のダイアログの右上に × (Close) が無い (U64)');
+    if (/pf-back|aria-label="Back"|Saved|ProfileSaved/.test(pfHtml) || /pf-back|pf-saved/.test(read('css', 'style.css')) || 'ProfileSaved' in ctx.DEVICE_FIELDS) fail('Profile のダイアログに ‹ (Back) か "Saved" が残っている (U64)');
+    // 選ぶとすぐ保存し、見本が変わる (#1891 の FB 14)。× で閉じても保存した値のまま、次に開くとその値から。どちらでも画面はそのまま
+    for (const where of [`${R}.Matchmake.Searching`, `${R}.Matchmake`, `${R}.FriendMatch.Room`, L(R, 'Ready'), L(R, 'Ready.WaitingForOpponent')]) {
       const open = (st) => Engine.fire(st, `${d}.profile`);
       const st = d === 'host' ? at(where, `${O}.MultiModeSelection`) : at(`${O}.MultiModeSelection`, where);
       const pick = (s, e, g) => [`${d}.dialog.pickEmoji.${e}`, `${d}.dialog.pickGreeting.${g}`].reduce((x, ev) => { const r = Engine.fire(x, ev); if (!r) fail(`${ev} の行が無い`); return r ? r.state : x; }, s);
       const before = `${st[d + 'Emoji']} ${say(st[d + 'Greeting'])}`;
       let o = open(st).state;
-      if (`${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== before || o[d + 'ProfileSaved'] !== false) fail(`${where}: Profile を開いたときに値が変わるか、"Saved" が出ている`);
-      if (Engine.canFire(o, `${d}.back`) || Engine.canFire(o, `${d}.cancelSearch`) || Engine.canFire(o, `${d}.startSearch`) || Engine.canFire(o, `${d}.createMatch`)) fail(`${where}: Profile のダイアログの後ろの画面を操作できる (モーダルでない)`);
+      if (`${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== before) fail(`${where}: Profile を開いたときに値が変わる`);
+      for (const ev of ['back', 'cancelSearch', 'startSearch', 'createMatch', 'ready', 'cancelReady', 'copyCode']) if (Engine.canFire(o, `${d}.${ev}`)) fail(`${where}: Profile のダイアログの後ろの画面を操作できる (${ev}、モーダルでない)`);
       o = pick(o, 'robot', 'goodLuck');
-      if (o[d] !== where || o[d + 'Dialog'] !== 'profile' || `${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== '\u{1F916} Good luck!' || o[d + 'ProfileSaved'] !== true) fail(`${where}: Profile で選んでもすぐ保存されないか、"Saved" が出ない`);
-      const searchingNow = searching.includes(where);
-      if ((`${o[d + 'ShownEmoji']} ${say(o[d + 'ShownGreeting'])}` === '\u{1F916} Good luck!') !== searchingNow) fail(`${where}: 選んだ値を相手に見せる値に${searchingNow ? '写さない (相手を探している間)' : '写す (探していない)'}`);
+      if (o[d] !== where || o[d + 'Dialog'] !== 'profile' || `${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: Profile で選んでもすぐ保存されない`);
+      // 相手を探している間と部屋の画面 (U68) で選んだものは、この対戦の相手に見せる値にもなる
+      const shownNow = searching.includes(where) || lobby.includes(where);
+      if ((`${o[d + 'ShownEmoji']} ${say(o[d + 'ShownGreeting'])}` === '\u{1F916} Good luck!') !== shownNow) fail(`${where}: 選んだ値を相手に見せる値に${shownNow ? '写さない' : '写す'}`);
       const c = Engine.fire(o, `${d}.dialog.closeProfile`).state;
-      if (c[d] !== where || c[d + 'Dialog'] !== null || c[d + 'ProfileSaved'] !== false || `${c[d + 'Emoji']} ${say(c[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: ‹ で閉じないか、選んだ値が残らない`);
+      if (c[d] !== where || c[d + 'Dialog'] !== null || `${c[d + 'Emoji']} ${say(c[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: × で閉じないか、選んだ値が残らない`);
       const reopenedHere = open(c).state;
-      if (`${reopenedHere[d + 'Emoji']} ${say(reopenedHere[d + 'Greeting'])}` !== '\u{1F916} Good luck!' || reopenedHere[d + 'ProfileSaved'] !== false) fail(`${where}: Profile をもう一度開くと保存した値から始まらないか、"Saved" が残る`);
+      if (`${reopenedHere[d + 'Emoji']} ${say(reopenedHere[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: Profile をもう一度開くと保存した値から始まらない`);
     }
-    // 画面が変わる (相手が見つかる) とダイアログと "Saved" は消える。選んだものは保存済みで、見つかった相手にも見える
+    // Profile を開けない画面へ変わる (相手が見つかる) とダイアログは閉じる。選んだものは保存済みで、見つかった相手にも見える
     const both = Engine.fire(pickState(at('Host.Matchmake.Searching', 'Client.Matchmake.Searching'), d), 'sys.opponentFound');
-    if (!both || both.state[d] !== `${R}.Opponent` || both.state[d + 'Dialog'] !== null || both.state[d + 'ProfileSaved'] !== false || both.state[d + 'Emoji'] !== '\u{1F680}' || both.state[d + 'ShownEmoji'] !== '\u{1F680}') fail(`${R}: 相手が見つかっても Profile のダイアログが閉じないか、選んだものが保存されていない`);
+    if (!both || both.state[d] !== `${R}.Opponent` || both.state[d + 'Dialog'] !== null || both.state[d + 'Emoji'] !== '\u{1F680}' || both.state[d + 'ShownEmoji'] !== '\u{1F680}') fail(`${R}: 相手が見つかっても Profile のダイアログが閉じないか、選んだものが保存されていない`);
+    // U68: 部屋の中で画面が変わる (相手が Ready を押す・相手が切断する) ときは開いたまま。読み込みが始まる・期限が切れると閉じる
+    const go = (st, evs) => evs.reduce((x, ev) => { const r = x && Engine.fire(x, ev); if (x && !r) fail(`U68: ${ev} の行が無い (${x.host} / ${x.client})`); return r && r.state; }, st);
+    const other = d === 'host' ? 'client' : 'host';
+    const roomOpen = pickState(at(L('Host', 'Ready'), L('Client', 'Ready')), d);
+    const theirReady = go(roomOpen, [`${other}.ready`, 'sys.readyConfirmed']);
+    if (!theirReady || theirReady[d] !== L(R, 'Ready.OpponentReady') || theirReady[d + 'Dialog'] !== 'profile') fail(`${R}: 部屋で相手が Ready を押すと Profile のダイアログが閉じる (U68)`);
+    const theirGone = go(roomOpen, [`${other}.disconnect`]);
+    if (!theirGone || theirGone[d] !== L(R, 'FriendDisconnected') || theirGone[d + 'Dialog'] !== 'profile') fail(`${R}: 部屋で相手が切断すると Profile のダイアログが閉じる (U68)`);
+    const expired = go(roomOpen, ['timer.codeExpired']);
+    if (!expired || expired[d] !== L(R, 'CodeExpired') || expired[d + 'Dialog'] !== null) fail(`${R}: 期限が切れても Profile のダイアログが開いたまま (U68)`);
+    const started = go(at(...(d === 'host' ? [L('Host', 'Ready.WaitingForOpponent'), L('Client', 'Ready.OpponentReady')] : [L('Host', 'Ready.OpponentReady'), L('Client', 'Ready.WaitingForOpponent')])),
+      [`${d}.profile`, `${other}.ready`, 'sys.readyConfirmed']);
+    if (!started || started[d] !== L(R, 'Starting') || started[d + 'Dialog'] !== null) fail(`${R}: 読み込み (Starting match…) が始まっても Profile のダイアログが開いたまま (U68)`);
   }
   function pickState(st, d) {
     return [`${d}.profile`, `${d}.dialog.pickEmoji.rocket`].reduce((x, ev) => Engine.fire(x, ev).state, st);
@@ -1624,9 +1697,9 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     if (copies && !r.decided.includes('U56')) fail(`${r.id}: 値を固定する行に決定 U56 が無い`);
     const m = /\.dialog\.pick(Emoji|Greeting)\./.exec(r.event);
     if (m) {
-      const whileSearching = states(r.from[d]).every((n) => /\.Matchmake\.(Searching|NextOpponent)$/.test(n));
+      const whileSearching = states(r.from[d]).every((n) => /\.Matchmake\.(Searching|NextOpponent)$|\.FriendMatch\.Lobby\./.test(n));
       const writes = !!r.set && (d + 'Shown' + m[1]) in r.set;
-      if (writes !== whileSearching || (writes && r.set[d + 'Shown' + m[1]] !== r.set[d + m[1]])) fail(`${r.id}: 相手を探している間${whileSearching ? '' : 'の外'}で選んだ値を相手に見せる値へ${writes ? '書く' : '書かない'}`);
+      if (writes !== whileSearching || (writes && r.set[d + 'Shown' + m[1]] !== r.set[d + m[1]])) fail(`${r.id}: 相手を探している間・部屋の画面${whileSearching ? '' : 'の外'}で選んだ値を相手に見せる値へ${writes ? '書く' : '書かない'}`);
     }
   }
   // どのシナリオでも、相手と向き合う画面 (VS・ゲーム・結果) では両者の値が決まっている
@@ -1641,7 +1714,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   const sc22 = SCENARIOS.find((x) => x.id === '22');
   const vs22 = sc22 && Engine.replay(sc22, 9).state;
   const search22 = sc22 && Engine.replay(sc22, 5).state;
-  if (!search22 || search22.host !== 'Host.Matchmake.Searching' || search22.hostDialog !== 'profile' || search22.hostEmoji !== '\u{1F680}' || !search22.hostProfileSaved) fail('シナリオ 22 で相手を探している間に Profile のダイアログが開いていないか、選んだものが保存されていない');
+  if (!search22 || search22.host !== 'Host.Matchmake.Searching' || search22.hostDialog !== 'profile' || search22.hostEmoji !== '\u{1F680}') fail('シナリオ 22 で相手を探している間に Profile のダイアログが開いていないか、選んだものが保存されていない');
   if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Bring it on!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
   const end22 = sc22 && Engine.replay(sc22);
   if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後が再戦の VS 画面 (ホストのあいさつ付き) でない');
@@ -1649,7 +1722,13 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   const sc22b = SCENARIOS.find((x) => x.id === '22b');
   const end22b = sc22b && Engine.replay(sc22b).state;
   const mid22b = sc22b && Engine.replay(sc22b, 5).state;
-  if (!mid22b || mid22b.hostDialog !== null || `${mid22b.hostEmoji} ${say(mid22b.hostGreeting)}` !== '\u{1F916} Good luck!') fail('シナリオ 22b で選んだものが ‹ で閉じたあとに残らない');
+  if (!mid22b || mid22b.hostDialog !== null || `${mid22b.hostEmoji} ${say(mid22b.hostGreeting)}` !== '\u{1F916} Good luck!') fail('シナリオ 22b で選んだものが × で閉じたあとに残らない');
+  // シナリオ 22c (U68): Ready 画面で選ぶ → 相手が Ready を押してもダイアログは開いたまま → × で閉じて Ready → この対戦の VS 画面に出る
+  const sc22c = SCENARIOS.find((x) => x.id === '22c');
+  const mid22c = sc22c && Engine.replay(sc22c, 11).state;
+  if (!mid22c || mid22c.host !== 'Host.FriendMatch.Lobby.Ready.OpponentReady' || mid22c.hostDialog !== 'profile' || mid22c.hostShownEmoji !== '\u{1F680}') fail('シナリオ 22c で相手が Ready を押すと Profile のダイアログが閉じるか、選んだものが相手に見せる値にならない');
+  const end22c = sc22c && Engine.replay(sc22c);
+  if (!end22c || end22c.failedAt !== -1 || end22c.state.host !== 'Host.Opponent' || shown(end22c.state, 'host') !== '\u{1F680} Bring it on!') fail(`シナリオ 22c の最後の VS 画面が ${end22c && shown(end22c.state, 'host')} (期待: 🚀 Bring it on!)`);
   if (!end22b || end22b.host !== 'Host.FriendMatch.Room' || end22b.hostDialog !== null || `${end22b.hostEmoji} ${say(end22b.hostGreeting)}` !== '\u{1F31F} Good luck!') fail('シナリオ 22b の最後で選んだ値が残らないか、Friend Match トップに残らない');
   if (SCENARIOS.some((sc) => sc.steps.some((ev) => /saveProfile/.test(ev)))) fail('シナリオに Profile の Save が残っている');
 
@@ -1676,7 +1755,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   // シナリオは localStorage に関係なく、いつも最初の値から (Engine.replay は保存した値を受け取らない)
   if (Engine.replay(sc22, 0).state.hostEmoji !== EMOJIS[0]) fail('シナリオが最初の値から始まらない');
   if (!/if \(app\.scenario \|\| !storage\) return;/.test(appJs)) fail('app.js がシナリオの再生中にも localStorage に書く');
-  console.log('ok  U56 (2026-10-08、入口は #1891 の FB 12): Profile の候補 10 + 10 (アポストロフィは ’、あいさつは日本語と英語、#1891 FB 13)・既定値 👋 "Hello!"・Random Match と Friend Match トップの上にダイアログで開く (Online Battle と専用の画面は無い)・選ぶとすぐ保存して "Saved"、閉じるのは左上の ‹ だけ (FB 14)・次の部屋と次の検索から相手に見える (探している間に選んだものは見つかる相手にも)・localStorage・再戦の VS 画面にもあいさつは出る');
+  console.log('ok  U56 (2026-10-08、入口は #1891 の FB 12): Profile の候補 10 + 10 (アポストロフィは ’、あいさつは日本語と英語、#1891 FB 13)・既定値 👋 "Hello!"・Random Match と Friend Match トップの上にダイアログで開く (Online Battle と専用の画面は無い)・部屋の画面でも開ける (U68)・選ぶとすぐ保存し (FB 14、"Saved" は出さない)、閉じるのは右上の × だけ (U64)・次の部屋と次の検索から相手に見える (探している間と部屋の画面で選んだものはこの対戦の相手にも)・localStorage・再戦の VS 画面にもあいさつは出る');
 }
 
 const unused = TRANSITIONS.filter((r) => !used.has(r.id));

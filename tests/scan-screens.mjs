@@ -5,7 +5,8 @@
 // Random Match の画面は開いた直後が大きな Ready だけで、探している間は同じ場所・同じ大きさの Cancel になることも確かめる (決定 U62、#1891 の FB 16)。
 // アプリを離れて検索が止まった通知がモーダルではなく、メニューをさまたげないことも確かめる (決定 U43)。
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
-// 結果画面にスコアの行が無いこと (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ) も確かめる (決定 U20 / U27 / U28 / U30)。
+// 結果画面にスコアの行が無いこと (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ) も確かめる (決定 U20 / U27 / U28)。
+// 再戦 (決定 U72) は、両者に同じ Rematch だけがあり、押した側のくるくるが画面に収まって後ろの結果画面を押せず、Cancel だけを押せることを確かめる。
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
 // 再接続を待つ 20s のカウントダウンだけが数字として出ること (自分だけ Ready で待つ間は秒数ではなく待っている印 (点の動き) を出す、#1891 の FB 6)、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
@@ -653,13 +654,50 @@ function scan(only, wantLang = 'en') {
       if (screen.querySelector('.result')) {
         // Friend Match ではレートの行を出さない (U70、#1891 の FB)
         if (current.match === 'friend' && (screen.querySelector('.r-stats') || /rating/i.test(text))) findings.push(`${at}: Friend Match の結果画面にレートの行がある (U70)`);
-        // ランダム対戦は勝ち負けによらず Find Next Opponent がある (U67)
-        if (current.match === 'random' && !screen.querySelector('.result-actions [data-ev="findNextOpponent"]')) findings.push(`${at}: ランダム対戦の結果画面に Find Next Opponent が無い (U67)`);
+        // ランダム対戦は勝ち負けによらず Find Next Opponent がある (U67。再戦のくるくるの後ろでは押せないだけで、見た目は同じ)
+        const nextOpp = [...screen.querySelectorAll('.result-actions .btn')].find((b) => b.textContent === 'Find Next Opponent');
+        if (current.match === 'random' && (!nextOpp || (!screen.querySelector('.rematch-wait') && nextOpp.dataset.ev !== 'findNextOpponent'))) findings.push(`${at}: ランダム対戦の結果画面に Find Next Opponent が無い (U67)`);
         // 降参で終わった試合 (U38 / U66): 終わった理由は "You surrendered" / "Your opponent surrendered" で、Friend Match では再戦のボタンがある
         const reason = screen.querySelector('.r-reason').textContent;
         if (current.surrendered && !/(You|Your opponent) surrendered/.test(reason)) findings.push(`${at}: 降参で終わった試合の理由が ${reason}`);
-        if (/surrendered/.test(reason) && current.match === 'friend' && !/OpponentLeft/.test(state) && !screen.querySelector('.result-actions [data-ev="rematch"], .result-actions [data-ev="cancelRematch"], .result-actions .is-disabled')) {
+        const actionLabels = [...screen.querySelectorAll('.result-actions .btn')].map((b) => b.textContent);
+        if (/surrendered/.test(reason) && current.match === 'friend' && !/OpponentLeft/.test(state) && !actionLabels.includes('Rematch')) {
           findings.push(`${at}: 降参で終わった Friend Match の結果画面に再戦のボタンが無い (U66)`);
+        }
+        // 再戦 (U72、#1891 の 2026-10-20 の FB): 再戦できる結果画面は、勝ち負けと再戦の段階によらず同じボタン。Cancel Request / Accept / Decline は無い
+        if (actionLabels.some((l) => /^(Cancel Request|Accept|Decline)$/.test(l))) findings.push(`${at}: 結果画面に ${actionLabels.join(' / ')} がある (U72)`);
+        const canRematch = /\.(Win|Lose|Draw)Result(\.Rematch\w+)?$/.test(state);
+        if (canRematch && actionLabels.join() !== (current.match === 'friend' ? 'Rematch,Back to Friend Match' : 'Find Next Opponent,Rematch,Back to Random Match')) {
+          findings.push(`${at}: 結果画面のボタンが ${actionLabels.join(' / ')} (U72: 両者に同じ Rematch)`);
+        }
+        const line = screen.querySelector('.r-status').textContent;
+        if ((line === 'Your opponent wants a rematch') !== /\.RematchIncoming$/.test(state)) findings.push(`${at}: 再戦の一行が "${line}"`);
+        // 自分が押した (.RematchRequested) / 両者が押した (.RematchStarting) 間は、くるくるが画面に収まり、後ろの結果画面は inert で押せない。
+        // Cancel は自分だけが押した間だけで、押せる (上に何も重なっていない)
+        const wait = screen.querySelector('.dim.rematch-wait');
+        const spinning = /\.Rematch(Requested|Starting)$/.test(state);
+        if (!!wait !== spinning) findings.push(`${at}: 再戦のくるくるが${spinning ? '無い' : 'ある'}`);
+        if (wait) {
+          const wantText = /Requested$/.test(state) ? 'Waiting for opponent\u2026' : 'Starting match\u2026';
+          if (!wait.querySelector('.spinner') || wait.querySelector('.rw-text').textContent !== wantText) findings.push(`${at}: くるくるの表示が違う (${wait.textContent})`);
+          const sr = screen.getBoundingClientRect();
+          const box = wait.querySelector('.rw-box').getBoundingClientRect();
+          if (box.top < sr.top || box.bottom > sr.bottom || box.left < sr.left || box.right > sr.right) findings.push(`${at}: くるくるが画面からはみ出している`);
+          if (!screen.querySelector('.result').inert || !screen.querySelector('.result-actions').inert) findings.push(`${at}: くるくるの後ろの結果画面が inert でない`);
+          if (screen.querySelector('.result [data-ev], .result-actions [data-ev]')) findings.push(`${at}: くるくるの後ろのボタンにイベントがある`);
+          const cancel = wait.querySelector('.rw-cancel');
+          if (!!cancel !== /Requested$/.test(state)) findings.push(`${at}: くるくるの Cancel が${cancel ? 'ある' : '無い'}`);
+          if (cancel) {
+            const scroller = document.querySelector('.devices');
+            const [sx, sy] = [scroller.scrollLeft, scroller.scrollTop];
+            cancel.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+            const r = cancel.getBoundingClientRect();
+            const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+            if (cancel.textContent !== 'Cancel' || cancel.hasAttribute('data-norow') || !cancel.contains(hit)) findings.push(`${at}: くるくるの Cancel を押せない`);
+            scroller.scrollTo(sx, sy);
+            const evs = [...dev.querySelectorAll('.mock-controls [data-env]:not([data-norow])')].map((e) => e.textContent).join();
+            if (evs !== '相手も Rematch を押す') findings.push(`${at}: 端末の下のモック操作で相手の Rematch を押せない (${evs})`);
+          }
         }
       }
       if (/💬 (gg|thanks|nice)/.test(state)) {

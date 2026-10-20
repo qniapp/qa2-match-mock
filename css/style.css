@@ -462,7 +462,6 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .r-row b { font-size: 16px; letter-spacing: 0.03em; }
 .r-row.r-note { justify-content: center; color: #C9CED8; }
 .r-status { margin-top: auto; padding-bottom: 10px; min-height: 2.5em; font-size: 14px; text-align: center; line-height: 1.4; text-wrap: balance; }
-.r-status.wait { color: var(--h); }
 .r-status.asked { color: var(--y); }
 .r-status.info { color: #C9CED8; }
 .r-stamps { display: flex; justify-content: center; gap: 10px; padding-bottom: 16px; }
@@ -473,6 +472,19 @@ code { font-family: ui-monospace, 'JetBrains Mono', Menlo, monospace; font-size:
 .r-stamp:hover:not(:disabled) { border-color: var(--h); }
 .r-stamp.is-disabled { cursor: default; opacity: 0.4; }
 .view-result .actions { padding-bottom: 28px; gap: 8px; }
+/* 再戦のくるくる (決定 U72): キャンセルできる読み込みの表示。結果画面の上に暗幕と一緒に出し、後ろの結果画面は押せない。
+   後ろの結果画面 (Rating の行など) と重なっても読めるように、確認ダイアログと同じ箱に入れる */
+.rw-box {
+  width: 240px; padding: 26px 18px 18px; border-radius: 14px; background: #161C36; border: 1px solid #3A4466;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6); display: flex; flex-direction: column; align-items: center; gap: 16px;
+}
+.spinner {
+  width: 56px; height: 56px; border-radius: 50%; border: 5px solid rgba(255, 255, 255, 0.14); border-top-color: var(--h);
+  animation: spin 0.9s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.rw-text { margin: 0; font-size: 15px; text-align: center; }
+.rw-cancel { margin-top: 4px; }
 .btn-row { display: flex; gap: 8px; }
 .btn-row .btn { flex: 1; }
 

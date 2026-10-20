@@ -93,18 +93,15 @@ var hostTop = ['Host.FriendMatch.Room', 'Host.FriendMatch.Room.ConnectionFailed'
 // 降参で終わった試合も、時間切れと同じ結果画面で再戦できる (決定 U66、#1891 の FB 10)
 var OUTCOMES = ['Win', 'Lose', 'Draw'];
 var OPPOSITE = { Win: 'Lose', Lose: 'Win', Draw: 'Draw' };
-// 再戦の申し込みが終わったあとの一行 (決定 U30 / U50)。両者に出し、次の操作 (どちらかがまた申し込む・結果画面を抜ける) まで残る:
-//   Cancelled (申し込まれた側) / CancelledByYou (取り消した側)、Declined (申し込んだ側) / DeclinedByYou (断った側)、
-//   Expired (申し込んだ側) / ExpiredIncoming (申し込まれた側)。.Cooldown が付いている 3 秒 (仮) の間は Rematch を押せない
-var REMATCH_ENDINGS = ['Cancelled', 'CancelledByYou', 'Declined', 'DeclinedByYou', 'Expired', 'ExpiredIncoming'];
-var REMATCH_ENDING_PAIRS = { Cancelled: 'CancelledByYou', CancelledByYou: 'Cancelled', Declined: 'DeclinedByYou', DeclinedByYou: 'Declined',
-  Expired: 'ExpiredIncoming', ExpiredIncoming: 'Expired' };
-var ENDED_PHASES = REMATCH_ENDINGS.map(function (e) { return '.Rematch' + e; });
-var COOLDOWN_PHASES = ENDED_PHASES.map(function (p) { return p + '.Cooldown'; });
-// 再戦を申し込める段階: なし と、申し込みが終わって 3 秒たったあと (一行は残っている)
-var IDLE_PHASES = [''].concat(ENDED_PHASES);
-// 再戦の段階: 申し込める / 自分が申し込んだ / 相手から申し込まれた / 3 秒待ち。ほかに相手が抜けた (.OpponentLeft)
-var REMATCH_PHASES = ['', '.RematchRequested', '.RematchIncoming'].concat(ENDED_PHASES, COOLDOWN_PHASES);
+// 再戦の段階 (決定 U72、#1891 の 2026-10-20 の FB): 両者に同じ Rematch のボタンがあり、押すとキャンセルできるくるくる。両者が押したら再戦。
+//   ''                 まだどちらも押していない
+//   .RematchIncoming   相手が先に押した ("Your opponent wants a rematch" の一行だけ。ボタンは変わらない)
+//   .RematchRequested  自分が押して相手を待っている (くるくると Cancel。後ろの結果画面は押せない)
+//   .RematchStarting   両者が押した (同じくるくる。取り消せず、そのまま VS 画面へ)
+// Cancel Request / Accept / Decline、取り消し・辞退・期限切れの一行と 3 秒待ち (U30 / U50) は無い。ほかに相手が抜けた (.OpponentLeft)
+// 自分が Rematch を押せて、結果画面のほかのボタン (戻る・Find Next Opponent・スタンプ) も押せる段階。くるくるの間は押せない
+var IDLE_PHASES = ['', '.RematchIncoming'];
+var REMATCH_PHASES = IDLE_PHASES.concat(['.RematchRequested', '.RematchStarting']);
 var RESULT_PHASES = REMATCH_PHASES.concat(['.OpponentLeft']);
 function resultState(role, outcome, phase) { return role + '.' + outcome + 'Result' + (phase || ''); }
 function resultStates(role, outcome, phases) { return phases.map(function (ph) { return resultState(role, outcome, ph); }); }
@@ -119,16 +116,25 @@ function resultAny(role) {
   OUTCOMES.forEach(function (o) { list = list.concat(resultStates(role, o, RESULT_PHASES)); });
   return list.concat(specialResults(role), [role + '.NoContestResult']);
 }
+// 結果画面を抜けられる状態: 再戦のくるくる (.RematchRequested / .RematchStarting) を出している間を除く (決定 U72: 後ろのボタンは押せない)
+function resultLeavable(role) {
+  var list = [];
+  OUTCOMES.forEach(function (o) { list = list.concat(resultStates(role, o, IDLE_PHASES.concat(['.OpponentLeft']))); });
+  return list.concat(specialResults(role), [role + '.NoContestResult']);
+}
 function isResultState(name) { return /^(Host|Client)\.(Win|Lose|Draw|NoContest)Result(\.|$)/.test(name); }
 // 同じ相手と対戦している間 (VS 画面・ゲーム画面・結果画面)。右パネルの「対戦:」はこの間だけ出す
 function isWithOpponent(name) { return isResultState(name) || /^(Host|Client)\.(Opponent(\.|$)|Game\.)/.test(name); }
 var hostResultAny = resultAny('Host');
 var clientResultAny = resultAny('Client');
+var hostResultLeavable = resultLeavable('Host');
+var clientResultLeavable = resultLeavable('Client');
 // ランダム対戦の Find Next Opponent は、勝ち負けによらずどの結果画面にもある (決定 U67、#1891 の FB。戻るボタンもどの結果画面も同じ、U59)
-// スタンプを送れる結果画面 (U27): 相手がまだ結果画面にいるもの。相手が抜けた・切断した・接続エラーのときは送れない
+// スタンプを送れる結果画面 (U27): 相手がまだ結果画面にいるもの。相手が抜けた・切断した・接続エラーのときは送れない。
+// 再戦のくるくるを出している間も、後ろのスタンプは押せない (U72)
 function stampable(role) {
   var list = [];
-  OUTCOMES.forEach(function (o) { list = list.concat(resultStates(role, o, REMATCH_PHASES)); });
+  OUTCOMES.forEach(function (o) { list = list.concat(resultStates(role, o, IDLE_PHASES)); });
   return list;
 }
 var hostStampable = stampable('Host');
@@ -188,6 +194,8 @@ var STATE_GROUPS = {
   'Client.FriendMatch.Room.Join.Any': clientJoinAny,
   'Host.Result.Any': hostResultAny,
   'Client.Result.Any': clientResultAny,
+  'Host.Result.Leavable': hostResultLeavable,
+  'Client.Result.Leavable': clientResultLeavable,
   'Host.Result.Stampable': hostStampable,
   'Client.Result.Stampable': clientStampable,
   'Host.Game.InPlay': hostInPlay,
@@ -213,7 +221,6 @@ OUTCOMES.forEach(function (o) {
   ['Host', 'Client'].forEach(function (R) {
     STATE_GROUPS[R + '.' + o + 'Result.Rematchable'] = resultStates(R, o, REMATCH_PHASES);
     STATE_GROUPS[R + '.' + o + 'Result.CanRematch'] = resultStates(R, o, IDLE_PHASES);
-    STATE_GROUPS[R + '.' + o + 'Result.Cooldown'] = resultStates(R, o, COOLDOWN_PHASES);
   });
 });
 
@@ -750,50 +757,33 @@ var TRANSITIONS = (function () {
   T({ from: { host: hostInGame, client: clientInGame }, event: 'net.serviceFailure', to: { host: 'Host.NoContestResult', client: 'Client.NoContestResult' },
     note: '決定 (U28): サービス障害も "No contest due to a connection error"。レートは変わらない', decided: ['U28', 'U21'] });
 
-  // === 結果画面の再戦 (決定 U23 / U30 / U50 / U60) ===
-  // どちらからでも申し込め、相手が応じたらそのまま VS 画面へ。申し込みは 20 秒 (仮) で期限切れ。
-  // ランダム対戦では勝った側からは申し込めない (U60: 勝った側は Find Next Opponent、負けた側は Rematch。引き分けは両者とも申し込める)。
-  // 取り消し・辞退・期限切れのあとは両者とも結果画面に残り、両者に一行を出す (U50)。3 秒 (仮) たつまでは申し込めず、一行は次の操作まで残る。
-  // タイマーは環境イベント (端末の外)
+  // === 結果画面の再戦 (決定 U23 / U72) ===
+  // 両者に同じ Rematch のボタンがあり、相手が押したかどうかでボタンは変わらない (U72、#1891 の 2026-10-20 の FB)。
+  // 押すとキャンセルできるくるくるを出し (後ろの結果画面は押せない)、相手には "Your opponent wants a rematch" の一行だけを出す。
+  // 相手も押したら同じくるくるのあと、ロビーの Ready を挟まずにそのまま VS 画面へ (U23)。Friend Match でもランダム対戦でも、勝ち負けによらず同じ。
+  // Cancel Request / Accept / Decline、断る・期限切れ・3 秒待ちは無い (U30 / U50 / U60 を置き換えた)。断りたいときは結果画面を抜ける (相手には U25 の一行)
   OUTCOMES.forEach(function (o) {
     var H = function (ph) { return resultState('Host', o, ph); };
     var C = function (ph) { return resultState('Client', OPPOSITE[o], ph); };
-    var idle = function (f) { return IDLE_PHASES.map(f); };
+    var starting = { host: H('.RematchStarting'), client: C('.RematchStarting') };
     [['host', 'client'], ['client', 'host']].forEach(function (p) {
       var d = p[0];
-      var other = p[1];
       var mine = d === 'host' ? H : C;
       var theirs = d === 'host' ? C : H;
       var pair = function (m, t) { return d === 'host' ? { host: m, client: t } : { host: t, client: m }; };
       var asked = pair(mine('.RematchRequested'), theirs('.RematchIncoming'));
-      var winner = (d === 'host' ? o : OPPOSITE[o]) === 'Win';
-      T(Object.assign({ from: pair(idle(mine), idle(theirs)), event: d + '.rematch', to: asked,
-        note: '決定 (U23 / U30 / U60): 押した側は "Waiting for opponent to accept…" と Cancel Request、相手は "Your opponent wants a rematch" と Accept / Decline。' +
-          '前の申し込みの一行 (U50) はここで消える。' + (winner ? 'ランダム対戦で勝った側は申し込めない (U60) ので Friend Match だけ' : 'Friend Match でもランダム対戦でも申し込める'),
-        decided: ['U23', 'U30', 'U50', 'U60'] }, winner ? { when: { match: 'friend' } } : {}));
-      T({ from: asked, event: other + '.rematch', to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { rated: false, rematch: true, surrendered: false },
-        note: '決定 (U23 / U60): 相手が Accept で応じたらそのまま VS 画面へ (ロビーの Ready は挟まない)。ランダム対戦の再戦はレートが変わらない (U21)',
-        decided: ['U23', 'U21', 'U60'] });
-      T({ from: asked, event: d + '.cancelRematch', to: pair(mine('.RematchCancelledByYou.Cooldown'), theirs('.RematchCancelled.Cooldown')),
-        note: '決定 (U30 / U50): Cancel Request で取り消すと、両者に "Rematch request cancelled" (2026-10-08 に両者の文言を統一)。' +
-          '両者とも結果画面に残り、3 秒 (仮) は申し込めない', decided: ['U30', 'U50'] });
-      T({ from: asked, event: other + '.declineRematch', to: pair(mine('.RematchDeclined.Cooldown'), theirs('.RematchDeclinedByYou.Cooldown')),
-        note: '決定 (U30 / U50): Decline で断ると、申し込んだ側に "Your opponent declined the rematch"、断った側にも "Rematch declined"。' +
-          '両者とも結果画面に残り、3 秒 (仮) は申し込めない', decided: ['U30', 'U50'] });
-      T({ from: asked, event: 'timer.rematchTimeout', to: pair(mine('.RematchExpired.Cooldown'), theirs('.RematchExpiredIncoming.Cooldown')),
-        note: '決定 (U30 / U50): 20 秒 (仮) 応答がなければ、申し込んだ側に "No response to rematch request"、申し込まれた側にも "Rematch request expired"。' +
-          '両者とも結果画面に残り、3 秒 (仮) は申し込めない', decided: ['U30', 'U50'] });
+      T({ from: pair(mine(''), theirs('')), event: d + '.rematch', to: asked,
+        note: '決定 (U72): 押した側はキャンセルできるくるくる ("Waiting for opponent…" と Cancel、後ろの結果画面は押せない)。' +
+          '相手には "Your opponent wants a rematch" の一行だけを出し、相手の Rematch のボタンは変わらない', decided: ['U23', 'U72'] });
+      T({ from: pair(mine('.RematchIncoming'), theirs('.RematchRequested')), event: d + '.rematch', to: starting,
+        note: '決定 (U72): 相手が先に押していたので成立。両者に同じくるくる ("Starting match…") を出してから VS 画面へ', decided: ['U23', 'U72'] });
+      T({ from: asked, event: d + '.cancelRematch', to: pair(mine(''), theirs('')),
+        note: '決定 (U72): くるくるの Cancel で取り消す。両者とも何も押していない結果画面に戻り、相手の一行も消える (一行・3 秒待ちは無く、すぐまた押せる)', decided: ['U72'] });
     });
-    T(Object.assign({ from: { host: idle(H), client: idle(C) }, event: 'sys.rematchSimultaneous', to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { rated: false, rematch: true, surrendered: false },
-      note: '決定 (U23): 両者が同時に申し込んだら成立 (応じたのと同じ) で VS 画面へ。' +
-        (o === 'Draw' ? '引き分けはランダム対戦でも両者が申し込める (U60)' : 'ランダム対戦で勝った側は申し込めない (U60) ので Friend Match だけ'),
-      decided: ['U23', 'U21', 'U60'] }, o === 'Draw' ? {} : { when: { match: 'friend' } }));
-    REMATCH_ENDINGS.forEach(function (e) {
-      var ph = '.Rematch' + e;
-      var theirPh = '.Rematch' + REMATCH_ENDING_PAIRS[e];
-      T({ from: { host: H(ph + '.Cooldown'), client: C(theirPh + '.Cooldown') }, event: 'timer.rematchCooldown', to: { host: H(ph), client: C(theirPh) },
-        note: '決定 (U30 / U50): 3 秒 (仮) たったら、どちらからでもまた申し込める。一行は次の操作まで残る', decided: ['U30', 'U50'] });
-    });
+    T({ from: { host: H(''), client: C('') }, event: 'sys.rematchSimultaneous', to: starting,
+      note: '決定 (U23 / U72): 両者が同時に押しても成立。どちらにも同じくるくるを出してから VS 画面へ', decided: ['U23', 'U72'] });
+    T({ from: starting, event: 'sys.rematchStarted', auto: 1500, to: { host: 'Host.Opponent', client: 'Client.Opponent' }, set: { rated: false, rematch: true, surrendered: false },
+      note: '決定 (U23 / U72): 再戦が成立したら、ロビーの Ready を挟まずにそのまま VS 画面へ。ランダム対戦の再戦はレートが変わらない (U21)', decided: ['U23', 'U72', 'U21'] });
   });
 
   // === 結果画面から抜ける (決定 U22 / U25 / U26 / U59 / U60 / U61) ===
@@ -813,11 +803,13 @@ var TRANSITIONS = (function () {
       r[other] = theirs;
       return r;
     };
-    var any = d === 'host' ? hostResultAny : clientResultAny;
+    // 再戦のくるくるを出している間は後ろのボタンを押せないので、抜けられるのはそれ以外の結果画面だけ (U72)
+    var any = d === 'host' ? hostResultLeavable : clientResultLeavable;
     var theirAny = d === 'host' ? clientResultAny : hostResultAny;
+    // 相手が再戦を待っていても (くるくる)、押していなくても、相手には "…Rematch is not available." を出す。両者が押したあと (.RematchStarting) は抜けられない
     var leaveRows = function (b) {
       OUTCOMES.forEach(function (oo) {
-        T({ from: pair(b[1], resultStates(O, oo, REMATCH_PHASES)), event: d + '.' + b[0], when: { match: b[3] },
+        T({ from: pair(b[1], resultStates(O, oo, IDLE_PHASES.concat(['.RematchRequested']))), event: d + '.' + b[0], when: { match: b[3] },
           to: pair(b[2], resultState(O, oo, '.OpponentLeft')),
           note: b[4] + '。決定 (U25): 相手に "' + (b[3] === 'friend' ? 'Your friend went back to Friend Match. Rematch is not available.' : 'Your opponent left. Rematch is not available.') + '"', decided: b[5].concat(['U25']) });
       });
@@ -986,9 +978,8 @@ var EVENT_LABELS = {
   'host.lose': 'ホスト: 時間切れで負ける (得点が下、モック操作)',
   'host.draw': 'ホスト: 時間切れで同点になる (モック操作)',
   'host.disconnect': 'ホスト: 接続が切れる (モック操作)',
-  'host.rematch': 'ホスト: Rematch を押す (申し込む) / Accept を押す (応じる)',
-  'host.cancelRematch': 'ホスト: Cancel Request を押す (再戦の申し込みを取り消す)',
-  'host.declineRematch': 'ホスト: Decline を押す (再戦を断る)',
+  'host.rematch': 'ホスト: Rematch を押す',
+  'host.cancelRematch': 'ホスト: 再戦のくるくるの Cancel を押す (取り消す)',
   'host.backToFriendMatch': 'ホスト: Back to Friend Match を押す',
   'host.backToRandomMatch': 'ホスト: Back to Random Match を押す',
   'host.stamp.gg': 'ホスト: スタンプ 👏 Good game を送る',
@@ -1024,9 +1015,8 @@ var EVENT_LABELS = {
   'client.lose': 'クライアント: 時間切れで負ける (得点が下、モック操作)',
   'client.draw': 'クライアント: 時間切れで同点になる (モック操作)',
   'client.disconnect': 'クライアント: 接続が切れる (モック操作)',
-  'client.rematch': 'クライアント: Rematch を押す (申し込む) / Accept を押す (応じる)',
-  'client.cancelRematch': 'クライアント: Cancel Request を押す (再戦の申し込みを取り消す)',
-  'client.declineRematch': 'クライアント: Decline を押す (再戦を断る)',
+  'client.rematch': 'クライアント: Rematch を押す',
+  'client.cancelRematch': 'クライアント: 再戦のくるくるの Cancel を押す (取り消す)',
   'client.backToFriendMatch': 'クライアント: Back to Friend Match を押す',
   'client.backToRandomMatch': 'クライアント: Back to Random Match を押す',
   'client.stamp.gg': 'クライアント: スタンプ 👏 Good game を送る',
@@ -1050,9 +1040,8 @@ var EVENT_LABELS = {
   'timer.readyTimeout': '環境: 片方が Ready のまま 60 秒 (仮) たつ',
   'timer.loadTimeout': '環境: 読み込み (Starting match…) が 20 秒 (仮) で終わらない',
   'sys.syncFailed': '環境: 開始の同期に失敗する',
-  'timer.rematchTimeout': '環境: 再戦の申し込みから 20 秒 (仮) たつ (応答なし)',
-  'timer.rematchCooldown': '環境: 3 秒 (仮) たつ (また再戦を申し込める)',
   'sys.rematchSimultaneous': '環境: 両者が同時に Rematch を押す',
+  'sys.rematchStarted': '自動: 両者の Rematch がそろい、再戦が成立する',
   'timer.codeExpired': '環境: Match Code の期限 (30 分、仮) が切れる',
 };
 // Profile (決定 U56) の操作
@@ -1098,19 +1087,18 @@ var END_REASONS = {
   opponentDisconnected: 'Your opponent disconnected',
   connectionError: 'No contest due to a connection error',
 };
-// 結果画面の再戦の段階ごとの一行 (決定 U23 / U25 / U30 / U50)。取り消し・辞退・期限切れは両者に出し、3 秒 (仮) のあとも次の操作まで残る (.Cooldown を除いた名前で引く)
+// 結果画面の再戦の段階ごとの一行 (決定 U25 / U72)。相手が先に Rematch を押したら、ボタンはそのままで一行だけ出す
 var REMATCH_STATUS = {
-  RematchRequested: { text: 'Waiting for opponent to accept…', kind: 'wait' },
   RematchIncoming: { text: 'Your opponent wants a rematch', kind: 'asked' },
-  RematchCancelled: { text: 'Rematch request cancelled', kind: 'info' },
-  RematchCancelledByYou: { text: 'Rematch request cancelled', kind: 'info' },
-  RematchDeclined: { text: 'Your opponent declined the rematch', kind: 'info' },
-  RematchDeclinedByYou: { text: 'Rematch declined', kind: 'info' },
-  RematchExpired: { text: 'No response to rematch request', kind: 'info' },
-  RematchExpiredIncoming: { text: 'Rematch request expired', kind: 'info' },
   OpponentLeft: { text: 'Your opponent left. Rematch is not available.', kind: 'info' },
   // Friend Match で相手が Back to Friend Match を押した (U61)。相手は同じ部屋に戻っている ("room" とは書かない、U63)
   FriendReturned: { text: 'Your friend went back to Friend Match. Rematch is not available.', kind: 'info' },
+};
+// 再戦のくるくる (決定 U72)。結果画面の上に暗幕と一緒に出し、後ろの結果画面は押せない。
+// 自分だけが押した間は Cancel で取り消せる。両者が押したら取り消せず、そのまま VS 画面へ
+var REMATCH_SPINNERS = {
+  RematchRequested: { text: 'Waiting for opponent\u2026', cancel: { label: 'Cancel', event: 'cancelRematch' } },
+  RematchStarting: { text: 'Starting match\u2026' },
 };
 // レーティング (決定 U21): ランダム対戦の最初の 1 戦だけ Elo で変わる。Friend Match と、同じ相手との再戦では変わらない。
 // Friend Match ではレートが変わらないのは明らかなので、何も出さない (決定 U70、#1891 の FB)。
@@ -1132,25 +1120,17 @@ function resultReason(spec, session) {
   if (session.surrendered && spec.reason === 'timeUp') return spec.outcome === 'Lose' ? 'surrendered' : 'opponentSurrendered';
   return spec.reason;
 }
-// 結果画面のボタン (決定 U22 / U24 / U41 / U59 / U60 / U67)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める。
+// 結果画面のボタン (決定 U22 / U24 / U41 / U59 / U67 / U72)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める。
 // 戻るボタンはどちらの対戦でも 1 つだけで、ホストとクライアント、降参した側と勝った側で同じ (U59)。降参で終わったときも同じボタン (U66)。
-// ランダム対戦は勝ち負けによらず Find Next Opponent があり (U67)、負けた側と引き分けには Rematch も (勝った側からは申し込めない、U60)。
-// 再戦の無い結果画面 (切断・No contest) は Find Next Opponent と戻るボタンだけ。勝った側も、負けた側からの申し込みには Accept / Decline で応じられる
+// ランダム対戦は勝ち負けによらず Find Next Opponent が主のボタン (U67)。Rematch は勝ち負けによらず両者に同じものを出し、
+// 再戦の段階 (相手が先に押した・自分が押してくるくるを出している) でボタンは変わらない (U72。Cancel Request / Accept / Decline は無い)。
+// 再戦の無い結果画面 (切断・No contest) と相手が抜けたあとは Find Next Opponent と戻るボタンだけ
 function resultButtons(spec, match) {
   var random = match === 'random';
   var back = random ? { label: 'Back to Random Match', event: 'backToRandomMatch' } : { label: 'Back to Friend Match', event: 'backToFriendMatch' };
-  var ph = spec.phase;
-  var rematch = [];
-  if (spec.rematch && ph === 'RematchRequested') rematch = [{ label: 'Cancel Request', event: 'cancelRematch' }];
-  else if (spec.rematch && ph === 'RematchIncoming') {
-    rematch = [{ label: 'Accept', event: 'rematch', primary: true, half: true }, { label: 'Decline', event: 'declineRematch', half: true }];
-  } else if (random && spec.outcome === 'Win') rematch = [];
-  else if (spec.rematch && /\.Cooldown$/.test(ph)) rematch = [{ label: 'Rematch', disabled: true }];
-  else if (spec.rematch && ph !== 'OpponentLeft') rematch = [{ label: 'Rematch', event: 'rematch', primary: !random }];
-  var invited = rematch.some(function (b) { return b.primary; }) || ph === 'RematchRequested';
+  var rematch = spec.rematch && spec.phase !== 'OpponentLeft' ? [{ label: 'Rematch', event: 'rematch', primary: !random }] : [];
   if (!random) return rematch.concat([Object.assign(back, { primary: !rematch.length })]);
-  // 勝ち負けによらず同じ流れ (U67): いちばん上の Find Next Opponent が主のボタン。再戦を申し込んだ・申し込まれた間は再戦のボタンが主
-  return [{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: !invited }].concat(rematch, [back]);
+  return [{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: true }].concat(rematch, [back]);
 }
 // 片方が切断して 20 秒 (仮) 待っている間の表示 (決定 U46)。対戦中 (U28) と、ランダム対戦・再戦の開始前 (U54) で同じ。残りの秒数は timer で別に出す
 var DISCONNECT_OVERLAYS = {
@@ -1184,20 +1164,16 @@ var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両
   '時間切れで終わったときの理由は "Time is up"、同点の引き分けは "Same score when time ran out" (U44)。' +
   '降参で終わったときも同じ結果画面で、理由は降参した側が "You surrendered"、相手が "Your opponent surrendered" (U38)。時間切れと同じく再戦できる (U66、#1891 の FB 10)。' +
   'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Friend Match では何も出さない (U70)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
-  'ボタンは Friend Match なら Rematch / Back to Friend Match。ランダム対戦は勝ち負けによらず Find Next Opponent があり (U67)、勝った側が Find Next Opponent / Back to Random Match、' +
-  '負けた側と引き分けが Find Next Opponent / Rematch / Back to Random Match (U60 / U67)。' +
-  '戻るボタンはホストとクライアントで同じ 1 つだけ (U59)。Back to Friend Match は両者を同じ Match Code の同じ部屋へ戻す (U61)。自動では次へ進まない (U26)。';
-var RESULT_COOLDOWN_CONTEXT = '3 秒 (仮) は Rematch を押せない (右パネルの環境イベント「3 秒たつ」で進める)。3 秒たっても一行は残り、どちらかがまた申し込むか結果画面を抜けるまで出しておく (U50)。';
+  'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら勝ち負けによらず Find Next Opponent / Rematch / Back to Random Match (U67 / U72)。' +
+  'Rematch は両者に同じものを出し、相手が押してもボタンは変わらない。押すとキャンセルできるくるくるになり、両者が押したら再戦 (U72)。' +
+  '戻るボタンはホストとクライアントで同じ 1 つだけ (U59)。Back to Friend Match は両者を同じ Match Code の同じ部屋へ戻す (U61)。自動では次へ進まない (U26。両者が Rematch を押したあとの VS 画面へは自動で進む、U72)。';
 var RESULT_PHASE_CONTEXT = {
-  RematchRequested: '自分が再戦を申し込んで、相手が応じるのを待っている (U23 / U30 / U60)。"Waiting for opponent to accept…" と Cancel Request。相手が応じたときだけ再戦が始まる。' +
-    '相手の応答 (応じる / 断る) と期限 20 秒 (仮) は、端末の下のモック操作「相手が応じる」「相手が断る」「20 秒たつ」か相手の端末で進める (秒数は端末の画面に出さない)。',
-  RematchIncoming: '相手から再戦を申し込まれた (U23 / U30 / U60)。Accept で応じるとそのまま VS 画面、Decline で断る。',
-  RematchCancelled: '相手が申し込みを取り消した (U30)。取り消した側と同じ "Rematch request cancelled" を出す (2026-10-08 に両者の文言を統一)。両者とも結果画面に残る。',
-  RematchCancelledByYou: '自分が申し込みを取り消した。取り消した側にも "Rematch request cancelled" を出す (U50。相手と同じ文言、2026-10-08)。両者とも結果画面に残る。',
-  RematchDeclined: '相手が再戦を断った (U30)。両者とも結果画面に残る。',
-  RematchDeclinedByYou: '自分が再戦を断った。断った側にも "Rematch declined" を出す (U50)。両者とも結果画面に残る。',
-  RematchExpired: '再戦の申し込みに 20 秒 (仮) 応答がなかった (U30)。両者とも結果画面に残る。',
-  RematchExpiredIncoming: '申し込まれた再戦に 20 秒 (仮) 応答しなかった。申し込まれた側にも "Rematch request expired" を出す (U50)。両者とも結果画面に残る。',
+  RematchIncoming: '相手が先に Rematch を押した (U72)。"Your opponent wants a rematch" の一行だけを出し、ボタンは変わらない (Accept / Decline に変わらない)。' +
+    '自分も Rematch を押すと同じくるくるのあと VS 画面へ。押さずに結果画面を抜けると、相手のくるくるが閉じて "…Rematch is not available." になる。',
+  RematchRequested: '自分が Rematch を押して、相手を待っている (U72)。キャンセルできるくるくる ("Waiting for opponent…" と Cancel) を出し、後ろの結果画面のボタンとスタンプは押せない。' +
+    'Cancel で取り消すと何も押していない結果画面に戻る (一行・3 秒待ちは無い)。相手も押すと再戦。期限は無い。' +
+    '相手の Rematch は、相手の端末か端末の下のモック操作「相手も Rematch を押す」で進める。',
+  RematchStarting: '両者が Rematch を押した (U72)。同じくるくる ("Starting match…") を出し、取り消せない。成立したらロビーの Ready を挟まずに VS 画面へ (U23。自由操作では 1.5 秒 (仮) で自動で進む)。',
   OpponentLeft: '相手が結果画面を抜けた (決定 U25)。勝敗とレートは変わらず、再戦はできない。Friend Match では相手は同じ部屋に戻っているので "Your friend went back to Friend Match. Rematch is not available." (U61)。',
 };
 var STAMP_CONTEXT = 'スタンプ (決定 U27): 👏 Good game / 🤝 Thanks for the match / 👍 Nice。1 つ 3 秒 (仮) 出て、次を送れるのは送ってから 5 秒 (仮) 後 (どちらも端末の下のモック操作で進める)。' +
@@ -1554,18 +1530,15 @@ var SCREENS = (function () {
   // --- 対戦後の結果画面 (両端末共通。決定 U20〜U30) ---
   // outcome: Win / Lose / Draw / NoContest、phase: 再戦の段階、reason: 終わった理由 (END_REASONS のキー)。
   // ボタンと Rating の行はセッション (Friend Match かランダム対戦か) で変わるので、描画のときに resultButtons / ratingText で決める
-  // phase の .Cooldown は「3 秒 (仮) は Rematch を押せない」で、一行 (REMATCH_STATUS) は .Cooldown を除いた名前で引く (U50)
+  // phase の .RematchRequested / .RematchStarting では、結果画面の上に再戦のくるくる (REMATCH_SPINNERS) を出す (U72)
   function result(outcome, phase, extra) {
     var rematch = !extra || extra.rematch !== false;
-    var cooldown = /\.Cooldown$/.test(phase);
-    var status = phase.replace(/\.Cooldown$/, '');
-    var ended = REMATCH_ENDINGS.indexOf(status.replace(/^Rematch/, '')) !== -1;
     var stamps = phase !== 'OpponentLeft' && (!extra || extra.stamps !== false);
-    var spec = { view: 'result', title: 'RESULT', back: null, outcome: outcome, phase: phase, status: status,
-      reason: outcome === 'Draw' ? 'timeUpTie' : 'timeUp', rematch: rematch, stamps: stamps,
-      decided: ['U20', 'U21', 'U22', 'U24', 'U26', 'U67', 'U70'].concat(rematch ? ['U23', 'U30'] : [], ended ? ['U50'] : [], stamps ? ['U27', 'U49'] : [],
+    var spec = { view: 'result', title: 'RESULT', back: null, outcome: outcome, phase: phase, status: phase,
+      reason: outcome === 'Draw' ? 'timeUpTie' : 'timeUp', rematch: rematch, stamps: stamps, spinner: REMATCH_SPINNERS[phase] || null,
+      decided: ['U20', 'U21', 'U22', 'U24', 'U26', 'U67', 'U70'].concat(rematch ? ['U23', 'U72'] : [], stamps ? ['U27', 'U49'] : [],
         phase === 'OpponentLeft' ? ['U25'] : [], !extra || !extra.reason ? ['U44'] : []),
-      context: [RESULT_CONTEXT].concat(RESULT_PHASE_CONTEXT[status] || [], cooldown ? [RESULT_COOLDOWN_CONTEXT] : [], stamps ? [STAMP_CONTEXT] : []) };
+      context: [RESULT_CONTEXT].concat(RESULT_PHASE_CONTEXT[phase] || [], stamps ? [STAMP_CONTEXT] : []) };
     return Object.assign(spec, extra);
   }
   ['Host', 'Client'].forEach(function (role) {
@@ -1765,12 +1738,14 @@ var UNDECIDED = [
       'Online Battle へ戻るボタンは、降参後のものも含めてすべて "Back to Online" にそろえた。' +
       '2026-10-17 の U59 で、ランダム対戦の Back to Online は Back to Random Match に、降参した側のボタンは勝った側と同じ戻るボタン (Back to Friend Match / Back to Random Match) になった。' +
       '同日の U60 で、ランダム対戦の勝った側は Find Next Opponent (Rematch なし)、負けた側は Rematch (Find Next Opponent なし) になった。' +
-      '2026-10-19 の U67 で、負けた側にも Find Next Opponent を出すようになり、U66 で降参した側にも勝った側と同じボタン (Rematch を含む) を出すようになった。',
+      '2026-10-19 の U67 で、負けた側にも Find Next Opponent を出すようになり、U66 で降参した側にも勝った側と同じボタン (Rematch を含む) を出すようになった。' +
+      '2026-10-20 の U72 で、Cancel Request / Accept / Decline をやめ、勝ち負けによらず両者に同じ Rematch を出すようになった (ランダム対戦の勝った側にも Rematch)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U23', title: '再戦: どちらからでも申し込め、相手が応じたらそのまま VS 画面へ。同時に申し込んだら成立',
     desc: '結果画面の Rematch で、どちらのプレイヤーからでも再戦を申し込める。相手が応じたら (Rematch を押したら)、ロビーの Ready を挟まずにそのまま VS 画面へ進む。' +
       '両者が同時に申し込んだ場合も成立 (応じたのと同じ)。申し込んだ側には "Waiting for your opponent…"、申し込まれた側には "Your opponent wants a rematch" を出す。' +
-      '2026-10-17 の U60 で、申し込んだ側の文言は "Waiting for opponent to accept…"、応じるボタンは Accept になり、ランダム対戦で勝った側からは申し込めなくなった。',
+      '2026-10-17 の U60 で、申し込んだ側の文言は "Waiting for opponent to accept…"、応じるボタンは Accept になり、ランダム対戦で勝った側からは申し込めなくなった。' +
+      '2026-10-20 の U72 で、両者に同じ Rematch を出し、押した側はキャンセルできるくるくる、相手には "Your opponent wants a rematch" の一行だけを出す形にした (Accept は無い。勝った側からも押せる)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U24', title: '戻り先: Back to Friend Match は同じ Match Code の部屋、Back to Random Match は Random Match の画面',
     desc: 'Friend Match の Back to Friend Match は、Match Code を作る・入れる画面 (Friend Match トップ) に戻る。前の Match Code は使えなくなる。' +
@@ -1803,7 +1778,8 @@ var UNDECIDED = [
   { id: 'U30', title: '再戦の申し込み: 応答期限 20 秒、Cancel Request で取り消し、Decline で断る。どの場合も結果画面に残り 3 秒後にまた申し込める',
     desc: '再戦の申し込みには 20 秒の応答期限がある。申し込んだ側には Cancel Request を出す。取り消すと相手に "Rematch request cancelled" (2026-10-08 に取り消した側 (U50) と同じ文言に統一)、' +
       '相手が断ると申し込んだ側に "Your opponent declined the rematch"、期限が切れると申し込んだ側に "No response to rematch request" を出す。' +
-      'どの場合も両者とも結果画面に残り、3 秒後にまた申し込める。20 秒・3 秒は QA² 側の仮の値 (変わりうる)。もう一方にも一行を出し、次の操作まで残す (U50、2026-10-08)。',
+      'どの場合も両者とも結果画面に残り、3 秒後にまた申し込める。20 秒・3 秒は QA² 側の仮の値 (変わりうる)。もう一方にも一行を出し、次の操作まで残す (U50、2026-10-08)。' +
+      '2026-10-20 の U72 で置き換えた: Cancel Request と Decline、応答期限、取り消し・辞退・期限切れの一行、3 秒待ちは無い。取り消しはくるくるの Cancel で、両者とも何も押していない結果画面に戻る。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U31', title: 'Friend Match の開始は両者が Ready を押してから (2026-10-07 にボタンの名前を Ready に変更)',
     desc: 'U2 から分けた残りの論点。Friend Match では、両者が Ready を押したら開始する (Ready 画面になっても自動では開始しない)。ランダム対戦には Ready 画面が無く、相手が見つかり次第 VS 画面へ進む (U13a)。' +
@@ -1906,7 +1882,8 @@ var UNDECIDED = [
     desc: 'U30 のメッセージに加えて、もう一方にも出す: 取り消した側に "Rematch request cancelled"、断った側に "Rematch declined"、申し込まれたまま期限が切れた側に "Rematch request expired"。' +
       'U30 のメッセージ (申し込まれた側の "Rematch request cancelled"、申し込んだ側の "Your opponent declined the rematch" / "No response to rematch request") はそのまま。' +
       '取り消しは両者とも "Rematch request cancelled" (2026-10-08 に統一)。' +
-      'どの一行も次の操作 (どちらかがまた申し込む・結果画面を抜ける) まで残す。Rematch を押せないのは 3 秒 (決定済み、QA² 側の仮の値)。',
+      'どの一行も次の操作 (どちらかがまた申し込む・結果画面を抜ける) まで残す。Rematch を押せないのは 3 秒 (決定済み、QA² 側の仮の値)。' +
+      '2026-10-20 の U72 で無くなった (辞退・期限切れが無く、取り消しは一行を出さずに元の結果画面へ戻る)。',
     decided: { by: '高宮さん', date: '2026-10-08' } },
   { id: 'U51', title: 'ホストの確認の題名は "Cancel this match?" (U63)。U12 のクライアント向けの本文は保留',
     desc: 'ホストの確認の題名は、決めたときは "Close this room?" のまま (本文は U34、ボタンは Close Room / Keep Waiting)。2026-10-17 の U63 で "Cancel this match?" と Cancel Match / Keep Waiting になった。' +
@@ -1980,7 +1957,8 @@ var UNDECIDED = [
       '断られたとき・20 秒 (仮) 応答がないときは結果画面に残り、"Your opponent declined the rematch" / "No response to rematch request" の一行を出す (U30 / U50)。' +
       '引き分けは勝ち負けが無いので、今までどおり両者に Find Next Opponent と Rematch。Back to Random Match (U59) はどの結果画面にも残す。' +
       'Friend Match の再戦は変えないが、申し込んだ側の文言 ("Waiting for opponent to accept…") と応じるボタン (Accept) はランダム対戦とそろえる。' +
-      '2026-10-19 の U67 で、負けた側にも Find Next Opponent を出すようになった (Rematch と並べる)。',
+      '2026-10-19 の U67 で、負けた側にも Find Next Opponent を出すようになった (Rematch と並べる)。' +
+      '2026-10-20 の U72 で、勝った側にも同じ Rematch を出し、Accept / Decline と Cancel Request をやめた (両者が押したら再戦)。',
     decided: { by: '#1891 の FB (10 番目)', date: '2026-10-17' } },
   { id: 'U61', title: 'Back to Friend Match は両者を同じ部屋 (同じ Match Code) へ戻す。部屋を閉じるのはホストの ‹ だけ',
     desc: '#1891 の FB の 11 番目。Friend Match の結果画面の Back to Friend Match は、Friend Match トップではなく、対戦した部屋へ同じ Match Code のまま戻す (U24 を変更)。' +
@@ -2024,13 +2002,14 @@ var UNDECIDED = [
   { id: 'U66', title: '降参で終わった試合のあとも再戦できる (時間切れの決着と同じ結果画面)',
     desc: '#1891 の FB 10 (2026-10-19 の FB で、Rematch が出ていないと指摘)。原因は、降参で終わった試合の結果画面が U45 で再戦の無い特別な画面になっていたこと。' +
       'モックのゲーム画面で試合を終える操作は降参だけ (時間切れは端末の下のモック操作) なので、降参のあとに Rematch が出ないことが目立っていた。' +
-      '降参で終わった試合も時間切れと同じ結果画面にし、Friend Match では両者に Rematch、ランダム対戦では負けた側 (降参した側) と勝った側に U60 / U67 と同じボタンを出す。' +
+      '降参で終わった試合も時間切れと同じ結果画面にし、Friend Match では両者に Rematch、ランダム対戦では負けた側 (降参した側) と勝った側に U60 / U67 と同じボタンを出す (2026-10-20 の U72 から、両者に同じ Rematch)。' +
       '終わった理由 ("You surrendered" / "Your opponent surrendered"、U38)・レーティング (U21)・スタンプ (U27) は変えない。切断・No contest のあとは今までどおり再戦できない (U45)。',
     decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
   { id: 'U67', title: 'ランダム対戦の結果画面は、勝ち負けによらず Find Next Opponent を出す',
     desc: '#1891 の 2026-10-19 の FB。勝ち負けによらず流れは変わらないので、負けた側にも Find Next Opponent を出す (U60 では負けた側は Rematch だけだった)。' +
       'ボタンは引き分けと同じく Find Next Opponent / Rematch / Back to Random Match で、Find Next Opponent を主のボタンにする。勝った側は今までどおり Find Next Opponent / Back to Random Match (勝った側からは申し込めない、U60)。' +
-      '再戦を申し込んだ・申し込まれた間は、再戦のボタン (Cancel Request / Accept) を主にする。',
+      '再戦を申し込んだ・申し込まれた間は、再戦のボタン (Cancel Request / Accept) を主にする。' +
+      '2026-10-20 の U72 で、勝った側にも Rematch を出し (Find Next Opponent / Rematch / Back to Random Match)、再戦の段階によらず Find Next Opponent を主のボタンのままにした。',
     decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
   { id: 'U68', title: 'Match Code を出している部屋の画面でも Profile を変えられる',
     desc: '#1891 の 2026-10-19 の FB。部屋の画面 (友だちを待っている間・Ready 画面など、Match Code を出している画面) の右上にも Profile を置き、今の画面の上にダイアログで開く。' +
@@ -2051,4 +2030,13 @@ var UNDECIDED = [
       '相手が戻って初めて自分と相手の名前 (カード) が出ていた。分ける必要がないので、相手が戻る前から Ready 画面と同じ両者のカード (名前とレーティング、"Not ready") を出す。' +
       '状況の一行はそのまま。Ready は相手が戻って同期が終わるまで押せない (U4) ので、無効表示の Ready を出す。',
     decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
+  { id: 'U72', title: '再戦は両者に同じ Rematch のボタンだけ。押すとキャンセルできるくるくる、両者が押したら再戦 (Cancel Request / Accept / Decline は使わない)',
+    desc: '#1891 の 2026-10-20 の FB (Rematch の遷移が複雑で、通信で意図しないタイミングに UI が変わると押し間違えが起きる)。' +
+      'Friend Match でもランダム対戦でも、勝ち負けによらず両者の結果画面に同じ Rematch を出し、相手の操作でボタンを変えない (Rematch が Accept / Decline に変わらない)。' +
+      'Rematch を押すと結果画面の上にキャンセルできるくるくる ("Waiting for opponent…" と Cancel) を出し、後ろのボタン (Find Next Opponent・戻る・スタンプ) は押せない。' +
+      '相手が先に押していたら、自分の画面に "Your opponent wants a rematch" の一行だけを出す。自分も押すと同じくるくる ("Starting match…") のあと、ロビーの Ready を挟まずに VS 画面へ (U23)。' +
+      'Cancel で取り消すと、両者とも何も押していない結果画面に戻る (一行・3 秒待ちは出さない)。断る操作と応答期限は無く、断りたいときは結果画面を抜ける (相手には U25 の一行)。' +
+      'U30 / U50 の Cancel Request・Decline・期限切れと一行、U60 の「ランダム対戦で勝った側からは申し込めない」と Accept / Decline を置き換えた。' +
+      'くるくるは他の画面の読み込みの表示とそろえるとよい、という提案もある (モックでは結果画面だけ)。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-20 の FB)', date: '2026-10-20' } },
 ];

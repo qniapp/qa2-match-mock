@@ -273,7 +273,8 @@
     },
     // 対戦後の結果画面 (決定 U20〜U30)。勝敗・両者の名前・終わった理由・レーティング、再戦の段階の一行、スタンプ、ボタン。
     // スコアは出さない (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ)
-    // ボタンと Rating の行は Friend Match かランダム対戦か (セッションの match / rated) で変わる
+    // ボタンと Rating の行は Friend Match かランダム対戦か (セッションの match / rated) で変わる。
+    // 再戦のくるくる (決定 U72) を出している間は、後ろの結果画面を同じ見た目のまま inert にして押せなくする
     result: function (dev, s) {
       var other = dev === 'host' ? 'client' : 'host';
       var head = RESULT_HEADLINES[s.outcome];
@@ -289,14 +290,15 @@
       };
       var stats = (rating && /^No /.test(rating) ? '<div class="r-row r-note">' + esc(rating) + '</div>' : '') +
         (rating && !/^No /.test(rating) ? '<div class="r-row"><span>Rating</span><b>' + esc(rating) + '</b></div>' : '');
-      return header(dev, s, s.title) + '<div class="result">' +
+      var inert = s.spinner ? ' inert' : '';
+      return header(dev, s, s.title) + '<div class="result"' + inert + '>' +
         '<div class="r-outcome ' + head[1] + '">' + head[0] + '</div>' +
         '<div class="r-reason">' + esc(END_REASONS[resultReason(s, app.state)]) + '</div>' +
         '<div class="r-players">' + player(dev, true) + '<span class="r-vs">vs</span>' + player(other, false) + '</div>' +
         (stats ? '<div class="r-stats">' + stats + '</div>' : '') +
         '<div class="r-status ' + (status ? status.kind : '') + '">' + (status ? esc(status.text) : '') + '</div>' +
-        (s.stamps ? stampsHtml(dev) : '') +
-        '</div>' + resultActionsHtml(dev, resultButtons(s, app.state.match));
+        (s.stamps ? stampsHtml(dev, !!s.spinner) : '') +
+        '</div>' + resultActionsHtml(dev, resultButtons(s, app.state.match), !!s.spinner) + (s.spinner ? rematchSpinnerHtml(dev, s.spinner) : '');
     },
   };
 
@@ -338,31 +340,30 @@
     return STAMPS.filter(function (st) { return st.id === id; })[0] || null;
   }
 
-  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。ミュートのボタンは無い (#1891 の FB 8)
-  function stampsHtml(dev) {
+  // スタンプ (決定 U27)。送ってから 5 秒 (仮) は押せない (ゲーム内の無効表示)。ミュートのボタンは無い (#1891 の FB 8)。
+  // 再戦のくるくるの後ろ (behind、決定 U72) では見た目を変えずにイベントを付けない (inert の中なので押せない)
+  function stampsHtml(dev, behind) {
     var waiting = app.state[dev + 'Stamp'] !== null;
     return '<div class="r-stamps">' + STAMPS.map(function (st) {
       if (waiting) return '<button type="button" class="r-stamp is-disabled" disabled aria-label="' + esc(st.text) + '">' + st.emoji + '</button>';
-      return '<button type="button" class="r-stamp" aria-label="' + esc(st.text) + '"' + attrs(dev, 'stamp.' + st.id) + '>' + st.emoji + '</button>';
+      return '<button type="button" class="r-stamp" aria-label="' + esc(st.text) + '"' + (behind ? '' : attrs(dev, 'stamp.' + st.id)) + '>' + st.emoji + '</button>';
     }).join('') + '</div>';
   }
 
-  // 結果画面のボタン。half の 2 つ (再戦を申し込まれたときの Accept / Decline) は横に並べる
-  function resultActionsHtml(dev, buttons) {
-    var btn = function (b) {
-      if (b.disabled) return '<button type="button" class="btn is-disabled" disabled>' + esc(b.label) + '</button>';
-      return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + attrs(dev, b.event) + '>' + esc(b.label) + '</button>';
-    };
-    var html = '';
-    for (var i = 0; i < buttons.length; i++) {
-      if (buttons[i].half && buttons[i + 1] && buttons[i + 1].half) {
-        html += '<div class="btn-row">' + btn(buttons[i]) + btn(buttons[i + 1]) + '</div>';
-        i++;
-      } else {
-        html += btn(buttons[i]);
-      }
-    }
-    return '<div class="actions result-actions">' + html + '</div>';
+  // 結果画面のボタン。再戦のくるくるの後ろ (behind、決定 U72) では、見た目を変えずに inert にする (行が無い破線の表示にはしない)
+  function resultActionsHtml(dev, buttons, behind) {
+    return '<div class="actions result-actions"' + (behind ? ' inert' : '') + '>' + buttons.map(function (b) {
+      return '<button type="button" class="btn' + (b.primary ? ' primary' : '') + '"' + (behind ? '' : attrs(dev, b.event)) + '>' + esc(b.label) + '</button>';
+    }).join('') + '</div>';
+  }
+
+  // 再戦のくるくる (決定 U72)。キャンセルできる読み込みの表示で、結果画面の上に暗幕と一緒に出す。
+  // 自分だけが押した間は "Waiting for opponent…" と Cancel、両者が押したら "Starting match…" (取り消せない)
+  function rematchSpinnerHtml(dev, sp) {
+    return '<div class="dim rematch-wait"><div class="rw-box" role="status">' +
+      '<div class="spinner" aria-hidden="true"></div><p class="rw-text">' + esc(sp.text) + '</p>' +
+      (sp.cancel ? '<button type="button" class="btn rw-cancel"' + attrs(dev, sp.cancel.event) + '>' + esc(sp.cancel.label) + '</button>' : '') +
+      '</div></div>';
   }
 
   function fieldHtml(cols, cls) {
@@ -425,7 +426,7 @@
 
   // 端末の下のモック操作 (ゲーム内 UI ではない)。押せるかどうかは遷移表で決まる。
   // ランダム対戦で相手を探している間は「アプリを離れる」と「60 秒たつ」(決定 U13 / U29 / U47)、ロビー (Ready 画面) では「アプリを離れる」と「切断する」(決定 U5 / U35)、
-  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、再戦を申し込んで待っている間は相手の応答の「相手が応じる」「相手が断る」「20 秒たつ」(決定 U30 / U60。相手の端末の Accept / Decline と同じ)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。右パネルの環境イベントと同じ)、
+  // 結果画面ではスタンプの「3 秒たつ」「5 秒たつ」(決定 U27)、再戦のくるくるで相手を待っている間は「相手も Rematch を押す」(決定 U72。相手の端末の Rematch と同じ)、切断を待っている間は「再接続する」(相手側は「相手が戻る」) と「20 秒たつ」(決定 U46 / U54。右パネルの環境イベントと同じ)、
   // それ以外は時間切れの決着 (勝ち / 負け / 同点、決定 U44) と、この端末の接続が切れる「切断する」(決定 U28 / U32 / U54)
   function mockControlsHtml(dev) {
     var btn = function (ev, text, cls) { return '<button type="button" class="mc-btn' + (cls ? ' ' + cls : '') + '"' + attrs(dev, ev) + '>' + esc(text) + '</button>'; };
@@ -450,8 +451,7 @@
     }
     if (/\.RematchRequested$/.test(state)) {
       var other = dev === 'host' ? 'client' : 'host';
-      return '<span class="mc-label">モック操作 (再戦):</span>' + envBtn(other + '.rematch', '相手が応じる') + envBtn(other + '.declineRematch', '相手が断る') +
-        envBtn('timer.rematchTimeout', '20 秒たつ');
+      return '<span class="mc-label">モック操作 (再戦):</span>' + envBtn(other + '.rematch', '相手も Rematch を押す');
     }
     if (isResultState(app.state[dev])) {
       return '<span class="mc-label">モック操作 (スタンプ):</span>' + btn('stampShown', '3 秒たつ') + btn('stampInterval', '5 秒たつ');

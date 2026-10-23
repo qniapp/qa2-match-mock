@@ -691,16 +691,17 @@ for (const [id, n, want] of [['15', 14, 'friend/false'], ['15c', 20, 'friend/fal
   if (sessionAt(id, n) !== want) fail(`シナリオ ${id} の手順 ${n} のセッション ${sessionAt(id, n)} (期待: ${want})`);
 }
 
-// U22 / U24 / U59 / U67 / U72: ボタン。Friend Match は Rematch / Back to Friend Match、ランダム対戦は勝ち負けによらず Find Next Opponent / Rematch / Back to Random Match。
+// U22 / U24 / U59 / U67 / U72 / U73: ボタン。Friend Match は Rematch / Back to Friend Match、ランダム対戦は勝ち負けによらず Rematch / Find Next Opponent / Back to Random Match。
+// Rematch はどちらの対戦でもいちばん上 (U73)。
 // 再戦の段階 (相手が先に押した・自分が押してくるくるを出している・両者が押した) でボタンは変わらない (U72: Cancel Request / Accept / Decline は無い)。
 // 降参で終わった試合も同じ結果画面なので、同じボタン (U66)
 const labels = (name, match) => resultButtons(SCREENS[name], match).map((b) => b.label + (b.primary ? '(主)' : '')).join(' / ');
 const wantButtons = [
   ['Host.WinResult', 'friend', 'Rematch(主) / Back to Friend Match'],
-  ['Host.WinResult', 'random', 'Find Next Opponent(主) / Rematch / Back to Random Match'],
-  ['Host.LoseResult', 'random', 'Find Next Opponent(主) / Rematch / Back to Random Match'],
+  ['Host.WinResult', 'random', 'Rematch / Find Next Opponent(主) / Back to Random Match'],
+  ['Host.LoseResult', 'random', 'Rematch / Find Next Opponent(主) / Back to Random Match'],
   ['Host.LoseResult', 'friend', 'Rematch(主) / Back to Friend Match'],
-  ['Host.DrawResult', 'random', 'Find Next Opponent(主) / Rematch / Back to Random Match'],
+  ['Host.DrawResult', 'random', 'Rematch / Find Next Opponent(主) / Back to Random Match'],
   ['Host.LoseResult.OpponentLeft', 'random', 'Find Next Opponent(主) / Back to Random Match'],
   ['Host.LoseResult.Disconnected', 'random', 'Find Next Opponent(主) / Back to Random Match'],
   ['Host.WinResult.OpponentLeft', 'friend', 'Back to Friend Match(主)'],
@@ -716,6 +717,21 @@ for (const o of ['Win', 'Lose', 'Draw']) {
   }
 }
 for (const name of resultNames) if (!resultButtons(SCREENS[name], 'random').some((b) => b.event === 'findNextOpponent')) fail(`${name} (random) に Find Next Opponent が無い (U67)`);
+// U73: Rematch があるときは、どちらの対戦でもいちばん上。Rematch が消えても (相手が抜けた)、ほかのボタンの並びは変わらない
+for (const name of resultNames) {
+  for (const match of ['friend', 'random']) {
+    const bs = resultButtons(SCREENS[name], match);
+    const i = bs.findIndex((b) => b.event === 'rematch');
+    if (i > 0) fail(`${name} (${match}) の Rematch がいちばん上でない (U73): ${labels(name, match)}`);
+    const rest = bs.filter((b) => b.event !== 'rematch').map((b) => b.label).join(' / ');
+    const restWant = match === 'friend' ? 'Back to Friend Match' : 'Find Next Opponent / Back to Random Match';
+    if (rest !== restWant) fail(`${name} (${match}) の Rematch 以外のボタン ${rest} (期待: ${restWant}、U73)`);
+  }
+}
+{
+  const u73 = UNDECIDED.find((u) => u.id === 'U73');
+  if (!u73 || !u73.decided || u73.decided.date !== '2026-10-23' || !/#1891/.test(u73.desc) || !/高宮さん/.test(u73.decided.by)) fail('U73 が高宮さんの #1891 の FB (2026-10-23) の決定になっていない');
+}
 if (/label: '(Cancel Request|Accept|Decline)'|declineRematch|rematchTimeout|rematchCooldown|相手が応じる|相手が断る/.test(read('js', 'transitions.js').split('var UNDECIDED')[0] + appJs)) {
   fail('Cancel Request / Accept / Decline、断る・期限切れ・3 秒待ちの行かボタンが残っている (U72)');
 }
@@ -1034,7 +1050,7 @@ for (const id of ['U37', 'U38', 'U39', 'U40', 'U41', 'U42']) {
 }
 if (/降参/.test(UNDECIDED.find((u) => u.id === 'U28').title)) fail('U28 の題名に決定済みの降参が残っている');
 for (const [id, later] of [['U40', 'U65'], ['U45', 'U66'], ['U60', 'U67'], ['U56', 'U64'], ['U56', 'U68'], ['U63', 'U69'], ['U21', 'U70'], ['U61', 'U71'],
-  ['U22', 'U72'], ['U23', 'U72'], ['U30', 'U72'], ['U50', 'U72'], ['U60', 'U72'], ['U67', 'U72']]) {
+  ['U22', 'U72'], ['U23', 'U72'], ['U30', 'U72'], ['U50', 'U72'], ['U60', 'U72'], ['U67', 'U72'], ['U22', 'U73'], ['U67', 'U73']]) {
   if (!new RegExp(later).test(UNDECIDED.find((u) => u.id === id).desc)) fail(`${id} の説明に、${later} で変わったことが無い`);
 }
 for (const id of ['U64', 'U65', 'U66', 'U67', 'U68', 'U69', 'U70', 'U71']) {
@@ -1304,10 +1320,10 @@ console.log('ok  端末の画面と端末の上に決定の注記・バッジが
 // 端末の画面には仮・未決の印やモックの注記も出さない (説明は右パネル)。
 // 実際の描画は tests/scan-screens.mjs が全シナリオの全手順で確かめる
 if (/mock-note|class="tmp"|pill-undecided small inline|btn-wrap/.test(appJs)) fail('app.js が端末の画面に仮・未決の印やモックの注記を出している');
-// 結果画面の決定 (U44 / U45 / U49 / U72) は右パネルの「決定済み」に出し、仮の値の説明も右パネルに出す
+// 結果画面の決定 (U44 / U45 / U49 / U72 / U73) は右パネルの「決定済み」に出し、仮の値の説明も右パネルに出す
 for (const [name, s] of Object.entries(SCREENS)) {
   if (s.view !== 'result') continue;
-  const want = [].concat(s.stamps ? ['U49'] : [], s.rematch ? ['U72'] : [], /^timeUp/.test(s.reason) ? ['U44'] : [],
+  const want = [].concat(s.stamps ? ['U49'] : [], s.rematch ? ['U72', 'U73'] : [], /^timeUp/.test(s.reason) ? ['U44'] : [],
     /\.(Surrendered|OpponentSurrendered|Disconnected|OpponentDisconnected)$|NoContest/.test(name) ? ['U45'] : []);
   for (const id of want) if (!s.decided.includes(id)) fail(`${name}: 決定 ${id} が無い`);
   if (!/仮の値/.test([].concat(s.context).join())) fail(`${name}: 右パネルに秒数・Elo の値が仮だという説明が無い`);

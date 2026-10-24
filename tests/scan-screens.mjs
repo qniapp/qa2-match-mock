@@ -7,6 +7,7 @@
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
 // 結果画面にスコアの行が無いこと (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ) も確かめる (決定 U20 / U27 / U28)。
 // 再戦 (決定 U72) は、両者に同じ Rematch だけがあり、押した側のくるくるが画面に収まって後ろの結果画面を押せず、Cancel だけを押せることを確かめる。
+// 結果画面の Rematch は、Friend Match でもランダム対戦でもほかのボタンより上に描かれていることも確かめる (決定 U73)。
 // Ready 画面 (決定 U31 / U32 / U36) は、プレイヤーごとのカード 2 枚 ("✓ Ready" / "Not ready"、自分のカードに YOU) と、
 // 再接続を待つ 20s のカウントダウンだけが数字として出ること (自分だけ Ready で待つ間は秒数ではなく待っている印 (点の動き) を出す、#1891 の FB 6)、"Start Match" がどこにも無いこと、
 // 「アプリを離れる」「切断する」が端末の外 (下のモック操作) にあることも確かめる。
@@ -667,9 +668,13 @@ function scan(only, wantLang = 'en') {
         // 再戦 (U72、#1891 の 2026-10-20 の FB): 再戦できる結果画面は、勝ち負けと再戦の段階によらず同じボタン。Cancel Request / Accept / Decline は無い
         if (actionLabels.some((l) => /^(Cancel Request|Accept|Decline)$/.test(l))) findings.push(`${at}: 結果画面に ${actionLabels.join(' / ')} がある (U72)`);
         const canRematch = /\.(Win|Lose|Draw)Result(\.Rematch\w+)?$/.test(state);
-        if (canRematch && actionLabels.join() !== (current.match === 'friend' ? 'Rematch,Back to Friend Match' : 'Find Next Opponent,Rematch,Back to Random Match')) {
-          findings.push(`${at}: 結果画面のボタンが ${actionLabels.join(' / ')} (U72: 両者に同じ Rematch)`);
+        if (canRematch && actionLabels.join() !== (current.match === 'friend' ? 'Rematch,Back to Friend Match' : 'Rematch,Find Next Opponent,Back to Random Match')) {
+          findings.push(`${at}: 結果画面のボタンが ${actionLabels.join(' / ')} (U72: 両者に同じ Rematch、U73: Rematch がいちばん上)`);
         }
+        // U73: Rematch は描いた画面でもいちばん上 (ほかのボタンより上にある)
+        const actionTops = [...screen.querySelectorAll('.result-actions .btn')].map((b) => [b.textContent, b.getBoundingClientRect().top]);
+        const rematchTop = actionTops.find(([l]) => l === 'Rematch');
+        if (rematchTop && actionTops.some(([l, t]) => l !== 'Rematch' && t <= rematchTop[1])) findings.push(`${at}: Rematch がいちばん上に描かれていない (U73)`);
         const line = screen.querySelector('.r-status').textContent;
         if ((line === 'Your opponent wants a rematch') !== /\.RematchIncoming$/.test(state)) findings.push(`${at}: 再戦の一行が "${line}"`);
         // 自分が押した (.RematchRequested) / 両者が押した (.RematchStarting) 間は、くるくるが画面に収まり、後ろの結果画面は inert で押せない。

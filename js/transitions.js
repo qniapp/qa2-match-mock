@@ -1120,17 +1120,18 @@ function resultReason(spec, session) {
   if (session.surrendered && spec.reason === 'timeUp') return spec.outcome === 'Lose' ? 'surrendered' : 'opponentSurrendered';
   return spec.reason;
 }
-// 結果画面のボタン (決定 U22 / U24 / U41 / U59 / U67 / U72)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める。
+// 結果画面のボタン (決定 U22 / U24 / U41 / U59 / U67 / U72 / U73)。Friend Match とランダム対戦で違うので、画面 (SCREENS) とセッションの match から決める。
 // 戻るボタンはどちらの対戦でも 1 つだけで、ホストとクライアント、降参した側と勝った側で同じ (U59)。降参で終わったときも同じボタン (U66)。
 // ランダム対戦は勝ち負けによらず Find Next Opponent が主のボタン (U67)。Rematch は勝ち負けによらず両者に同じものを出し、
 // 再戦の段階 (相手が先に押した・自分が押してくるくるを出している) でボタンは変わらない (U72。Cancel Request / Accept / Decline は無い)。
+// Rematch はどちらの対戦でもいちばん上 (U73)。ボタンは下にそろえて並べるので、Rematch が消えてもほかのボタンの位置は変わらない。
 // 再戦の無い結果画面 (切断・No contest) と相手が抜けたあとは Find Next Opponent と戻るボタンだけ
 function resultButtons(spec, match) {
   var random = match === 'random';
   var back = random ? { label: 'Back to Random Match', event: 'backToRandomMatch' } : { label: 'Back to Friend Match', event: 'backToFriendMatch' };
   var rematch = spec.rematch && spec.phase !== 'OpponentLeft' ? [{ label: 'Rematch', event: 'rematch', primary: !random }] : [];
   if (!random) return rematch.concat([Object.assign(back, { primary: !rematch.length })]);
-  return [{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: true }].concat(rematch, [back]);
+  return rematch.concat([{ label: 'Find Next Opponent', event: 'findNextOpponent', primary: true }, back]);
 }
 // 片方が切断して 20 秒 (仮) 待っている間の表示 (決定 U46)。対戦中 (U28) と、ランダム対戦・再戦の開始前 (U54) で同じ。残りの秒数は timer で別に出す
 var DISCONNECT_OVERLAYS = {
@@ -1164,7 +1165,8 @@ var RESULT_CONTEXT = '結果画面 (決定 U20〜U22 / U24 / U26)。勝敗・両
   '時間切れで終わったときの理由は "Time is up"、同点の引き分けは "Same score when time ran out" (U44)。' +
   '降参で終わったときも同じ結果画面で、理由は降参した側が "You surrendered"、相手が "Your opponent surrendered" (U38)。時間切れと同じく再戦できる (U66、#1891 の FB 10)。' +
   'レーティングはランダム対戦の最初の 1 戦だけ Elo で変わり、Friend Match と同じ相手との再戦では変わらない (U21)。Friend Match では何も出さない (U70)。Elo の初期値 1000・K=24 は QA² 側の仮の値。' +
-  'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら勝ち負けによらず Find Next Opponent / Rematch / Back to Random Match (U67 / U72)。' +
+  'ボタンは Friend Match なら Rematch / Back to Friend Match、ランダム対戦なら勝ち負けによらず Rematch / Find Next Opponent / Back to Random Match (U67 / U72)。' +
+  'Rematch はどちらの対戦でもいちばん上で、相手が抜けて Rematch が消えてもほかのボタンの位置は変わらない (U73、#1891 の FB)。' +
   'Rematch は両者に同じものを出し、相手が押してもボタンは変わらない。押すとキャンセルできるくるくるになり、両者が押したら再戦 (U72)。' +
   '戻るボタンはホストとクライアントで同じ 1 つだけ (U59)。Back to Friend Match は両者を同じ Match Code の同じ部屋へ戻す (U61)。自動では次へ進まない (U26。両者が Rematch を押したあとの VS 画面へは自動で進む、U72)。';
 var RESULT_PHASE_CONTEXT = {
@@ -1536,7 +1538,7 @@ var SCREENS = (function () {
     var stamps = phase !== 'OpponentLeft' && (!extra || extra.stamps !== false);
     var spec = { view: 'result', title: 'RESULT', back: null, outcome: outcome, phase: phase, status: phase,
       reason: outcome === 'Draw' ? 'timeUpTie' : 'timeUp', rematch: rematch, stamps: stamps, spinner: REMATCH_SPINNERS[phase] || null,
-      decided: ['U20', 'U21', 'U22', 'U24', 'U26', 'U67', 'U70'].concat(rematch ? ['U23', 'U72'] : [], stamps ? ['U27', 'U49'] : [],
+      decided: ['U20', 'U21', 'U22', 'U24', 'U26', 'U67', 'U70'].concat(rematch ? ['U23', 'U72', 'U73'] : [], stamps ? ['U27', 'U49'] : [],
         phase === 'OpponentLeft' ? ['U25'] : [], !extra || !extra.reason ? ['U44'] : []),
       context: [RESULT_CONTEXT].concat(RESULT_PHASE_CONTEXT[phase] || [], stamps ? [STAMP_CONTEXT] : []) };
     return Object.assign(spec, extra);
@@ -1739,7 +1741,8 @@ var UNDECIDED = [
       '2026-10-17 の U59 で、ランダム対戦の Back to Online は Back to Random Match に、降参した側のボタンは勝った側と同じ戻るボタン (Back to Friend Match / Back to Random Match) になった。' +
       '同日の U60 で、ランダム対戦の勝った側は Find Next Opponent (Rematch なし)、負けた側は Rematch (Find Next Opponent なし) になった。' +
       '2026-10-19 の U67 で、負けた側にも Find Next Opponent を出すようになり、U66 で降参した側にも勝った側と同じボタン (Rematch を含む) を出すようになった。' +
-      '2026-10-20 の U72 で、Cancel Request / Accept / Decline をやめ、勝ち負けによらず両者に同じ Rematch を出すようになった (ランダム対戦の勝った側にも Rematch)。',
+      '2026-10-20 の U72 で、Cancel Request / Accept / Decline をやめ、勝ち負けによらず両者に同じ Rematch を出すようになった (ランダム対戦の勝った側にも Rematch)。' +
+      '2026-10-23 の U73 で、ランダム対戦も Rematch をいちばん上にした (Rematch / Find Next Opponent / Back to Random Match)。',
     decided: { by: '高宮さん', date: '2026-10-07' } },
   { id: 'U23', title: '再戦: どちらからでも申し込め、相手が応じたらそのまま VS 画面へ。同時に申し込んだら成立',
     desc: '結果画面の Rematch で、どちらのプレイヤーからでも再戦を申し込める。相手が応じたら (Rematch を押したら)、ロビーの Ready を挟まずにそのまま VS 画面へ進む。' +
@@ -2009,7 +2012,8 @@ var UNDECIDED = [
     desc: '#1891 の 2026-10-19 の FB。勝ち負けによらず流れは変わらないので、負けた側にも Find Next Opponent を出す (U60 では負けた側は Rematch だけだった)。' +
       'ボタンは引き分けと同じく Find Next Opponent / Rematch / Back to Random Match で、Find Next Opponent を主のボタンにする。勝った側は今までどおり Find Next Opponent / Back to Random Match (勝った側からは申し込めない、U60)。' +
       '再戦を申し込んだ・申し込まれた間は、再戦のボタン (Cancel Request / Accept) を主にする。' +
-      '2026-10-20 の U72 で、勝った側にも Rematch を出し (Find Next Opponent / Rematch / Back to Random Match)、再戦の段階によらず Find Next Opponent を主のボタンのままにした。',
+      '2026-10-20 の U72 で、勝った側にも Rematch を出し (Find Next Opponent / Rematch / Back to Random Match)、再戦の段階によらず Find Next Opponent を主のボタンのままにした。' +
+      '2026-10-23 の U73 で、並びを Rematch / Find Next Opponent / Back to Random Match にした (Find Next Opponent は主のボタンのまま)。',
     decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-19 の FB)', date: '2026-10-19' } },
   { id: 'U68', title: 'Match Code を出している部屋の画面でも Profile を変えられる',
     desc: '#1891 の 2026-10-19 の FB。部屋の画面 (友だちを待っている間・Ready 画面など、Match Code を出している画面) の右上にも Profile を置き、今の画面の上にダイアログで開く。' +
@@ -2039,4 +2043,11 @@ var UNDECIDED = [
       'U30 / U50 の Cancel Request・Decline・期限切れと一行、U60 の「ランダム対戦で勝った側からは申し込めない」と Accept / Decline を置き換えた。' +
       'くるくるは他の画面の読み込みの表示とそろえるとよい、という提案もある (モックでは結果画面だけ)。',
     decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-20 の FB)', date: '2026-10-20' } },
+  { id: 'U73', title: '結果画面の Rematch は、Friend Match でもランダム対戦でもいちばん上',
+    desc: '#1891 の 2026-10-23 の FB。ランダム対戦の結果画面のボタンを Find Next Opponent / Rematch / Back to Random Match から Rematch / Find Next Opponent / Back to Random Match にし、' +
+      'Friend Match (Rematch / Back to Friend Match) と同じく Rematch をいちばん上にそろえる。' +
+      '理由: ボタンは画面の下にそろえて並べるので、相手が抜けて Rematch が消えたとき (U25) に真ん中が抜けて Find Next Opponent の位置が変わっていた。Rematch が上なら、消えてもほかのボタンは動かない。' +
+      'また、Find Next Opponent と Back to Random Match はどちらも今の相手と別れる役割なので、下に並べてまとめる。' +
+      'Find Next Opponent が主のボタンであること (U67)、Rematch を押したあとのくるくる (U72) は変えない。',
+    decided: { by: '高宮さん (#1891 の YoshiyukiN さんの 2026-10-23 の FB)', date: '2026-10-23' } },
 ];

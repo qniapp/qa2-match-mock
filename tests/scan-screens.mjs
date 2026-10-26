@@ -2,7 +2,7 @@
 // 全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 も) をヘッドレス Chromium で描画し、
 // 両端末の画面 (.screen) にゲームが出さないもの (仮・未決・決定の印、U 番号、モックの注記、日本語) が無いことを確かめる。
 // ランダム対戦の画面に 60 秒 (仮の長さ) が出ないこと、検索中のモック操作が端末の外にあることも確かめる (決定 U13)。
-// Random Match の画面は開いた直後が大きな Ready だけで、探している間は同じ場所・同じ大きさの Cancel になることも確かめる (決定 U62、#1891 の FB 16)。
+// Random Match の画面は開くとすぐ "Searching for an opponent…" と大きな Cancel だけになり、Ready を待つ画面が無いことも確かめる (決定 U74)。
 // アプリを離れて検索が止まった通知がモーダルではなく、メニューをさまたげないことも確かめる (決定 U43)。
 // 結果画面と切断を待つ画面に秒数 (20 秒・3 秒・5 秒、仮の長さ) が出ないこと、スタンプの「3 秒たつ」「5 秒たつ」が端末の外にあること、
 // 結果画面にスコアの行が無いこと (qniapp/qa2#1891 FB 7: 勝敗とレーティングの変化だけ) も確かめる (決定 U20 / U27 / U28)。
@@ -250,22 +250,16 @@ function profileSave() {
   if (dialog() || !/^Host\.FriendMatch\.Lobby\.Waiting/.test(stateName()) || host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F31F}') page(`部屋の画面で × で閉じないか、選んだものが残らない (${stateName()})`);
   press('.back');
   press('[data-ev="dialog.cancelMatch"]');
-  // Random Match の画面 (Ready を待っている間、U62) でも開ける
+  // Random Match で相手を探している間 (開くとすぐ探す、U74) に開いて選ぶと、相手を探し続けたまま保存する
   press('.back');
   press('[data-ev="randomMatch"]');
   press('[data-ev="profile"]');
-  if (!dialog() || stateName() !== 'Host.Matchmake + 🗨 profile') page(`Random Match (Ready を待っている) で Profile を押しても、画面がそのままダイアログが開かない (${stateName()})`);
-  press(close);
-  if (dialog() || stateName() !== 'Host.Matchmake') page(`× で閉じないか、Random Match (Ready を待っている) から移った (${stateName()})`);
-  // Random Match で相手を探している間に開いて選ぶと、相手を探し続けたまま保存する
-  press('[data-ev="startSearch"]');
-  press('[data-ev="profile"]');
-  if (!dialog() || stateName() !== 'Host.Matchmake.Searching + 🗨 profile') page(`Random Match で Profile を押しても、画面がそのままダイアログが開かない (${stateName()})`);
+  if (!dialog() || stateName() !== 'Host.Matchmake + 🗨 profile') page(`Random Match で Profile を押しても、画面がそのままダイアログが開かない (${stateName()})`);
   press('[data-ev="dialog.pickEmoji.rocket"]');
   press('[data-ev="dialog.pickGreeting.bringItOn"]');
-  if (stateName() !== 'Host.Matchmake.Searching + 🗨 profile') page(`選ぶと Random Match から移るか、ダイアログが閉じる (${stateName()})`);
+  if (stateName() !== 'Host.Matchmake + 🗨 profile') page(`選ぶと Random Match から移るか、ダイアログが閉じる (${stateName()})`);
   press(close);
-  if (dialog() || stateName() !== 'Host.Matchmake.Searching') page(`× で閉じないか、Random Match から移った (${stateName()})`);
+  if (dialog() || stateName() !== 'Host.Matchmake') page(`× で閉じないか、Random Match から移った (${stateName()})`);
   if (host.querySelector('.hdr-profile .hp-emoji').textContent !== '\u{1F680}') page('閉じたあとの Profile のボタンの絵文字が 🚀 でない');
   const saved = JSON.parse(localStorage.getItem(KEY) || 'null');
   if (!saved || saved.host.emoji !== '\u{1F680}' || saved.host.greeting !== 'bringItOn' || saved.client.emoji !== '\u{1F60E}') page(`選んだものが保存されない (${localStorage.getItem(KEY)})`);
@@ -300,7 +294,6 @@ function scan(only, wantLang = 'en') {
   const BAD_SEL = '.mock-note, .tmp, .decided-note, [class*="pill-"], [data-undecided]';
   const findings = [];
   const norow = {};
-  const bigButtonAt = { idle: new Set(), searching: new Set() }; // Random Match の画面の大きなボタンの位置 (端末ごと)
   let frames = 0;
   let current = null; // 描いている手順の遷移表の状態
   // 手順の移動は MockApp.show (#s=..&step=..&cd=.. の deep link と同じ) を直接呼んで行う。
@@ -338,24 +331,15 @@ function scan(only, wantLang = 'en') {
       // ランダム対戦 (決定 U13): 60 秒という仮の長さは端末の画面に出さない。「アプリを離れる」「60 秒たつ」は端末の外 (下のモック操作) だけ
       if (/\.Matchmake/.test(state) && /\d/.test(text)) findings.push(`${at}: 数字がある (60 秒は端末の画面に出さない): ${text.trim().slice(0, 80)}`);
       if (screen.querySelector('[data-ev="leaveApp"], [data-ev="searchTimeout"]')) findings.push(`${at}: 検索中のモック操作が端末の画面の中にある`);
-      // Random Match の画面 (決定 U62): 開いた直後は "Searching…" の無い大きな Ready だけ。探している間は同じ場所が大きな Cancel になる
-      if (/\.Matchmake(\.Searching)?$/.test(state)) {
-        const searching = /\.Searching$/.test(state);
+      // Random Match の画面 (決定 U74): 開くとすぐ "Searching for an opponent…" と点、大きな Cancel だけ (Ready を待つ画面は無い)
+      if (/\.Matchmake(\.NextOpponent)?$/.test(state)) {
         const btns = [...screen.querySelectorAll('.actions .btn')];
-        const want = searching ? 'Cancel:cancelSearch' : 'Ready:startSearch';
         const got = btns.map((b) => `${b.textContent}:${b.dataset.ev}`).join();
-        if (got !== want || !btns[0].classList.contains('big') || btns[0].hasAttribute('data-norow')) findings.push(`${at}: ボタンが大きな ${want} だけでない (${got})`);
-        if (!!screen.querySelector('.dots') !== searching || /Searching/.test(text) !== searching) findings.push(`${at}: "Searching for an opponent…" と点が${searching ? '無い' : 'ある'}`);
-        if (btns[0]) {
-          const r = btns[0].getBoundingClientRect();
-          const key = `${dev.dataset.dev} ${Math.round(r.left)},${Math.round(r.top)},${Math.round(r.width)},${Math.round(r.height)}`;
-          bigButtonAt[searching ? 'searching' : 'idle'].add(key);
-        }
+        if (got !== 'Cancel:cancelSearch' || !btns[0].classList.contains('big') || btns[0].hasAttribute('data-norow')) findings.push(`${at}: ボタンが大きな Cancel だけでない (${got})`);
+        if (!screen.querySelector('.dots') || !/Searching for an opponent/.test(text)) findings.push(`${at}: "Searching for an opponent…" と点が無い`);
       }
-      if (/\.Matchmake$/.test(state) && dev.querySelector('.mock-controls [data-ev="leaveApp"]:not([data-norow]), .mock-controls [data-ev="searchTimeout"]:not([data-norow])')) {
-        findings.push(`${at}: Ready を待っている間に検索中のモック操作を押せる`);
-      }
-      if (/\.Matchmake\.Searching$/.test(state)) {
+      if (screen.querySelector('[data-ev="startSearch"]')) findings.push(`${at}: Random Match の Ready (startSearch) のボタンがある (U74)`);
+      if (/\.Matchmake(\.NextOpponent)?$/.test(state)) {
         ['leaveApp', 'searchTimeout'].forEach((ev) => {
           if (!dev.querySelector(`.mock-controls [data-ev="${ev}"]:not([data-norow])`)) findings.push(`${at}: 端末の下のモック操作で ${ev} を押せない`);
         });
@@ -427,7 +411,7 @@ function scan(only, wantLang = 'en') {
       // 保存した絵文字を添える。題名と重ならず、画面に収まる。押せないのはダイアログを開いている間 (と、"No opponent found." の後ろ) だけ
       const pItem = screen.querySelector('.hdr-profile');
       const inLobby = /\.FriendMatch\.Lobby\./.test(current[d]) && !/\.CodeExpired$/.test(current[d]) && screen.querySelector('.hdr button.back');
-      const pWant = (/^(Host|Client)\.(Matchmake(\.Searching|\.NextOpponent)?|FriendMatch\.Room(\.[A-Za-z.]+)?)( \+|$)/.test(state) && !/Matchmake\..*NotFound/.test(state)) || !!inLobby;
+      const pWant = (/^(Host|Client)\.(Matchmake(\.NextOpponent)?|FriendMatch\.Room(\.[A-Za-z.]+)?)( \+|$)/.test(state) && !/Matchmake\..*NotFound/.test(state)) || !!inLobby;
       if (pWant !== !!pItem || screen.querySelectorAll('[data-ev="profile"]').length !== (pWant ? 1 : 0)) findings.push(`${at}: Profile のボタンが ${pItem ? 'ある' : '無い'}`);
       if (pItem) {
         if (pItem.textContent !== `${current[d + 'Emoji']}Profile` || pItem.getAttribute('aria-haspopup') !== 'dialog') findings.push(`${at}: Profile のボタンが ${pItem.textContent}`);
@@ -731,9 +715,5 @@ function scan(only, wantLang = 'en') {
       }
     }
   });
-  // Ready と Cancel は同じ場所の同じ大きさのボタン (U62)
-  const idleAt = [...bigButtonAt.idle].sort().join(' | ');
-  const searchingAt = [...bigButtonAt.searching].sort().join(' | ');
-  if (!idleAt || idleAt !== searchingAt) findings.push(`Random Match の Ready (${idleAt}) と Cancel (${searchingAt}) の位置・大きさが違う`);
   return { frames, findings, norow };
 }

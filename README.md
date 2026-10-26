@@ -27,7 +27,7 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 開いたあとはキーボードの ← / → で手順を戻す / 進めることができ、電話のボタンでシナリオの次の手順と同じ操作をしても進みます。
 ゲーム本体のカウントダウン中の手順では、`&cd=3` / `&cd=2` / `&cd=1` で止めて表示する数字を選べます
 (例: `index.html#s=1&step=13&cd=1`。省略すると 3)。詳しくは「ゲーム画面とゲーム本体のカウントダウン」を見てください。
-`&lang=ja` で両端末のあいさつを日本語に、`&lang=ja,en` (ホスト,クライアント) で端末ごとに選べます (例: `index.html#s=22&step=9&lang=ja`。省略すると英語。「Profile (絵文字とあいさつ)」を参照)。
+`&lang=ja` で両端末のあいさつを日本語に、`&lang=ja,en` (ホスト,クライアント) で端末ごとに選べます (例: `index.html#s=22&step=7&lang=ja`。省略すると英語。「Profile (絵文字とあいさつ)」を参照)。
 
 ## 画面構成
 
@@ -35,7 +35,7 @@ URL の `#s=<シナリオ ID>&step=<手順数>` で、特定のシナリオの�
 同じ日に、未決が 0 件になって要らなくなった部品 (右パネルの状態名の行、決定済みの「ほか:」の列、ログタブ、凡例の `未決` と点線 / 実線、端末の上の黄色い未決の帯、未決トグル) も消しました。
 
 - **左: 2 台の端末** - 左が `ホスト` (青)、右が `クライアント` (橙)。電話のボタンは直接押せます (押すと遷移表の同じイベントが発火します)。
-  最初の画面 Online Battle には Random Match / Friend Match があります。Profile (U56) は Random Match の画面 (Ready を待っている間と相手を探している間、U62)、Friend Match トップ、Match Code を出している部屋の画面 (U68) の右上にあり、今の画面の上にダイアログで開きます (#1891 の FB 12)。
+  最初の画面 Online Battle には Random Match / Friend Match があります。Profile (U56) は Random Match の画面 (相手を探している間)、Friend Match トップ、Match Code を出している部屋の画面 (U68) の右上にあり、今の画面の上にダイアログで開きます (#1891 の FB 12)。
   シナリオの次の手順と同じ操作ならシナリオが進み、違う操作ならシナリオを外れて自由操作になります。
   遷移表に行が無い操作は破線・半透明で表示し、押しても何も起きません。
   端末の下の `モック操作` はゲーム内 UI ではない操作で、ふだんは時間切れの決着と切断 (`時間切れ: 勝ち` / `負け` / `同点` と `切断する`)、ランダム対戦で相手を探している間は `アプリを離れる` / `60 秒たつ`、
@@ -108,13 +108,12 @@ VS 画面・カウントダウン中の切断 (U32 で決定) については、
 読み込みが 20 秒で "Match could not start…"、同期の失敗で "Couldn’t start the match…" になること (U15) を確かめます。シナリオ 1〜7b / 12 / 13 / 19〜20 の流れも確認します。
 ランダム対戦 (U13a で決定) については、相手が見つかると両端末とも直接 VS 画面になること、ランダム対戦の状態から Ready 画面 / "Starting match…" へ進む行が無いこと、
 相手を探す画面が "Searching for an opponent…" と大きな Cancel だけ (トーストなし) であること、シナリオ 11 の流れを確認します。
-Random Match の画面の Ready (U62 で決定) については、Random Match の画面を開いた直後 (`*.Matchmake`) が "Searching…" の無い大きな Ready だけの画面で、
-Ready (`*.startSearch`) で `*.Matchmake.Searching` へ、Cancel で `*.Matchmake` へ戻り、‹ で Online Battle へ戻ること、Ready を待っている間は相手が見つからないこと、
-Random Match の画面へ入る行 (メニュー・通知を出したままの Random Match・結果画面の Back to Random Match) がすべて Ready を待つ状態へ着き、すぐ探すのは Search again / Find Next Opponent だけであることを確かめます。
-相手を探している間の操作 (U13 で決定) については、両端末とも (相手の端末がどの状態でも) Cancel と ‹ が確認ダイアログなしで、Cancel は Ready を待つ状態へ、‹ は Online Battle へ戻ること、
-探している間に行が有るのは Cancel / ‹ / アプリを離れる / 60 秒たつ の 4 つだけで、行き先は Ready を待つ状態・Online Battle か通知だけであること、
+Random Match の画面 (U74 で決定) については、Ready を待つ状態 (`*.Matchmake.Searching` と分けた状態) と Ready (`*.startSearch`) が無く、Random Match の画面が "Searching for an opponent…" と大きな Cancel だけであること、
+Random Match の画面へ入る行 (メニュー・通知を出したままの Random Match・結果画面の Back to Random Match) がすべて相手を探している状態 `*.Matchmake` へ着くこと、Friend Match の Ready (U31) の行は残っていることを確かめます。
+相手を探している間の操作 (U13 で決定) については、両端末とも (相手の端末がどの状態でも) Cancel と ‹ が確認ダイアログなしで Online Battle へ戻ること (Find Next Opponent で探しているときも、U74)、
+探している間に行が有るのは Cancel / ‹ / アプリを離れる / 60 秒たつ の 4 つだけで、行き先は Online Battle か通知だけであること、
 アプリを離れると `*.Matchmake.Stopped` ("Search stopped while the app was in the background.")、60 秒たつと `*.Matchmake.NotFound` ("No opponent found.") になり、
-どちらも Search again (→ `*.Matchmake.Searching`) / Close (→ `*.MultiModeSelection`) を出すこと、通知の文言に数字 (60 秒) が無いこと、
+どちらも Search again (→ `*.Matchmake`) / Close (→ `*.MultiModeSelection`) を出すこと、通知の文言に数字 (60 秒) が無いこと、
 U13 が高宮さん 2026-10-07 の決定で、説明に「60 秒という長さは仮」があること、遷移表に U13 が未決として残っていないこと、
 端末の下のモック操作に「アプリを離れる」「60 秒たつ」があること、シナリオ 11b〜11h の流れを確認します。
 検索停止のお知らせ (U43 で決定) については、U43 が高宮さん 2026-10-07 の決定で遷移表・画面に未決として残っていないこと、古い文言 "…because you left the app." が残っていないこと、
@@ -160,7 +159,7 @@ localStorage のキーがモックの名前で区切られ、保存して読み�
 Friend Match トップ (U63、#1891 の FB 19・20) については、トップのボタンが New Match / Join Match だけで入力欄がダイアログの外に無いこと、Join a Match のダイアログの題名・"Match Code" の欄・Join・× と、開く・入れる・閉じる・Join の行、Match Code の誤り・満員がダイアログの中の赤字ではなく画面の下のトーストで (U69)、見つからない・期限切れ (ホストの Match Code が切れたとき) が同じ "Match not found" / "The code may be wrong or expired." になり、モック設定とシナリオ 9 にも別の期限切れが無いこと、接続失敗のトーストがダイアログの上に出ること、画面・ダイアログ・トースト・お知らせ・app.js に "room" が無いこと、確認・帯・一行の新しい文言を確かめます。
 
 端末の画面の検査: `node tests/scan-screens.mjs` (ヘッドレス Chromium が必要。場所は環境変数 `CHROMIUM` で変えられます) で、
-全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 981 枚) を 1280x720 の画面で実際に描画し (手順は `#s=..&step=..&cd=..` と同じ `MockApp.show` で開く)、
+全シナリオの全手順 (ゲーム本体のカウントダウンは 3 / 2 / 1 それぞれ。計 943 枚) を 1280x720 の画面で実際に描画し (手順は `#s=..&step=..&cd=..` と同じ `MockApp.show` で開く)、
 両端末の画面 (`.screen`) に `仮`・`未決`・`決定`・U 番号・日本語・モックの注記 (`.mock-note`、`.pill-*` など) が無いこと、
 を確認します。各手順で両端末の状態が遷移表の再生結果と同じかも確かめます。
 その前に、hash なしで開いたページが自由操作 (シナリオなし、両端末が Online Battle で、ボタンを押すと進み、参加のあとの同期が実時間で進む) であること、
@@ -201,7 +200,7 @@ Profile のダイアログの題名・右上の × (U64)・候補・選ばれて
 
 - 役割: `Host.` / `Client.` (本体の `MultiplayManager.IsHost()` / `IsClient()` [1])
 - 画面: `MultiModeSelection` (Online Battle) / `FriendMatch.Room` (Friend Match トップ) / `FriendMatch.Lobby` (Match Code を発行したあとの待機・Ready) /
-  `Matchmake` (Random Match の画面。開いた直後は Ready を待ち、`Matchmake.Searching` で相手を探す、2026-10-17 の U62) / `Opponent` (VS 画面) / `Game.Countdown` / `Game.Play` / `Game.MatchMenu` / `WinResult` / `LoseResult`、
+  `Matchmake` (Random Match の画面で相手を探している。2026-10-17 の U62 で Ready を待つ状態と `Matchmake.Searching` に分けたが、2026-10-27 の U74 で元に戻した) / `Opponent` (VS 画面) / `Game.Countdown` / `Game.Play` / `Game.MatchMenu` / `WinResult` / `LoseResult`、
   ホストの離席は `Host.Away.FriendMatchRoom.*` / `Host.Away.StageSelection.*` (2026-10-10 の U57 で削除)、Profile 画面は `Profile` (2026-10-08。#1891 の FB 12 でダイアログに変えたので削除。いまは付属状態 `Dialog` の `profile`)
 - 本体に 1 対 1 の名前が無いもの (Room、Lobby、Opponent (VS 画面)、Countdown、離席の Away、ステージ選択、図の段階名) には **近い名前を当てた** ので、下の表の「対応」に書いています。
 - 遷移表のグループ名も同じ形にしました (例: `Host.FriendMatch.Lobby.Cancelable`)。グループは状態名と重ならない名前 (`.Any` や形容詞) にしています。JS の変数名は `hostCancelable` などの camelCase です。
@@ -218,7 +217,8 @@ Ready の決定 (U31 の変更・U32〜U36、2026-10-07) で Ready 画面と開�
 その後の 2026-10-08 の決定で 213 状態・68 グループ・408 行になり、部屋の出口を ‹ だけにした決定 (U57、2026-10-10) で離席の状態を消したので、199 状態・61 グループ・325 行になりました (「2026-10-10 の決定 (U57)」を参照)。結果画面の戻るボタンをそろえた決定 (U59、2026-10-17) で降参した側の行を 2 行減らし、Back to Friend Match で同じ部屋へ戻す決定 (U61、2026-10-17) で部屋の状態を 2 つ・行を 6 行足し、#1891 の FB 12 (Profile をダイアログに) で Profile 画面の状態を 2 つ消しました。#1891 の FB 14 (Profile は選ぶとすぐ保存) で行を 36 行足し、Random Match の画面の Ready (U62、2026-10-17) で `*.Matchmake.Searching` を足しました。Friend Match トップの Join a Match の決定 (U63、2026-10-17) で状態を 5 つ・行を 6 行足したので、206 状態・61 グループ・371 行になりました。
 2026-10-19 の決定 (U64〜U71) で降参の確認 (`*.Game.SurrenderConfirm`) と降参の特別な結果画面 (`*.LoseResult.Surrendered` / `*.WinResult.OpponentSurrendered`) を消し、
 `Host.Result.Leavable` / `Client.Result.Leavable` を消して `Host.FriendMatch.Lobby.Copyable` を足し、部屋の画面で Profile を選ぶ行 (40 行) と Match Code のコピーの行 (2 行) を足したので、200 状態・60 グループ・409 行になりました (「2026-10-19 の決定」を参照)。
-2026-10-20 の再戦の決定 (U72) で、取り消し・辞退・期限切れの段階と 3 秒待ち (結果画面の 72 状態) を消して両者が押したあとの `.RematchStarting` (6 状態) を足し、3 秒待ちのグループ `*.Result.Cooldown` (6 グループ) を消して、くるくるの間を除いた結果画面 `Host.Result.Leavable` / `Client.Result.Leavable` を足したので、今の遷移表は 134 状態・56 グループ・382 行です (「2026-10-20 の決定」を参照)。
+2026-10-20 の再戦の決定 (U72) で、取り消し・辞退・期限切れの段階と 3 秒待ち (結果画面の 72 状態) を消して両者が押したあとの `.RematchStarting` (6 状態) を足し、3 秒待ちのグループ `*.Result.Cooldown` (6 グループ) を消して、くるくるの間を除いた結果画面 `Host.Result.Leavable` / `Client.Result.Leavable` を足したので、134 状態・56 グループ・382 行になりました (「2026-10-20 の決定」を参照)。
+2026-10-27 の U74 で Random Match の Ready を待つ状態 (`*.Matchmake.Searching` と `*.startSearch` の行) を消したので、今の遷移表は 132 状態・56 グループ・378 行です (「2026-10-27 の決定 (U74)」を参照)。
 このとき `Client.FriendMatch.Lobby.MatchExpired` → `Client.FriendMatch.Lobby.CodeExpired`、`Host.Away.*.Ready` → `Host.Away.*.FriendReady` に改名し、図03 の `Host.FriendMatch.Lobby.Connecting` と、同期の前のクライアントの `Waiting` / `FriendJoined` / `HostAway` を削除しました。
 このとき `Ready.WaitingForFriend` → `Ready.WaitingForOpponent`、`Ready.FriendReady` → `Ready.OpponentReady`、`Lobby.StartFailed` → `Lobby.Ready.StartFailed` に改名し、図07 の離席と図04 の "cancelled the match." の状態を削除しました (下の対応表の新名は改名当時のもの)。
 このとき再戦の段階の名前を変えました: 自分が申し込んだ `.RematchWaiting` → `.RematchRequested`、相手から申し込まれた `.RematchRequested` → `.RematchIncoming` (下の対応表の新名は改名当時のもの)。
@@ -288,8 +288,8 @@ Ready の決定 (U31 の変更・U32〜U36、2026-10-07) で Ready 画面と開�
 | `H_AWAY_STAGE_EXPIRED` | `Host.Away.StageSelection.Expired` (2026-10-10 に削除、U57) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
 | `C_AWAY_STAGE_READY` | `Client.Away.StageSelection.Ready` (2026-10-07 に削除、U35) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
 | `C_AWAY_STAGE_EXPIRED` | `Client.Away.StageSelection.Expired` (2026-10-07 に削除、U35) | 本体に無い (モックの離席。図02 / 図07)。`StageSelection` は `GameModeTransitionScreen.AiStageRankSelection` [7] に近い | 近い名前を当てた (モック独自) |
-| `H_RANDOM_WAITING` | `Host.Matchmake` → `Host.Matchmake.Searching` (2026-10-17、U62。`Host.Matchmake` は Ready を待つ状態になった) | `MatchmakeView` [4] | 一致 |
-| `C_RANDOM_WAITING` | `Client.Matchmake` → `Client.Matchmake.Searching` (2026-10-17、U62。`Client.Matchmake` は Ready を待つ状態になった) | `MatchmakeView` [4] | 一致 |
+| `H_RANDOM_WAITING` | `Host.Matchmake` (2026-10-17 の U62 で `Host.Matchmake.Searching` に移したが、2026-10-27 の U74 で戻した) | `MatchmakeView` [4] | 一致 |
+| `C_RANDOM_WAITING` | `Client.Matchmake` (2026-10-17 の U62 で `Client.Matchmake.Searching` に移したが、2026-10-27 の U74 で戻した) | `MatchmakeView` [4] | 一致 |
 | `H_VS` | `Host.Opponent` | `OpponentView` (相手の名前を出す画面) [5]。モックの VS 画面 | 近い名前を当てた |
 | `C_VS` | `Client.Opponent` | `OpponentView` (相手の名前を出す画面) [5]。モックの VS 画面 | 近い名前を当てた |
 | `H_GAME_COUNTDOWN` | `Host.Game.Countdown` | `CountdownTimer` [8] (`Game` は `GameState` [6]) | 近い名前を当てた |
@@ -334,7 +334,7 @@ Ready の決定 (U31 の変更・U32〜U36、2026-10-07) で Ready 画面と開�
 
 2026-10-07 (対戦後の結果画面、U20〜U30) の変更: `Host.Result.Any` / `Client.Result.Any` は結果画面のすべて (29 状態ずつ。降参した側も含めた) になりました。
 新しいグループは、Find Next Opponent などがある結果画面 `*.Result.Leavable` (降参した側以外。2026-10-17 の U59 で戻るボタンは降参した側にも付いたので、今は Find Next Opponent の行だけに使う)、スタンプを送れる結果画面 `*.Result.Stampable`、
-試合中と切断を待つ間 `*.Game.InMatch`、相手を探している状態 `*.Matchmake.Searching` (Random Match から / Find Next Opponent から。2026-10-17 の U62 で状態 `*.Matchmake.Searching` ができたので、グループは `*.Matchmake.InSearch` に改名)、
+試合中と切断を待つ間 `*.Game.InMatch`、相手を探している状態 `*.Matchmake.Searching` (Random Match から / Find Next Opponent から。2026-10-17 の U62 で状態 `*.Matchmake.Searching` ができたので、グループは `*.Matchmake.InSearch` に改名。2026-10-27 の U74 で状態は `*.Matchmake` に戻したが、グループ名はそのまま)、
 勝敗ごとの再戦できる段階 `*.WinResult.Rematchable` などと 3 秒待ちの段階 `*.WinResult.Cooldown` など (勝ち・負け・引き分け) です (計 34 グループ)。
 
 2026-10-07 (Ready 画面と開始前の切断、U31 の変更・U32〜U36) の変更: 片方だけ押したグループ `*.FriendMatch.Lobby.Ready.OnePressed` を削除し、Ready 画面のグループ `*.FriendMatch.Lobby.Ready.NoneReady` (どちらも Ready していない 4 状態)、`*.FriendMatch.Lobby.Ready.Any` (Ready 画面 8 状態)、`*.FriendMatch.Lobby.PreStart` (Ready 画面と読み込み)、`*.FriendMatch.Lobby.RoomLeavable` (Leave Room / ‹ を押せる)、`*.Game.BeforeStart` (VS 画面とカウントダウン)、`Host.FriendMatch.Lobby.WaitingForFriend` (同じ Match Code で次の友だちを待つ 3 状態)、`Client.FriendMatch.Room.Empty` (入力欄が空の Friend Match トップ) を足しました (計 44 グループ)。
@@ -374,13 +374,13 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 | [8](https://qniapp.github.io/qa2-match-mock/#s=8&step=0) | 無効な Match Code | 08 (10-17 の決定 U63 で Join a Match に) | Friend Match トップの Join Match で Join a Match のダイアログを開き、Match Code を入れて Join を押すと、画面の下のトーストで "Match not found" / "The code may be wrong or expired." を出し、ダイアログは開いたまま (U63、10-19 の U69 で赤字からトーストに)。× で閉じる。 |
 | [9](https://qniapp.github.io/qa2-match-mock/#s=9&step=0) | Match Code が期限切れ (見つからないときと同じ表示) | 09 (10-17 の決定 U63 で 08 と同じ表示に) | ホストが New Match で部屋を作り、Match Code の期限 (30 分、仮) が切れる (右パネルの環境イベント)。クライアントがその Match Code を Join a Match に入れて Join を押すと、見つからないときと同じ "Match not found" / "The code may be wrong or expired." のトースト (U63 / U69、#1891 の FB 20。以前の "The match has expired." はやめた)。 |
 | [10](https://qniapp.github.io/qa2-match-mock/#s=10&step=0) | マッチが満員 | 10 | Match は存在するが、すでにほかの人が入っている。Join a Match を開いたまま、画面の下のトーストで "The match is already full." (U63 / U69)。 |
-| [11](https://qniapp.github.io/qa2-match-mock/#s=11&step=0) | ランダム対戦 (Ready で探し始め、相手が見つかり次第 VS) | 00 + 10-03 の決定 (U13a)、10-17 の U62 | 両者が Random Match を選ぶと、Random Match の画面に大きな Ready が出る (開いただけでは探さない、U62)。Ready を押すと相手を探す画面 ("Searching for an opponent…" と、Ready と同じ場所の大きな Cancel)。相手が見つかったらすぐ VS 画面へ進み (Friend Match の Ready 画面は無い、U13a で決定)、ゲーム本体のカウントダウン → プレイ開始。両者が Ready 画面で Ready を押す U31 は Friend Match だけ。探している間の Cancel・‹・アプリを離れたとき・タイムアウトは 11b〜11h (U13 / U62 で決定)。 |
-| [11b](https://qniapp.github.io/qa2-match-mock/#s=11b&step=0) | ランダム対戦 → Cancel で Ready 待ちに戻る / ‹ で Online Battle へ | 10-07 の決定 (U13)、10-17 の U62 | ホストが Random Match を選び、Ready で相手を探し始める。探している間に Cancel を押すと、確認ダイアログなしで探すのをやめ、Random Match の画面のまま Ready を待つ状態に戻る (U62)。もう一度 Ready で探し、今度は ‹ を押すと、確認なしで Online Battle へ戻る (U13)。もう一度 Random Match を開くと Ready を待つ状態から始まり、‹ で Online Battle へ戻る。探している間に行けるのは、この 2 つだけ。 |
-| [11c](https://qniapp.github.io/qa2-match-mock/#s=11c&step=0) | ランダム対戦 → アプリを離れて検索が止まる → Search again | 10-07 の決定 (U13 / U43) | ホストが Random Match の Ready で相手を探している間にアプリを離れる (バックグラウンド・画面ロック。端末の下のモック操作「アプリを離れる」) と、検索が止まる (U13)。戻ると Online Battle の中に "Search stopped while the app was in the background." と Search again / Close (U43、モーダルではない)。Search again ですぐもう一度探し、クライアントも Random Match を選んで Ready を押すと相手が見つかって VS 画面へ (U13a)。 |
+| [11](https://qniapp.github.io/qa2-match-mock/#s=11&step=0) | ランダム対戦 (開くとすぐ探し、相手が見つかり次第 VS) | 00 + 10-03 の決定 (U13a)、10-27 の U74 | 両者が Random Match を選ぶと、すぐ相手を探す画面 ("Searching for an opponent…" と大きな Cancel) になる (Ready を押す画面は無い、U74)。相手が見つかったらすぐ VS 画面へ進み (Friend Match の Ready 画面は無い、U13a で決定)、ゲーム本体のカウントダウン → プレイ開始。両者が Ready 画面で Ready を押す U31 は Friend Match だけ。探している間の Cancel・‹・アプリを離れたとき・タイムアウトは 11b〜11h (U13 で決定)。 |
+| [11b](https://qniapp.github.io/qa2-match-mock/#s=11b&step=0) | ランダム対戦 → Cancel / ‹ で Online Battle へ | 10-07 の決定 (U13)、10-27 の U74 | ホストが Random Match を選ぶと、すぐ相手を探す。探している間に Cancel を押すと、確認ダイアログなしで探すのをやめ、Online Battle へ戻る (U13 / U74)。もう一度 Random Match を選び、今度は ‹ を押しても、確認なしで Online Battle へ戻る (Cancel とまったく同じ)。探している間に行けるのは、この 2 つだけ。 |
+| [11c](https://qniapp.github.io/qa2-match-mock/#s=11c&step=0) | ランダム対戦 → アプリを離れて検索が止まる → Search again | 10-07 の決定 (U13 / U43) | ホストが Random Match で相手を探している間にアプリを離れる (バックグラウンド・画面ロック。端末の下のモック操作「アプリを離れる」) と、検索が止まる (U13)。戻ると Online Battle の中に "Search stopped while the app was in the background." と Search again / Close (U43、モーダルではない)。Search again ですぐもう一度探し、クライアントも Random Match を選ぶと相手が見つかって VS 画面へ (U13a)。 |
 | [11d](https://qniapp.github.io/qa2-match-mock/#s=11d&step=0) | ランダム対戦 → アプリを離れて検索が止まる → Close | 10-07 の決定 (U13 / U43) | クライアントが相手を探している間にアプリを離れて戻ると、Online Battle の中に "Search stopped while the app was in the background." (U13 / U43)。Close で通知を閉じ、Online Battle のまま (U43)。 |
 | [11g](https://qniapp.github.io/qa2-match-mock/#s=11g&step=0) | ランダム対戦 → アプリを離れて検索が止まる → 通知を出したまま Friend Match | 10-07 の決定 (U43) | ホストがアプリを離れて検索が止まり、Online Battle の中に "Search stopped while the app was in the background."。通知はモーダルではないので、そのまま Friend Match を押せる (U43)。ほかの画面へ移ると通知は消え、‹ で Online Battle に戻っても出ない。通知は自動では消えない。 |
-| [11h](https://qniapp.github.io/qa2-match-mock/#s=11h&step=0) | ランダム対戦 → アプリを離れて検索が止まる → 通知を出したまま Random Match (Ready 待ちから) | 10-07 の決定 (U43)、10-17 の U62 | ホストがアプリを離れて検索が止まり、Online Battle の中に "Search stopped while the app was in the background."。通知を出したまま Random Match を押すと、通知は消え、Random Match の画面は Ready を待つ状態から始まる (すぐには探さない、U62)。Ready で探し始める。 |
-| [11e](https://qniapp.github.io/qa2-match-mock/#s=11e&step=0) | ランダム対戦 → 60 秒で見つからない → Search again | 10-07 の決定 (U13) | ホストだけが Random Match の Ready で相手を探し、見つからないまま 60 秒たつ (端末の下のモック操作「60 秒たつ」。60 秒という長さは仮) と、元の画面 (Online Battle) に "No opponent found." と Search again / Close (U13)。Search again ですぐもう一度探し、クライアントも Random Match を選んで Ready を押すと相手が見つかって VS 画面へ (U13a)。 |
+| [11h](https://qniapp.github.io/qa2-match-mock/#s=11h&step=0) | ランダム対戦 → アプリを離れて検索が止まる → 通知を出したまま Random Match (すぐ探す) | 10-07 の決定 (U43)、10-27 の U74 | ホストがアプリを離れて検索が止まり、Online Battle の中に "Search stopped while the app was in the background."。通知を出したまま Random Match を押すと、通知は消え、メニューの Random Match と同じくすぐ相手を探す (U43 / U74)。 |
+| [11e](https://qniapp.github.io/qa2-match-mock/#s=11e&step=0) | ランダム対戦 → 60 秒で見つからない → Search again | 10-07 の決定 (U13) | ホストだけが Random Match で相手を探し、見つからないまま 60 秒たつ (端末の下のモック操作「60 秒たつ」。60 秒という長さは仮) と、元の画面 (Online Battle) に "No opponent found." と Search again / Close (U13)。Search again ですぐもう一度探し、クライアントも Random Match を選ぶと相手が見つかって VS 画面へ (U13a)。 |
 | [11f](https://qniapp.github.io/qa2-match-mock/#s=11f&step=0) | ランダム対戦 → 60 秒で見つからない → Close | 10-07 の決定 (U13) | ホストが相手を探し、見つからないまま 60 秒 (仮) たつと "No opponent found."。Close で通知を閉じ、Online Battle のまま (U13)。 |
 | [12](https://qniapp.github.io/qa2-match-mock/#s=12&step=0) | VS 画面中にクライアントが切断 → 戻らない → 同じ Match Code で入り直す | なし (10-07 の決定 U32、10-08 の U52 で Match Code を入れ直す手順を追加) | VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」) と、試合はまだ始まっていないので両者の Ready を消して止める (U32)。ホストは Ready 画面に "Opponent disconnected. Waiting for them to reconnect…" と 20 秒のカウントダウン (出口は ‹、U57)、クライアントは "Connection lost. Reconnecting…" と 20 秒のカウントダウン (U52)。20 秒 (仮) たっても戻らない (右パネルの環境イベント) と、ホストは "Match cancelled. Opponent did not reconnect." (結果なし) で同じ Match Code のまま部屋に残る。クライアントは Friend Match トップに "Could not reconnect. The match did not start." の帯 (U52)。帯を出したまま Join Match → Join a Match に Match Code を入れて Join で入ると "Friend joined!" (帯は消える)。部屋 (Ready 画面・読み込み) での切断は U5 で、文言と流れが違う (3a〜3c / 3e)。 |
 | [13b](https://qniapp.github.io/qa2-match-mock/#s=13b&step=0) | ホストが Match Code をコピー → "Match code copied" のトースト → 2 秒で消える | なし (10-19 の決定 U69) | ホストが New Match で部屋を作り、Match Code の右のコピーのボタン (#1891 の FB 5) を押すと、画面はそのままで下に "Match code copied" のトーストが出る (U69)。2 秒 (仮) たつと自動で消える (自由操作では実時間、シナリオでは → キーの手順)。画面が変わっても消える。 |
@@ -397,11 +397,11 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 | [16b](https://qniapp.github.io/qa2-match-mock/#s=16b&step=0) | 対戦中に降参 (MATCH MENU の SURRENDER ですぐ負け) → 降参した側が Rematch → 相手も Rematch | なし (10-07 の決定、案A、10-19 の U65 / U66、10-20 の U72) | ホストが ☰ で MATCH MENU を開き、いったん CONTINUE でプレイに戻る。もう一度開いて SURRENDER を押すと、確認を挟まずにすぐ降参する (確認は MATCH MENU の 1 回だけ、U65、#1891 の FB 18)。ホストは負けの結果画面 ("You surrendered")、クライアントは勝ちの結果画面に "Your opponent surrendered" (U38)。どちらも時間切れと同じ結果画面で、Rematch と Back to Friend Match がある (U66、#1891 の FB 10)。ホストが Rematch を押し (くるくる)、クライアントも Rematch を押すと再戦の VS 画面からゲームへ (U72)。 |
 | [16c](https://qniapp.github.io/qa2-match-mock/#s=16c&step=0) | MATCH MENU を開いている間に試合が終わる | なし (10-07 の決定、案A) | ホストが MATCH MENU を開いている間も試合は続くので、その間に時間切れでクライアントが勝つと (端末の下のモック操作「勝ち」)、ホストのメニューは閉じて負けの結果画面になる (U37)。 |
 | [16d](https://qniapp.github.io/qa2-match-mock/#s=16d&step=0) | ランダム対戦で降参 (レートが変わる) → 降参した側も勝った側も Find Next Opponent | なし (10-07 の決定 U21 / U28 / U41、10-19 の U65〜U67) | ランダム対戦でクライアントが MATCH MENU の SURRENDER ですぐ降参すると (U65)、クライアントは "LOSE" / "You surrendered" で 1000 → 988 (−12)、ホストは "WIN!" / "Your opponent surrendered" で 1000 → 1012 (+12) (U21)。降参しても時間切れの負けと同じ結果画面で (U66)、両者とも Find Next Opponent / Rematch / Back to Random Match (U67 / U72)。クライアントが Find Next Opponent で次の相手を探し始めると、ホストには "Your opponent left. Rematch is not available." (U25)。ホストも Find Next Opponent で探す。 |
-| [17](https://qniapp.github.io/qa2-match-mock/#s=17&step=0) | ランダム対戦の対戦後 (Elo → 負けた側が先に Rematch → 勝った側も Rematch → レートが変わらない → 次の相手) | なし (10-07 の決定 U21 / U22 / U29、10-20 の U72) | ランダム対戦でホストが勝つと、ホストは 1000 → 1012 (+12)、クライアントは 1000 → 988 (−12) (U21、Elo の初期値 1000・K=24 は仮)。ボタンは勝ち負けによらず両者とも Find Next Opponent / Rematch / Back to Random Match (U59 / U67 / U72)。クライアントが Rematch を押すとくるくる ("Waiting for opponent…" と Cancel)、ホストには "Your opponent wants a rematch" の一行だけ (ボタンは変わらない)。ホストも Rematch を押すと "Starting match…" のくるくるのあと再戦が始まり、その試合はレートが変わらない ("No rating change (rematch)")。再戦もホストが勝ち、ホストが Find Next Opponent で次の相手を探し始めると、クライアントには "Your opponent left. Rematch is not available." (U25)。クライアントも Back to Random Match で Random Match の画面へ戻り (メニューから開いたときと同じく Ready を待つ、U59 / U62)、Ready を押すと相手が見つかり、VS 画面へ (新しいランダム対戦なのでレートが変わる)。 |
+| [17](https://qniapp.github.io/qa2-match-mock/#s=17&step=0) | ランダム対戦の対戦後 (Elo → 負けた側が先に Rematch → 勝った側も Rematch → レートが変わらない → 次の相手) | なし (10-07 の決定 U21 / U22 / U29、10-20 の U72) | ランダム対戦でホストが勝つと、ホストは 1000 → 1012 (+12)、クライアントは 1000 → 988 (−12) (U21、Elo の初期値 1000・K=24 は仮)。ボタンは勝ち負けによらず両者とも Find Next Opponent / Rematch / Back to Random Match (U59 / U67 / U72)。クライアントが Rematch を押すとくるくる ("Waiting for opponent…" と Cancel)、ホストには "Your opponent wants a rematch" の一行だけ (ボタンは変わらない)。ホストも Rematch を押すと "Starting match…" のくるくるのあと再戦が始まり、その試合はレートが変わらない ("No rating change (rematch)")。再戦もホストが勝ち、ホストが Find Next Opponent で次の相手を探し始めると、クライアントには "Your opponent left. Rematch is not available." (U25)。クライアントも Back to Random Match で Random Match の画面へ戻り (メニューから開いたときと同じくすぐ探す、U59 / U74)、相手が見つかり、VS 画面へ (新しいランダム対戦なのでレートが変わる)。 |
 | [17d](https://qniapp.github.io/qa2-match-mock/#s=17d&step=0) | ランダム対戦で勝った側が先に Rematch → 負けた側は押さずに Find Next Opponent → くるくるが閉じる | なし (10-07 の決定 U25、10-19 の U67、10-20 の U72) | ランダム対戦でホストが勝ち、勝ったホストが先に Rematch を押す (U72 から勝った側も押せる)。ホストにくるくる、クライアントには "Your opponent wants a rematch"。クライアントは Rematch を押さずに Find Next Opponent で次の相手を探し始め (断るボタンは無い)、ホストのくるくるは閉じて "Your opponent left. Rematch is not available." (U25)。ホストは Back to Random Match で Random Match の画面へ。 |
 | [17e](https://qniapp.github.io/qa2-match-mock/#s=17e&step=0) | ランダム対戦で Rematch を Cancel → また Rematch → 相手も Rematch → VS | なし (10-20 の決定 U72) | ランダム対戦でホストが勝ち、負けたクライアントが Rematch を押してくるくる。Cancel で取り消すと、両者とも何も押していない結果画面に戻り、ホストの一行も消える (一行・3 秒待ちは無い)。クライアントがすぐまた Rematch を押し、ホストも押すと再戦の VS 画面 → プレイ開始 (レートは変わらない)。 |
 | [17b](https://qniapp.github.io/qa2-match-mock/#s=17b&step=0) | ランダム対戦の対戦後 → 次の相手が見つからない | なし (10-07 の決定 U29) | ホストが勝ったあと、ホストが Find Next Opponent で次の相手を探す。60 秒 (仮) 探しても見つからない (端末の下のモック操作「60 秒たつ」) と "No opponent found." と Search again / Back to Online (U29)。Search again でもう一度探し、また見つからないので Back to Online で Online Battle へ。 |
-| [17c](https://qniapp.github.io/qa2-match-mock/#s=17c&step=0) | 次の相手を探している間にアプリを離れる → "Search stopped…" → Search again | なし (10-08 の決定 U47) | ホストが勝ったあと、ホストが Find Next Opponent で次の相手を探している間にアプリを離れる (端末の下のモック操作「アプリを離れる」)。Random Match から探しているとき (U43) と同じく検索を止め、戻ると Online Battle の中に "Search stopped while the app was in the background." と Search again / Close (U47)。Search again でもう一度探し、クライアントも Back to Random Match で Random Match の画面へ戻って Ready を押すと相手が見つかる (U59 / U62)。 |
+| [17c](https://qniapp.github.io/qa2-match-mock/#s=17c&step=0) | 次の相手を探している間にアプリを離れる → "Search stopped…" → Search again | なし (10-08 の決定 U47) | ホストが勝ったあと、ホストが Find Next Opponent で次の相手を探している間にアプリを離れる (端末の下のモック操作「アプリを離れる」)。Random Match から探しているとき (U43) と同じく検索を止め、戻ると Online Battle の中に "Search stopped while the app was in the background." と Search again / Close (U47)。Search again でもう一度探し、クライアントも Back to Random Match で Random Match の画面へ戻ると (すぐ探す、U59 / U74) 相手が見つかる。 |
 | [18](https://qniapp.github.io/qa2-match-mock/#s=18&step=0) | 対戦中にクライアントが切断 → 20 秒で切断した側の負け | なし (10-07 の決定 U28) | Friend Match の対戦中にクライアントの接続が切れる (端末の下のモック操作「切断する」) と、サーバーが両者のゲームと得点を止め、ホストは "Your opponent disconnected"、クライアントは "Connection lost" / "Reconnecting…"。どちらにも残りの秒数 (20 秒、仮) を出す (U46)。20 秒たっても戻らない (右パネルの環境イベント) と、切断したクライアントの負け: ホストは "WIN!" / "Your opponent disconnected"、クライアントは "LOSE" / "You were disconnected" (U28)。再戦は無い (U45)。 |
 | [18b](https://qniapp.github.io/qa2-match-mock/#s=18b&step=0) | 対戦中にホストが切断 → 20 秒のうちに戻る | なし (10-07 の決定 U28) | ホストの接続が切れたあと、20 秒 (仮) のうちに通信が回復する (右パネルの環境イベント) と、止めていたところから両者とも試合を続ける (U46)。そのあと時間切れでホストが勝つ。 |
 | [18c](https://qniapp.github.io/qa2-match-mock/#s=18c&step=0) | 両者が切断 → No contest | なし (10-07 の決定 U28) | クライアントの接続が切れ、ホストが待っている間にホストの接続も切れると (右パネルの環境イベント「両者の接続が切れる」)、両者とも "NO CONTEST" / "No contest due to a connection error" (U28)。再戦は無い (U45)。 |
@@ -416,7 +416,7 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 | [21](https://qniapp.github.io/qa2-match-mock/#s=21&step=0) | ランダム対戦の VS 画面中に切断 → 20 秒のうちに戻る → VS 画面からやり直す | なし (10-08 の決定 U54) | ランダム対戦の VS 画面中にクライアントの接続が切れる (端末の下のモック操作「切断する」)。試合はまだ始まっていないが、Ready 画面は無いので VS 画面のまま 20 秒 (仮) 待つ (U54)。表示は対戦中の切断 (U46) と同じで、ホストは "Your opponent disconnected"、クライアントは "Connection lost" と、どちらも残りの秒数。20 秒のうちに戻る (端末の下のモック操作「再接続する」か右パネルの環境イベント) と、VS 画面からやり直してゲーム本体のカウントダウン → プレイ開始。 |
 | [21b](https://qniapp.github.io/qa2-match-mock/#s=21b&step=0) | ランダム対戦のカウントダウン中に切断 → 戻らない → 取りやめ → Search again | なし (10-08 の決定 U52 / U54) | ランダム対戦のゲーム本体のカウントダウン中にホストの接続が切れ、20 秒 (仮) たっても戻らない (端末の下のモック操作「20 秒たつ」) と、試合を取りやめる (U54)。勝敗は無く、レートも変わらない。ホストは Online Battle の中に "Could not reconnect. The match did not start." (U52)、クライアントは "Match cancelled. Opponent did not reconnect."。どちらも Search again / Close (U54。U43 と同じくモーダルではない)。両者が Search again で探し直すと、相手が見つかって新しいランダム対戦の VS 画面 (レートが変わる対戦)。 |
 | [21c](https://qniapp.github.io/qa2-match-mock/#s=21c&step=0) | Friend Match の再戦の VS 画面中に切断 → 戻らない → Friend Match トップ | なし (10-08 の決定 U52 / U54) | Friend Match の対戦のあと再戦が成立し、VS 画面中にクライアントの接続が切れる。再戦は Ready 画面に戻らず (U54)、VS 画面のまま 20 秒 (仮) 待つ (表示は U46 と同じ)。戻らないと試合を取りやめ (勝敗なし)、両者とも Friend Match トップへ: ホストは "Match cancelled. Opponent did not reconnect."、クライアントは "Could not reconnect. The match did not start." の帯 (U52)。行き先 (Back to Friend Match と同じ Friend Match トップ、U24) と帯の文言は 2026-10-08 に確認。両者とも Close で帯を閉じる。 |
-| [22](https://qniapp.github.io/qa2-match-mock/#s=22&step=0) | Random Match で相手を探している間に Profile を開いて選ぶ → 見つかった相手の VS 画面に出る | なし (10-08 の決定 U56、#1891 の FB 12 / FB 14) | ホストが Random Match を選んで相手を探している間に、右上の Profile を押す。"Searching for an opponent…" の画面の上にダイアログが開き、上に VS 画面のカードの見本 (Yasuhito、👋、"Hello!") がある。絵文字 🚀 とあいさつ "Bring it on!" を選ぶたびにすぐ保存され、見本が変わって下に "✓ Saved" が出る。左上の ‹ でダイアログを閉じると、相手を探し続けたまま Profile のボタンの絵文字も 🚀。まだ相手がいないので、見つかる相手に見せる値も 🚀 "Bring it on!" になる。クライアントも Random Match を選ぶと相手が見つかり、VS 画面のホストのカードに 🚀 "Bring it on!" が出る (クライアントは ogwssk 😎 "Let’s go!" のまま)。クライアントが勝ったあと両者が Rematch を押して再戦すると、再戦の VS 画面にも同じあいさつが出る。 |
+| [22](https://qniapp.github.io/qa2-match-mock/#s=22&step=0) | Random Match で相手を探している間に Profile を開いて選ぶ → 見つかった相手の VS 画面に出る | なし (10-08 の決定 U56、#1891 の FB 12 / FB 14) | ホストが Random Match を選んで相手を探している間に、右上の Profile を押す。"Searching for an opponent…" の画面の上にダイアログが開き、上に VS 画面のカードの見本 (Yasuhito、👋、"Hello!") がある。絵文字 🚀 とあいさつ "Bring it on!" を選ぶたびにすぐ保存され、見本が変わる ("Saved" は出さない、U64)。右上の × でダイアログを閉じると、相手を探し続けたまま Profile のボタンの絵文字も 🚀。まだ相手がいないので、見つかる相手に見せる値も 🚀 "Bring it on!" になる。クライアントも Random Match を選ぶと相手が見つかり、VS 画面のホストのカードに 🚀 "Bring it on!" が出る (クライアントは ogwssk 😎 "Let’s go!" のまま)。クライアントが勝ったあと両者が Rematch を押して再戦すると、再戦の VS 画面にも同じあいさつが出る。 |
 | [22b](https://qniapp.github.io/qa2-match-mock/#s=22b&step=0) | Friend Match で Profile を開いて選ぶとすぐ保存され、× で閉じても開き直しても残る | なし (10-08 の決定 U56、#1891 の FB 12 / FB 14、10-19 の U64) | ホストが Friend Match トップの右上の Profile を押すと、Friend Match トップの上にダイアログが開く。🤖 と "Good luck!" を選ぶとすぐ保存される ("Saved" は出さない、U64)。右上の × でダイアログを閉じると (U64)、Friend Match トップの Profile のボタンの絵文字が 🤖 になる。もう一度開くと見本は 🤖 "Good luck!" から始まり、🌟 を選んで × で閉じると 🌟 "Good luck!" が残る。Save / Cancel と左上の ‹ は無く、Esc やダイアログの外を押しても閉じない (#1891 の FB 14)。 |
 | [22c](https://qniapp.github.io/qa2-match-mock/#s=22c&step=0) | Ready 画面で Profile を開いて選ぶ → 相手が Ready を押しても閉じない → × で閉じて Ready → VS 画面に出る | なし (10-19 の決定 U68) | 両者が Ready 画面にいる間に、ホストが部屋の画面の右上の Profile を押す (U68。一つ前の Friend Match トップへ戻ると対戦が閉じるため)。🚀 を選ぶと、この対戦の相手に見せる値にもなる。開いている間にクライアントが Ready を押して "Opponent is ready. Are you?" になってもダイアログは閉じない。"Bring it on!" も選んで × で閉じ、ホストも Ready を押すと、VS 画面のホストのカードに 🚀 "Bring it on!" が出る。 |
 
@@ -425,8 +425,36 @@ ID のリンクで、公開版のそのシナリオを最初の手順から開�
 - **フレンド対戦の部屋** (シナリオ 3a / 3b / 3c / 3e / 4 / 4b / 4c / 5 / 5b / 7a / 19e / 20): フレンド対戦の部屋は 2026-10-07 に決定 (U1〜U19。細部は 2026-10-08 の U51 / U52)。2026-10-10 の U57 で、部屋の出口は左上の ‹ だけになった (ホストは確認のあと部屋を閉じ、クライアントは確認のあと抜ける。部屋を残したまま別の画面へは移れない)。2026-10-17 の U63 で、確認はホストが "Cancel this match?" (Cancel Match / Keep Waiting)、クライアントが "Leave this match?" (Leave / Stay) になり、Friend Match トップは New Match / Join Match だけで Match Code は Join a Match のダイアログに入れる。秒数 (再接続の 20 秒・Ready の 60 秒) と Match Code の期限 30 分は QA² 側の仮の値で、タイマーは右パネルの環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。
 - **Ready 画面と開始前の切断** (シナリオ 1 / 1b / 6 / 6b / 7b / 12 / 19 / 19b / 19c / 19d): Ready 画面と開始前の切断は 2026-10-07 に決定 (U31 の Ready への変更、U32〜U36。細部は 2026-10-08 の U52 / U53)。Ready を取り消せるのは届いたあとの Ready 画面だけで、試合が始まる (3-2-1 のあとサーバーが確認する) までは勝敗を記録しない。秒数 (Ready の 60 秒・再接続の 20 秒・読み込みの 20 秒) は QA² 側の仮の値で、タイマーは右パネルの環境イベントで進める。「アプリを離れる」「切断する」は端末の下のモック操作。
 - **対戦後** (シナリオ 15 / 15b / 15c / 15d / 15e / 15f / 15g / 15h / 16b / 16d / 17 / 17b / 17c / 17d / 17e / 18 / 18b / 18c / 18d / 18e / 21c): 結果画面は 2026-10-07 に決定 (U20〜U30。細部は 2026-10-08 の U44〜U50)。再戦は 2026-10-20 の U72 で、両者に同じ Rematch だけを出し、押すとキャンセルできるくるくる、両者が押したら再戦にした (Cancel Request / Accept / Decline・期限・3 秒待ちは無い)。2026-10-23 の U73 で、Rematch はどちらの対戦でもいちばん上のボタンにした。時間切れの勝ち / 負け / 同点と「切断する」は端末の下のモック操作で、得点の計算は対象外。秒数 (20 秒・3 秒・5 秒・60 秒) と Elo の値 (初期値 1000、K=24) は QA² 側の仮の値で、タイマーは右パネルの環境イベントか端末の下のモック操作で進める。
-- **Profile** (シナリオ 22 / 22b / 22c): 2026-10-08 に決定 (U56)。#1891 の FB 12 で、Random Match の画面 (Ready を待っている間と相手を探している間、U62) と Friend Match トップの上にダイアログで開くようにした。2026-10-19 の U64 で右上の × で閉じ "Saved" を出さないようにし、U68 で部屋の画面でも開けるようにした。候補と既定値は QA² 側の仮の値。あいさつは日本語と英語で、右パネルの「あいさつの言語」で切り替える (#1891 FB 13)。シナリオは localStorage に関係なく、いつも最初の値 (ホスト 👋 "Hello!"、クライアント 😎 "Let’s go!") から始まる。
+- **Profile** (シナリオ 22 / 22b / 22c): 2026-10-08 に決定 (U56)。#1891 の FB 12 で、Random Match の画面 (相手を探している間) と Friend Match トップの上にダイアログで開くようにした。2026-10-19 の U64 で右上の × で閉じ "Saved" を出さないようにし、U68 で部屋の画面でも開けるようにした。候補と既定値は QA² 側の仮の値。あいさつは日本語と英語で、右パネルの「あいさつの言語」で切り替える (#1891 FB 13)。シナリオは localStorage に関係なく、いつも最初の値 (ホスト 👋 "Hello!"、クライアント 😎 "Let’s go!") から始まる。
 - **MATCH MENU** (シナリオ 16 / 16b / 16c): オンライン対戦の MATCH MENU は 2026-10-07 に決定 (案A、U37〜U42)。試合は止まらず (Time.timeScale = 0 にしない、BGM も下げない)、暗幕は薄くゲーム画面が見えたまま。ボタンは CONTINUE と SURRENDER だけで、対戦中に REMATCH / RETRY は無い (U39)。2026-10-19 の U65 で、SURRENDER を押すとすぐ降参するようにした (確認は MATCH MENU の 1 回だけ)。
+
+## 2026-10-27 の決定 (U74: Random Match の画面は開くとすぐ探す)
+
+高宮さんの決定です。**未決は 0 件のまま** です。
+Random Match を押したあとに大きな Ready を押させる画面 (U62) をやめ、状態遷移をできるだけ単純にしました。Random Match の画面は「相手を探している」状態 1 つだけで、U62 より前 (U13a / U13) の形に戻ります。
+
+| | 以前 (U62) | 今 (U74) |
+|---|---|---|
+| Random Match を押す | Ready を待つ画面 (`*.Matchmake`、大きな **[Ready]**) | すぐ相手を探す (`*.Matchmake`、"Searching for an opponent…" と大きな **[Cancel]**) |
+| Ready を押す (`*.startSearch`) | 相手を探す (`*.Matchmake.Searching`) | 無い |
+| 探している間の Cancel | Ready を待つ画面へ戻る | Online Battle へ戻る (‹ とまったく同じ、確認なし) |
+| 通知 ("Search stopped…" など) を出したままの Random Match | Ready を待つ画面 | すぐ相手を探す |
+| 結果画面の Back to Random Match | Ready を待つ画面 | すぐ相手を探す |
+| Find Next Opponent で探している間の Cancel | Ready を待つ画面 | Online Battle へ |
+
+- Random Match の画面へのどの入口 (メニュー、通知を出したままの Random Match、結果画面の Back to Random Match) も同じ行き先 `*.Matchmake` にそろえ、例外を作っていません。Search again / Find Next Opponent は今までどおりすぐ探します。
+- 相手に見せる絵文字とあいさつ (U56) は、Ready を押したときではなく、Random Match の画面を開いた (探し始めた) ときに固定します (U62 より前と同じ)。
+- **Friend Match の Ready (U31〜U36) は残します。** 同じ「Ready」という名前ですが、Friend Match の Ready は部屋に入った 2 人が試合を始めることに合意するための状態 (`*.FriendMatch.Lobby.Ready.*`) で、ひとりで探し始めるだけの Random Match の Ready とは別の状態です。
+  消すと、部屋に入ったらすぐ始まることになり、開始前の取り消し・タイムアウト・切断 (U32〜U36 / U53) の決定をすべて作り直すことになるので、この決定の範囲に入れていません。
+- ほかの入口も確かめました。ランダム対戦の再戦 (U72) と、相手が見つかったあと (U13a) には、もともと Ready はありません。Friend Match の Back to Friend Match (U61) は Friend Match の部屋 (Ready 画面) へ戻るので、上の Friend Match の Ready のままです。
+- 状態 `*.Matchmake.Searching` とイベント `*.startSearch` を消し、`*.Matchmake` を相手を探している状態に戻しました。132 状態・56 グループ・378 行 (前は 134 状態・382 行)・63 シナリオです。
+- ランダム対戦のシナリオから Ready の手順を消したので、ランダム対戦を通るシナリオの `#s=..&step=..` は 2 つ前にずれました (Back to Random Match のあとは 3 つ)。U62 より前の節に書いた番号は、また今の手順と合います。シナリオ 11b は「Cancel / ‹ で Online Battle へ」に戻しました。
+- `tests/check.js` で、Ready を待つ状態と `*.startSearch` が無いこと、Random Match の画面へ入る行がすべて `*.Matchmake` に着くこと、Cancel と ‹ が Online Battle へ戻ること、Friend Match の Ready の行が残っていることを、
+  `tests/scan-screens.mjs` で、描いた Random Match の画面がどれも "Searching for an opponent…" と大きな Cancel だけで、Ready のボタンが無いことを確かめます。
+
+- `index.html#s=11&step=1` - Random Match を押した直後 (すぐ "Searching for an opponent…" と Cancel)
+- `index.html#s=11b&step=2` - Cancel で Online Battle へ戻った
+- `index.html#s=17&step=14` - 結果画面の Back to Random Match で戻った Random Match の画面 (すぐ探す)
 
 ## 2026-10-23 の決定 (U73: Rematch はいちばん上)
 
@@ -444,8 +472,8 @@ qniapp/qa2#1891 の YoshiyukiN さんの 2026-10-23 のコメント (<https://gi
 - `tests/check.js` で、どの結果画面でも Rematch がいちばん上で、ほかのボタンの並びが Rematch の有無で変わらないことを、`tests/scan-screens.mjs` で、描いた画面でも Rematch がほかのボタンより上にあることを確かめます。
 - `docs/screenshots` の結果画面の画像は、この決定より前の表示のままです。
 
-- `index.html#s=17&step=8` - ランダム対戦の結果画面 (Rematch / Find Next Opponent / Back to Random Match)
-- `index.html#s=17d&step=10` - 相手が抜けた (Rematch だけが消え、ほかのボタンは同じ位置)
+- `index.html#s=17&step=6` - ランダム対戦の結果画面 (Rematch / Find Next Opponent / Back to Random Match)
+- `index.html#s=17d&step=8` - 相手が抜けた (Rematch だけが消え、ほかのボタンは同じ位置)
 - `index.html#s=15&step=15` - Friend Match の結果画面 (Rematch / Back to Friend Match、変わらない)
 
 ## 2026-10-20 の決定 (U72: 再戦は両者に同じ Rematch だけ)
@@ -475,10 +503,10 @@ Rematch の遷移が複雑で、通信によって意図しないタイミング
 - `index.html#s=15f&step=16` - Friend Match: ホストが先に押した
 - `index.html#s=15c&step=17` - 両者が押した ("Starting match…")
 - `index.html#s=15d&step=17` - Cancel で取り消した (両者とも元の結果画面)
-- `index.html#s=17&step=8` - ランダム対戦の結果画面 (両者に同じ Find Next Opponent / Rematch / Back to Random Match)
-- `index.html#s=17&step=9` - ランダム対戦: 負けた側が先に押した
-- `index.html#s=17d&step=9` - ランダム対戦: 勝った側が先に押した
-- `index.html#s=17d&step=10` - 相手が押さずに抜けた (くるくるが閉じて "Your opponent left. Rematch is not available.")
+- `index.html#s=17&step=6` - ランダム対戦の結果画面 (両者に同じ Find Next Opponent / Rematch / Back to Random Match)
+- `index.html#s=17&step=7` - ランダム対戦: 負けた側が先に押した
+- `index.html#s=17d&step=7` - ランダム対戦: 勝った側が先に押した
+- `index.html#s=17d&step=8` - 相手が押さずに抜けた (くるくるが閉じて "Your opponent left. Rematch is not available.")
 
 ## 2026-10-19 の決定 (U64〜U71: #1891 の 10-19 の FB)
 
@@ -511,8 +539,8 @@ FB 10 (Rematch が出ていない) の原因: 時間切れ (端末の下のモ�
 
 - `index.html#s=22b&step=4` - Profile のダイアログ (右上の ×、"Saved" は無い)
 - `index.html#s=16b&step=18` - MATCH MENU の SURRENDER ですぐ降参した結果画面 (Rematch がある)
-- `index.html#s=16d&step=9` - ランダム対戦で降参した側にも Find Next Opponent / Rematch
-- `index.html#s=17&step=8` - ランダム対戦の負けた側の Find Next Opponent / Rematch / Back to Random Match
+- `index.html#s=16d&step=7` - ランダム対戦で降参した側にも Find Next Opponent / Rematch
+- `index.html#s=17&step=6` - ランダム対戦の負けた側の Find Next Opponent / Rematch / Back to Random Match
 - `index.html#s=22c&step=9` - Ready 画面の上の Profile のダイアログ
 - `index.html#s=13b&step=3` - "Match code copied" のトースト
 - `index.html#s=8&step=4` - Join a Match を開いたまま "Match not found" のトースト
@@ -556,6 +584,8 @@ qniapp/qa2#1891 の FB の 19・20 番目を反映しました。**未決は 0 �
 - `index.html#s=5&step=8` - クライアントの ‹ の確認 "Leave this match?" (Leave / Stay)
 
 ## 2026-10-17 の決定 (U62: Random Match の画面は Ready で探し始める)
+
+> **2026-10-27 の U74 で取りやめました。** 今は Random Match の画面を開くとすぐ相手を探し、Ready を待つ状態はありません (「2026-10-27 の決定 (U74)」を参照)。この節は当時の記録です (下の `#s=..&step=..` は当時の手順の番号です)。
 
 qniapp/qa2#1891 の FB の 16 番目と 17 番目を反映しました。**未決は 0 件のまま** です。
 
@@ -688,7 +718,7 @@ qniapp/qa2#1891 の FB の 9 番目と 17 番目を反映しました。**未決
 | 相手が降参した側 | Back to Friend Match | Find Next Opponent / Back to Random Match |
 
 - ホストとクライアントの結果画面のボタンは、どの段階でも同じです (`tests/check.js` で全結果画面を比べている)。結果画面に Back to Online は無くなりました。
-- Back to Random Match (`*.backToRandomMatch`) の行き先は、Online Battle の Random Match と同じ `*.Matchmake` (当時は "Searching for an opponent…" と Cancel、U13a。同じ日の U62 で、探し始めずに Ready を待つ状態になった) で、端末の付属状態も相手に見せる絵文字とあいさつの固定 (U56) も同じです。
+- Back to Random Match (`*.backToRandomMatch`) の行き先は、Online Battle の Random Match と同じ `*.Matchmake` (当時は "Searching for an opponent…" と Cancel、U13a。同じ日の U62 で、探し始めずに Ready を待つ状態になり、2026-10-27 の U74 でまたすぐ探すようになった) で、端末の付属状態も相手に見せる絵文字とあいさつの固定 (U56) も同じです。
   Back to Friend Match の行き先 (Friend Match トップ、U24) は変わりません。相手には今までどおり "Your opponent left. Rematch is not available." (U25)。
   (同じ日の U61 で、Back to Friend Match は同じ部屋へ戻るようになりました)
 - Find Next Opponent (U22 / U29) と、次の相手が見つからないときの "No opponent found." の Search again / Back to Online は変えていません。降参した側にはこれまでどおり Find Next Opponent は出しません。
@@ -798,10 +828,10 @@ qniapp/qa2#1891 の YoshiyukiN さんの「FB意見まとめ」の 1・2 番目�
   モックでは右パネルの「あいさつの言語」で端末ごとに `JA` / `EN` を切り替えます (既定は `EN`、URL の `&lang=`)。日本語は 「」、英語は “” で囲みます。日本語の `！` `？` は全角です。
   ゲームの言語の設定とのつなぎ方は QA² 側で決めます。モックではあいさつだけをローカライズし、ほかの文言は英語のままです。
 - **既定値**: 全員 👋 "Hello!"。モックのホスト (Yasuhito) はこの既定値から始まります。相手の役 (クライアントの ogwssk) は 😎 "Let’s go!" から始まります (すでに選んである人として扱う)。相手も Profile を変えられます (どちらも 2026-10-08 に決定)。
-- **開ける場所**: Random Match (Ready を待っている間 (U62) と相手を探している間。Find Next Opponent から探しているときも)、Friend Match トップ (部屋のお知らせ・トーストを出している間も、#1891 の FB 12)、
+- **開ける場所**: Random Match (相手を探している間。Find Next Opponent から探しているときも)、Friend Match トップ (部屋のお知らせ・トーストを出している間も、#1891 の FB 12)、
   Match Code を出している部屋の画面のうち ‹ で確認を出せるもの (友だちを待っている間・Ready 画面など。2026-10-19 の U68。一つ前の Friend Match トップへ戻ると対戦が閉じるため) だけ。
   "No opponent found." を出している間は開けません (2026-10-08 に決定)。Ready を送っている間・読み込み・自分の再接続中・期限切れの部屋の画面、Online Battle・対戦中には、Profile の行もボタンもありません。
-- **値を固定するとき**: 部屋を作る・部屋に入る・相手を探し始める (Random Match の画面の Ready / Search again / Find Next Opponent。Random Match の画面を開いただけでは固定しない、U62) ときに、保存した値を相手に見せる値として固定します。
+- **値を固定するとき**: 部屋を作る・部屋に入る・相手を探し始める (Random Match の画面を開く・Back to Random Match / Search again / Find Next Opponent。Random Match の画面を開くとすぐ探すので、そのときに固定する、U74) ときに、保存した値を相手に見せる値として固定します。
   変えたものが相手に見えるのは、次の部屋・次の検索からです。ただし相手を探している間に選んだものは、まだ相手がいないので見つかる相手にも見えます (#1891 の FB 12 / FB 14)。部屋の画面で選んだものも、この対戦の VS 画面から相手に見えます (U68)。今いる部屋と同じ相手との再戦では固定し直しません。ホストの "Join another match" はモックが入室を省いているので、固定するときに含めません (2026-10-08 に決定。2026-10-10 の U57 で、この確認自体が無くなった)。遷移表では、固定する行のメモに「写す: hostShownEmoji←hostEmoji, …」と出します。
 - **保存先**: ブラウザの localStorage だけ (キーは `qa2-match-mock.profile`、端末ごとに `host` / `client`)。あいさつは id (`hello` など) で残します。前のモックが英語の文で残した値は id に読み替え、読めない・候補に無い値は最初の値に戻します。
   モックでは自由操作のときだけ読み書きします。シナリオ (外れて操作したときも含む) は localStorage を読まず書かず、いつも最初の値から始まります (2026-10-08 に決定)。スクリーンショットとテストは保存した値に左右されません。
@@ -819,8 +849,8 @@ qniapp/qa2#1891 の YoshiyukiN さんの「FB意見まとめ」の 1・2 番目�
 
 2026-10-08 に、遷移表は 360 行から 408 行に、状態は 211 から 213 に、グループは 66 から 68 に、シナリオは 61 から 63 (22 / 22b) になりました。#1891 の FB 12 で、状態は 211 に戻りました (行の数は変わらない)。#1891 の FB 14 で、遷移表は 325 行から 361 行になりました。
 
-- `index.html#s=22&step=5` - 相手を探している間に Profile のダイアログで 🚀 と "Bring it on!" を選んだところ (見本がすぐ変わる。2026-10-17 の U62 で Ready の手順が増えたので step=4 から変わった)
-- `index.html#s=22&step=9` - × で閉じたあと相手が見つかって、VS 画面のホストのカードに 🚀 "Bring it on!" (同じく step=7 から変わった)
+- `index.html#s=22&step=4` - 相手を探している間に Profile のダイアログで 🚀 と "Bring it on!" を選んだところ (見本がすぐ変わる。2026-10-17 の U62 で step=5 になり、2026-10-27 の U74 で step=4 に戻った)
+- `index.html#s=22&step=7` - × で閉じたあと相手が見つかって、VS 画面のホストのカードに 🚀 "Bring it on!" (同じく step=9 から step=7 に戻った)
 - `index.html#s=22c&step=11` - Ready 画面で Profile を開いたまま、相手が Ready を押して "Opponent is ready. Are you?" になった (ダイアログは閉じない、U68)
 
 ![Profile: 🚀 と Bring it on! を選んだところ](docs/screenshots/78-profile-picked.png)
@@ -1946,6 +1976,10 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
 
 ### 決定済み
 
+- **U74 Random Match の画面は開くとすぐ相手を探す。Ready を待つ画面は無い (U62 を取りやめ)** - 決定 (高宮さん、2026-10-27)  
+  - Random Match の画面は "Searching for an opponent…" と Cancel の 1 状態だけ。メニュー・通知を出したままの Random Match・結果画面の Back to Random Match のどこから来てもすぐ探す。Cancel と ‹ は確認なしで Online Battle へ。
+  - Friend Match の Ready (U31〜U36) は、部屋の 2 人が始めることに合意する別の状態なので残す。
+  詳しくは「2026-10-27 の決定 (U74: Random Match の画面は開くとすぐ探す)」を見てください。
 - **U73 結果画面の Rematch は、Friend Match でもランダム対戦でもいちばん上** - 決定 (高宮さん、#1891 の YoshiyukiN さんの 2026-10-23 の FB)  
   - ランダム対戦の結果画面を Rematch / Find Next Opponent / Back to Random Match にし、Friend Match (Rematch / Back to Friend Match) とそろえる。相手が抜けて Rematch が消えても、ほかのボタンは動かない。Find Next Opponent は主のボタンのまま (U67)。
   詳しくは「2026-10-23 の決定 (U73: Rematch はいちばん上)」を見てください。
@@ -1983,7 +2017,7 @@ Find Next Opponent を押すと、Random Match から探すときと同じ "Sear
   - Join Match で "Join a Match" (Match Code の欄・Join・×) を開き、赤字はその中に出す (2026-10-19 の U69 でトーストにした)。見つからない・期限切れは同じ "Match not found. The code may be wrong or expired."。
   - ホストの ‹ は "Cancel this match?" (Cancel Match / Keep Waiting)、クライアントの ‹ は "Leave this match?" (Leave / Stay)。帯は "The host canceled the match."、ホストの一行は "Your opponent left the match."。
   詳しくは「2026-10-17 の決定 (U63: Friend Match トップは New Match / Join Match、画面に "Room" と書かない)」を見てください。
-- **U62 Random Match の画面は開いただけでは探さない。Ready で探し始め、探している間は同じボタンが Cancel** - 決定 (#1891 の FB の 16・17 番目、2026-10-17)  
+- **U62 Random Match の画面は開いただけでは探さない。Ready で探し始め、探している間は同じボタンが Cancel (2026-10-27 の U74 で取りやめ)** - 決定 (#1891 の FB の 16・17 番目、2026-10-17)  
   - Random Match の画面を開くと大きな Ready を出して待つ。Ready で "Searching for an opponent…"、同じ場所のボタンが Cancel になり、Cancel で Ready を待つ状態に戻る。‹ は Online Battle へ。
   - メニュー・通知を出したままの Random Match・結果画面の Back to Random Match のどこから来ても Ready を待つ状態。Search again / Find Next Opponent はすぐ探す。
   詳しくは「2026-10-17 の決定 (U62: Random Match の画面は Ready で探し始める)」を見てください。

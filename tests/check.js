@@ -968,8 +968,8 @@ for (const [dev, R, , O] of eachSide) {
   const next = `${R}.Matchmake.NextOpponent`;
   const st = (mine) => at(...sides(dev, mine, `${O}.MultiModeSelection`));
   expectFire(st(next), `${dev}.searchTimeout`, ...sides(dev, `${next}.NotFound`, `${O}.MultiModeSelection`));
-  // U62: Cancel は Random Match から探しているときと同じく、Random Match の画面の Ready を待つ状態へ
-  expectFire(st(next), `${dev}.cancelSearch`, ...sides(dev, `${R}.Matchmake`, `${O}.MultiModeSelection`));
+  // U74: Cancel は Random Match から探しているとき (U13) と同じく、確認なしで Online Battle へ
+  expectFire(st(next), `${dev}.cancelSearch`, ...sides(dev, `${R}.MultiModeSelection`, `${O}.MultiModeSelection`));
   expectFire(st(next), `${dev}.back`, ...sides(dev, `${R}.MultiModeSelection`, `${O}.MultiModeSelection`));
   expectFire(st(`${next}.NotFound`), `${dev}.searchAgain`, ...sides(dev, next, `${O}.MultiModeSelection`));
   expectFire(st(`${next}.NotFound`), `${dev}.backToOnlineBattle`, ...sides(dev, `${R}.MultiModeSelection`, `${O}.MultiModeSelection`));
@@ -978,8 +978,7 @@ for (const [dev, R, , O] of eachSide) {
   const nf = SCREENS[`${next}.NotFound`];
   if (!nf.notice || nf.notice.text !== 'No opponent found.' || nf.notice.buttons.map((b) => `${b.label}:${b.event}`).join() !== 'Search again:searchAgain,Back to Online:backToOnlineBattle') fail(`${next}.NotFound の通知が "No opponent found." と Search again / Back to Online でない`);
   if (SCREENS[next].status !== 'Searching for an opponent…') fail(`${next} の表示が Random Match と同じでない`);
-  const found = expectFire(at(...sides(dev, next, `${O}.Matchmake.Searching`)), 'sys.opponentFound', 'Host.Opponent', 'Client.Opponent');
-  if (Engine.canFire(at(...sides(dev, next, `${O}.Matchmake`)), 'sys.opponentFound')) fail(`${O}.Matchmake (Ready を待っている) で相手が見つかる (U62)`);
+  const found = expectFire(at(...sides(dev, next, `${O}.Matchmake`)), 'sys.opponentFound', 'Host.Opponent', 'Client.Opponent');
   if (found && (found.match !== 'random' || found.rated !== true)) fail('次の相手との対戦がレートの変わるランダム対戦になっていない');
 }
 
@@ -1010,22 +1009,22 @@ const flows = {
     [18, 'Host.Opponent / Client.Opponent'], [20, 'Host.Game.Play / Client.Game.Play']],
   '15g': [[15, 'Host.DrawResult / Client.DrawResult'], [16, 'Host.DrawResult.RematchStarting / Client.DrawResult.RematchStarting'], [17, 'Host.Opponent / Client.Opponent'],
     [19, 'Host.Game.Play / Client.Game.Play']],
-  '16d': [[9, 'Host.WinResult / Client.LoseResult'], [10, 'Host.WinResult.OpponentLeft / Client.Matchmake.NextOpponent'], [11, 'Host.Matchmake.NextOpponent / Client.Matchmake.NextOpponent']],
-  '17': [[8, 'Host.WinResult / Client.LoseResult'], [9, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'],
-    [10, 'Host.WinResult.RematchStarting / Client.LoseResult.RematchStarting'], [11, 'Host.Opponent / Client.Opponent'],
-    [14, 'Host.WinResult / Client.LoseResult'], [15, 'Host.Matchmake.NextOpponent / Client.LoseResult.OpponentLeft'],
-    [16, 'Host.Matchmake.NextOpponent / Client.Matchmake'], [17, 'Host.Matchmake.NextOpponent / Client.Matchmake.Searching'], [18, 'Host.Opponent / Client.Opponent']],
-  '17d': [[9, 'Host.WinResult.RematchRequested / Client.LoseResult.RematchIncoming'], [10, 'Host.WinResult.OpponentLeft / Client.Matchmake.NextOpponent'],
-    [11, 'Host.Matchmake / Client.Matchmake.NextOpponent']],
-  '17e': [[9, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [10, 'Host.WinResult / Client.LoseResult'],
-    [11, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [12, 'Host.WinResult.RematchStarting / Client.LoseResult.RematchStarting'],
-    [13, 'Host.Opponent / Client.Opponent'], [15, 'Host.Game.Play / Client.Game.Play']],
-  '17b': [[10, 'Host.Matchmake.NextOpponent.NotFound / Client.LoseResult.OpponentLeft'], [11, 'Host.Matchmake.NextOpponent / Client.LoseResult.OpponentLeft'], [13, 'Host.MultiModeSelection / Client.LoseResult.OpponentLeft']],
+  '16d': [[7, 'Host.WinResult / Client.LoseResult'], [8, 'Host.WinResult.OpponentLeft / Client.Matchmake.NextOpponent'], [9, 'Host.Matchmake.NextOpponent / Client.Matchmake.NextOpponent']],
+  '17': [[6, 'Host.WinResult / Client.LoseResult'], [7, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'],
+    [8, 'Host.WinResult.RematchStarting / Client.LoseResult.RematchStarting'], [9, 'Host.Opponent / Client.Opponent'],
+    [12, 'Host.WinResult / Client.LoseResult'], [13, 'Host.Matchmake.NextOpponent / Client.LoseResult.OpponentLeft'],
+    [14, 'Host.Matchmake.NextOpponent / Client.Matchmake'], [15, 'Host.Opponent / Client.Opponent']],
+  '17d': [[7, 'Host.WinResult.RematchRequested / Client.LoseResult.RematchIncoming'], [8, 'Host.WinResult.OpponentLeft / Client.Matchmake.NextOpponent'],
+    [9, 'Host.Matchmake / Client.Matchmake.NextOpponent']],
+  '17e': [[7, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [8, 'Host.WinResult / Client.LoseResult'],
+    [9, 'Host.WinResult.RematchIncoming / Client.LoseResult.RematchRequested'], [10, 'Host.WinResult.RematchStarting / Client.LoseResult.RematchStarting'],
+    [11, 'Host.Opponent / Client.Opponent'], [13, 'Host.Game.Play / Client.Game.Play']],
+  '17b': [[8, 'Host.Matchmake.NextOpponent.NotFound / Client.LoseResult.OpponentLeft'], [9, 'Host.Matchmake.NextOpponent / Client.LoseResult.OpponentLeft'], [11, 'Host.MultiModeSelection / Client.LoseResult.OpponentLeft']],
   '18': [[15, 'Host.Game.OpponentDisconnected / Client.Game.Disconnected'], [16, 'Host.WinResult.OpponentDisconnected / Client.LoseResult.Disconnected']],
   '18b': [[15, 'Host.Game.Disconnected / Client.Game.OpponentDisconnected'], [16, 'Host.Game.Play / Client.Game.Play'], [17, 'Host.WinResult / Client.LoseResult']],
   '18c': [[16, 'Host.NoContestResult / Client.NoContestResult']],
-  '18d': [[8, 'Host.NoContestResult / Client.NoContestResult'], [10, 'Host.Matchmake / Client.Matchmake.NextOpponent']],
-  '18e': [[9, 'Host.LoseResult.Disconnected / Client.WinResult.OpponentDisconnected']],
+  '18d': [[6, 'Host.NoContestResult / Client.NoContestResult'], [8, 'Host.Matchmake / Client.Matchmake.NextOpponent']],
+  '18e': [[7, 'Host.LoseResult.Disconnected / Client.WinResult.OpponentDisconnected']],
 };
 for (const [id, checks] of Object.entries(flows)) {
   const sc = SCENARIOS.find((x) => x.id === id);
@@ -1107,12 +1106,12 @@ for (const [id, [n, mid, last]] of Object.entries(menuScenarios)) {
 console.log('ok  MATCH MENU: 開いても相手は変わらない / CONTINUE / SURRENDER ですぐ負け (確認は 1 回だけ、U65) + 相手に "Your opponent surrendered"、降参のあとも再戦できる (U66) (両端末)、メニュー中も Win / Lose');
 
 // 決定 (U13a): ランダム対戦は相手が見つかり次第 VS 画面へ。Ready 画面 / Starting match… を挟まない (U31 は Friend Match だけ)。
-// 相手を探す画面は "Searching for an opponent…" と大きな Cancel (Ready を押してから、U62)
+// 相手を探す画面は "Searching for an opponent…" と大きな Cancel (Random Match の画面を開くとすぐ、U74)
 const u13a = UNDECIDED.find((u) => u.id === 'U13a');
 if (!u13a || !u13a.decided) fail('U13a が決定済みになっていない');
 if (!/Friend Match/.test(u31.title)) fail('U31 の題名が Friend Match だけの決定になっていない');
-expectFire(at('Host.Matchmake.Searching', 'Client.Matchmake.Searching'), 'sys.opponentFound', 'Host.Opponent', 'Client.Opponent');
-const randomStates = ['Host.Matchmake.Searching', 'Client.Matchmake.Searching'];
+expectFire(at('Host.Matchmake', 'Client.Matchmake'), 'sys.opponentFound', 'Host.Opponent', 'Client.Opponent');
+const randomStates = ['Host.Matchmake', 'Client.Matchmake'];
 const friendStart = /\.FriendMatch\.Lobby\.(Ready|Starting|StartFailed)/;
 for (const r of TRANSITIONS) {
   const fromRandom = Engine.DEVICES.some((d) => states(r.from[d]).some((s) => s.startsWith('Host.Matchmake') || s.startsWith('Client.Matchmake')));
@@ -1128,13 +1127,13 @@ for (const name of randomStates) {
   if (labels !== 'Cancel' || !s.buttons[0].big || s.buttons[0].event !== 'cancelSearch') fail(`${name} のボタンが大きな Cancel だけでない (${labels})`);
 }
 const sc11 = SCENARIOS.find((x) => x.id === '11');
-const got11 = sc11 ? [1, 2, 3, 4, 5, 6, 7].map((n) => pair(Engine.replay(sc11, n).state)).join(' → ') : 'なし';
-const want11 = 'Host.Matchmake / Client.MultiModeSelection → Host.Matchmake.Searching / Client.MultiModeSelection → Host.Matchmake.Searching / Client.Matchmake → ' +
-  'Host.Matchmake.Searching / Client.Matchmake.Searching → Host.Opponent / Client.Opponent → Host.Game.Countdown / Client.Game.Countdown → Host.Game.Play / Client.Game.Play';
+const got11 = sc11 ? [1, 2, 3, 4, 5].map((n) => pair(Engine.replay(sc11, n).state)).join(' → ') : 'なし';
+const want11 = 'Host.Matchmake / Client.MultiModeSelection → Host.Matchmake / Client.Matchmake → ' +
+  'Host.Opponent / Client.Opponent → Host.Game.Countdown / Client.Game.Countdown → Host.Game.Play / Client.Game.Play';
 if (got11 !== want11) fail(`シナリオ 11 の流れ ${got11} (期待: ${want11})`);
 console.log('ok  U13a: ランダム対戦は相手が見つかり次第 VS 画面、Searching + Cancel');
 
-// 決定 (U13、高宮さん 2026-10-07): 相手を探している間の Cancel / ‹ は確認なし。Cancel は Random Match の画面の Ready を待つ状態へ、‹ は Online Battle へ (U62)。
+// 決定 (U13、高宮さん 2026-10-07): 相手を探している間の Cancel / ‹ は確認なし。どちらも Online Battle へ (U74 で U62 の Ready を待つ状態を無くした)。
 // 探している間に行けるのはその 2 つだけ。アプリを離れると検索を止めて通知 (出し方は U43)、
 // 見つからなければ元の画面 (Online Battle) に "No opponent found." と Search again (→ 探し直す) / Close (→ 通知を閉じる)。
 // 60 秒という長さは仮で、右パネル (説明) と README にだけ書き、端末の画面には出さない
@@ -1148,10 +1147,10 @@ for (const r of TRANSITIONS) {
 if (!/60 秒という長さは仮/.test(SCREENS['Host.Matchmake.NotFound'].context)) fail('"No opponent found." の右パネルの説明に「60 秒という長さは仮」が無い');
 for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Host']]) {
   const pair3 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
-  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`, `${O}.Matchmake.Searching`, `${O}.Matchmake.NotFound`, `${O}.FriendMatch.Room`]) {
+  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`, `${O}.Matchmake.NotFound`, `${O}.FriendMatch.Room`]) {
     const st = (mine) => at(...pair3(mine, theirs));
-    const [idle, search, stopped, notFound, online] = [`${R}.Matchmake`, `${R}.Matchmake.Searching`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`, `${R}.MultiModeSelection`];
-    for (const [ev, dest] of [['cancelSearch', idle], ['back', online]]) {
+    const [search, stopped, notFound, online] = [`${R}.Matchmake`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`, `${R}.MultiModeSelection`];
+    for (const [ev, dest] of [['cancelSearch', online], ['back', online]]) {
       const res = Engine.fire(st(search), `${dev}.${ev}`);
       if (!res || res.state[dev + 'Dialog']) fail(`${search} の ${ev} で確認ダイアログが出る`);
       expectFire(st(search), `${dev}.${ev}`, ...pair3(dest, theirs));
@@ -1164,13 +1163,13 @@ for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Hos
     }
   }
   // 探している間に押せるのは Cancel / ‹ とモック操作 (アプリを離れる・60 秒たつ) と Profile (画面はそのままダイアログを開く、#1891 の FB 12) だけで、
-  // 行き先は Ready を待つ状態・Online Battle か通知
+  // 行き先は Online Battle か通知
   const devEvents = Object.keys(EVENT_LABELS).filter((ev) => ev.startsWith(dev + '.'));
   const allowed = ['cancelSearch', 'back', 'leaveApp', 'searchTimeout', 'profile'].map((e) => `${dev}.${e}`);
   for (const ev of devEvents) {
-    const res = Engine.fire(at('Host.Matchmake.Searching', 'Client.Matchmake.Searching'), ev);
-    if (res && !allowed.includes(ev)) fail(`${R}.Matchmake.Searching で ${ev} の行がある (探している間はほかの画面へ行けない)`);
-    if (res && ![`${R}.Matchmake`, `${R}.MultiModeSelection`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`].concat(ev === `${dev}.profile` ? [`${R}.Matchmake.Searching`] : []).includes(res.state[dev])) fail(`${R}.Matchmake.Searching から ${ev} で ${res.state[dev]} へ行く`);
+    const res = Engine.fire(at('Host.Matchmake', 'Client.Matchmake'), ev);
+    if (res && !allowed.includes(ev)) fail(`${R}.Matchmake で ${ev} の行がある (探している間はほかの画面へ行けない)`);
+    if (res && ![`${R}.MultiModeSelection`, `${R}.Matchmake.Stopped`, `${R}.Matchmake.NotFound`].concat(ev === `${dev}.profile` ? [`${R}.Matchmake`] : []).includes(res.state[dev])) fail(`${R}.Matchmake から ${ev} で ${res.state[dev]} へ行く`);
   }
   // "No opponent found." (モーダル) を出している間に押せるのは Search again / Close だけ
   const notFoundSt = at(...pair3(`${R}.Matchmake.NotFound`, `${O}.MultiModeSelection`));
@@ -1188,33 +1187,27 @@ for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Hos
     if (!s.decided.includes('U13')) fail(`${name} に決定 U13 が無い`);
   }
   if (SCREENS[`${R}.Matchmake.Stopped`].notice) fail(`${R}.Matchmake.Stopped の通知がモーダル (U43 はモーダルにしない)`);
-  for (const name of [`${R}.Matchmake`, `${R}.Matchmake.Searching`]) if (SCREENS[name].undecided.length) fail(`${name} に未決 ${SCREENS[name].undecided} が残っている`);
+  for (const name of [`${R}.Matchmake`]) if (SCREENS[name].undecided.length) fail(`${name} に未決 ${SCREENS[name].undecided} が残っている`);
 }
 if (!/leaveApp/.test(appJs) || !/searchTimeout/.test(appJs) || !/mockControlsHtml/.test(appJs)) fail('app.js の端末の下のモック操作に「アプリを離れる」「60 秒たつ」が無い');
 // [手順ごとの状態] (11b〜11f)
 const u13Scenarios = {
-  '11b': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake / Client.MultiModeSelection',
-    'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection',
+  '11b': ['Host.Matchmake / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection',
     'Host.Matchmake / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection'],
-  '11c': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection',
-    'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.Matchmake', 'Host.Matchmake.Searching / Client.Matchmake.Searching',
-    'Host.Opponent / Client.Opponent'],
-  '11d': ['Host.MultiModeSelection / Client.Matchmake', 'Host.MultiModeSelection / Client.Matchmake.Searching', 'Host.MultiModeSelection / Client.Matchmake.Stopped',
-    'Host.MultiModeSelection / Client.MultiModeSelection'],
-  '11e': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake.NotFound / Client.MultiModeSelection',
-    'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.Matchmake', 'Host.Matchmake.Searching / Client.Matchmake.Searching',
-    'Host.Opponent / Client.Opponent'],
-  '11f': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake.NotFound / Client.MultiModeSelection',
-    'Host.MultiModeSelection / Client.MultiModeSelection'],
-  '11h': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection',
-    'Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.MultiModeSelection'],
+  '11c': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection',
+    'Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake / Client.Matchmake', 'Host.Opponent / Client.Opponent'],
+  '11d': ['Host.MultiModeSelection / Client.Matchmake', 'Host.MultiModeSelection / Client.Matchmake.Stopped', 'Host.MultiModeSelection / Client.MultiModeSelection'],
+  '11e': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.NotFound / Client.MultiModeSelection',
+    'Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake / Client.Matchmake', 'Host.Opponent / Client.Opponent'],
+  '11f': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.NotFound / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection'],
+  '11h': ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection', 'Host.Matchmake / Client.MultiModeSelection'],
 };
 for (const [id, want] of Object.entries(u13Scenarios)) {
   const sc = SCENARIOS.find((x) => x.id === id);
   const got = sc ? want.map((_, i) => pair(Engine.replay(sc, i + 1).state)) : [];
   if (!sc || sc.steps.length !== want.length || got.join() !== want.join()) fail(`シナリオ ${id} の流れ ${got.join(' → ')} (期待: ${want.join(' → ')})`);
 }
-console.log('ok  U13: Cancel は確認なしで Ready 待ち、‹ は確認なしで Online Battle、アプリを離れると "Search stopped…"、見つからなければ "No opponent found." (Search again / Close) (両端末)');
+console.log('ok  U13: Cancel と ‹ は確認なしで Online Battle (U74)、アプリを離れると "Search stopped…"、見つからなければ "No opponent found." (Search again / Close) (両端末)');
 
 // 決定 (U43、高宮さん 2026-10-07): アプリを離れて検索が止まったら、戻ったときに Online Battle の中に通知のボックス (モーダルではない)。
 // 文言 "Search stopped while the app was in the background."、ボタンは Search again (新しく探す) / Close。
@@ -1235,7 +1228,7 @@ for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Hos
   // Online Battle で押せるもの (Random Match / Friend Match) は、通知を出している間も同じ行き先へ行ける。行き先に通知は無い
   const online = SCREENS[`${R}.MultiModeSelection`];
   if (SCREENS[stopped].items.map((i) => i.event).join() !== online.items.map((i) => i.event).join()) fail(`${stopped} のメニューが Online Battle と違う`);
-  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`, `${O}.Matchmake.Searching`, `${O}.FriendMatch.Room`]) {
+  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`, `${O}.FriendMatch.Room`]) {
     for (const it of online.items) {
       const ev = `${dev}.${it.event}`;
       const want = Engine.fire(at(...pair3(`${R}.MultiModeSelection`, theirs)), ev);
@@ -1260,7 +1253,7 @@ if (!/inlineNoticeHtml\(dev, s\.inlineNotice\)/.test(appJs)) fail('app.js が On
 if (!/\.inline-notice\s*\{/.test(read('css', 'style.css'))) fail('style.css に .inline-notice が無い');
 // [手順ごとの状態] 11g: 通知を出したまま Friend Match → ‹ で戻っても通知は出ない
 {
-  const want = ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Searching / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection',
+  const want = ['Host.Matchmake / Client.MultiModeSelection', 'Host.Matchmake.Stopped / Client.MultiModeSelection',
     'Host.FriendMatch.Room / Client.MultiModeSelection', 'Host.MultiModeSelection / Client.MultiModeSelection'];
   const sc = SCENARIOS.find((x) => x.id === '11g');
   const got = sc ? want.map((_, i) => pair(Engine.replay(sc, i + 1).state)) : [];
@@ -1268,49 +1261,38 @@ if (!/\.inline-notice\s*\{/.test(read('css', 'style.css'))) fail('style.css に 
 }
 console.log('ok  U43: 検索が止まった通知は Online Battle の中 (モーダルではない)、Search again / Close、ほかの画面へ移ると消え、自動では消えない (両端末)');
 
-// 決定 (U62、#1891 の FB 16・17): Random Match の画面は開いただけでは探さない。大きな Ready で探し始め、探している間は同じ場所のボタンが Cancel になり、
-// Cancel で Ready を待つ状態に戻る。Random Match の画面へはどこから来ても Ready を待つ状態 (Search again / Find Next Opponent だけはすぐ探す)
-const u61 = UNDECIDED.find((u) => u.id === 'U62');
-if (!u61 || !u61.decided || u61.decided.date !== '2026-10-17' || !/#1891/.test(u61.desc)) fail('U62 が #1891 の FB (2026-10-17) の決定になっていない');
+// 決定 (U74、高宮さん 2026-10-27): Random Match の画面は開くとすぐ相手を探す。Ready を待つ状態と Ready のボタン (startSearch) は無い (U62 を取りやめ)。
+// Random Match の画面へのどの入口 (メニュー・通知の Random Match、結果画面の Back to Random Match) も探している状態へ着き、
+// Cancel と ‹ はどちらも Online Battle へ (Find Next Opponent で探しているときも)。Friend Match の Ready (U31) は別の状態なので残す
+const u74 = UNDECIDED.find((u) => u.id === 'U74');
+if (!u74 || !u74.decided || u74.decided.by !== '高宮さん' || u74.decided.date !== '2026-10-27') fail('U74 が 高宮さん 2026-10-27 の決定になっていない');
+if (u74 && !/Friend Match の Ready/.test(u74.desc)) fail('U74 の説明に Friend Match の Ready の扱いが無い');
+const u62 = UNDECIDED.find((u) => u.id === 'U62');
+if (!u62 || !/U74 で取りやめ/.test(u62.title)) fail('U62 の題名に U74 で取りやめたことが無い');
+if (Object.keys(SCREENS).some((n) => /\.Matchmake\.Searching$/.test(n))) fail('Random Match の Ready を待つ状態と別の *.Matchmake.Searching が残っている');
+if (Object.keys(EVENT_LABELS).some((e) => /\.startSearch$/.test(e)) || TRANSITIONS.some((r) => /\.startSearch$/.test(r.event))) fail('Random Match の Ready (startSearch) が残っている');
+// Random Match の画面 (view: random) は、相手を探している画面 ("Searching for an opponent…" と Cancel) か、見つからなかった通知だけ
+for (const [name, sc] of Object.entries(SCREENS)) {
+  if (sc.view !== 'random') continue;
+  const searchingScreen = sc.status === 'Searching for an opponent…' && sc.buttons.map((b) => b.event).join() === 'cancelSearch';
+  if (!searchingScreen && !sc.notice) fail(`${name} が相手を探している画面でも通知でもない Random Match の画面 (U74)`);
+  if (sc.buttons.some((b) => b.label === 'Ready')) fail(`${name} に Ready のボタンがある (U74)`);
+}
 for (const [dev, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Host']]) {
   const pair3 = (mine, theirs) => (dev === 'host' ? [mine, theirs] : [theirs, mine]);
-  const [idle, search, online] = [`${R}.Matchmake`, `${R}.Matchmake.Searching`, `${R}.MultiModeSelection`];
-  const idleScreen = SCREENS[idle];
-  const searchScreen = SCREENS[search];
-  if (idleScreen.view !== 'random' || idleScreen.title !== 'Random Match' || idleScreen.status) fail(`${idle} が "Searching…" の無い Random Match の画面でない`);
-  const btn = (s) => s.buttons.map((b) => `${b.label}:${b.event}:${!!b.big}`).join();
-  if (btn(idleScreen) !== 'Ready:startSearch:true' || !idleScreen.buttons[0].primary) fail(`${idle} のボタンが大きな Ready だけでない (${btn(idleScreen)})`);
-  if (btn(searchScreen) !== 'Cancel:cancelSearch:true') fail(`${search} のボタンが大きな Cancel だけでない (${btn(searchScreen)})`);
-  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`, `${O}.Matchmake.Searching`]) {
+  const [search, online] = [`${R}.Matchmake`, `${R}.MultiModeSelection`];
+  for (const theirs of [`${O}.MultiModeSelection`, `${O}.Matchmake`]) {
     const st = (mine) => at(...pair3(mine, theirs));
-    expectFire(st(online), `${dev}.randomMatch`, ...pair3(idle, theirs));
-    expectFire(st(idle), `${dev}.startSearch`, ...pair3(search, theirs));
-    expectFire(st(idle), `${dev}.back`, ...pair3(online, theirs));
-    expectFire(st(search), `${dev}.cancelSearch`, ...pair3(idle, theirs));
-    // Ready を待っている間は相手が見つからない (自動でも)
-    if (Engine.canFire(st(idle), 'sys.opponentFound')) fail(`${idle} (相手 ${theirs}) で相手が見つかる`);
+    expectFire(st(online), `${dev}.randomMatch`, ...pair3(search, theirs));
+    for (const k of ['Stopped', 'MatchCancelled', 'ReconnectFailed']) expectFire(st(`${R}.Matchmake.${k}`), `${dev}.randomMatch`, ...pair3(search, theirs));
+    for (const from of [search, `${R}.Matchmake.NextOpponent`]) for (const ev of ['cancelSearch', 'back']) expectFire(st(from), `${dev}.${ev}`, ...pair3(online, theirs));
   }
-  // Ready を待っている間に押せるのは Ready と ‹ と Profile (画面はそのままダイアログを開く、#1891 の FB 12) だけ
-  const idleSt = at(...pair3(idle, `${O}.MultiModeSelection`));
-  for (const ev of Object.keys(EVENT_LABELS).filter((e) => e.startsWith(dev + '.'))) {
-    if (Engine.canFire(idleSt, ev) && ![`${dev}.startSearch`, `${dev}.back`, `${dev}.profile`].includes(ev)) fail(`${idle} で ${ev} の行がある`);
-  }
-  if (!idleScreen.profile) fail(`${idle} に Profile が無い (#1891 の FB 12: Random Match の画面で開ける)`);
-  expectFire(at(...pair3(idle, `${O}.MultiModeSelection`)), `${dev}.profile`, ...pair3(idle, `${O}.MultiModeSelection`));
 }
-// Random Match の画面へ入る行はすべて Ready を待つ状態へ着く。すぐ探すのは、はっきり探し直すボタン (Search again / Find Next Opponent) だけ
-const isRandomView = (name) => !!SCREENS[name] && SCREENS[name].view === 'random';
-for (const r of TRANSITIONS) {
-  const d = Engine.deviceOf(r.event);
-  if (d === null) continue;
-  const to = r.to[d];
-  if (typeof to !== 'string' || !isRandomView(to) || states(r.from[d]).every(isRandomView)) continue;
-  const action = r.event.slice(d.length + 1);
-  const ok = /\.Matchmake$/.test(to) || (['searchAgain', 'findNextOpponent'].includes(action) && /\.Matchmake\.(Searching|NextOpponent)$/.test(to));
-  if (!ok) fail(`${r.id}: ${r.event} で Random Match の画面の ${to} へ着く (Ready を待つ状態でない、U62)`);
-}
-for (const r of TRANSITIONS) if (/^(host|client)\.(randomMatch|backToRandomMatch)$/.test(r.event) && !/\.Matchmake$/.test(r.to[Engine.deviceOf(r.event)])) fail(`${r.id}: ${r.event} が Ready を待つ状態へ行かない`);
-console.log('ok  U62: Random Match の画面は Ready を待って始まり (メニュー・通知・結果画面のどこからでも)、Ready で探し、Cancel で Ready 待ちに戻る (両端末)');
+// 結果画面の Back to Random Match も、メニューの Random Match と同じく探している状態へ
+for (const r of TRANSITIONS) if (/^(host|client)\.(randomMatch|backToRandomMatch)$/.test(r.event) && !/\.Matchmake$/.test(r.to[Engine.deviceOf(r.event)])) fail(`${r.id}: ${r.event} が相手を探している状態 (*.Matchmake) へ行かない`);
+// Friend Match の Ready (U31) は残す
+for (const d of Engine.DEVICES) if (!TRANSITIONS.some((r) => r.event === `${d}.ready`)) fail(`Friend Match の Ready (${d}.ready) の行が無い (U31 は残す)`);
+console.log('ok  U74: Random Match の画面は開くとすぐ探し (メニュー・通知・結果画面のどこからでも)、Ready を待つ状態は無く、Cancel / ‹ は Online Battle へ (両端末)。Friend Match の Ready は残る');
 
 // 端末の画面にはゲームが出すものだけ: 決定の注記や「決定」バッジは端末の中にも端末の上にも出さない (右パネルへ)
 if (/decided-note|decidedNoteHtml|GAME_COUNTDOWN_PREMISE/.test(appJs)) fail('app.js が端末の画面に決定の注記を出している');
@@ -1469,7 +1451,7 @@ for (const [d, R, , O] of eachSideAll) {
     if (!sc || sc.view !== 'online' || !sc.inlineNotice || sc.notice || sc.inlineNotice.text !== text ||
       sc.inlineNotice.buttons.map((b) => `${b.label}:${b.event}`).join() !== 'Search again:searchAgain,Close:closeNotice') fail(`${name} が "${text}" と Search again / Close の Online Battle の中の通知でない`);
     const st = at(...side(name, `${O}.MultiModeSelection`));
-    expectFire(st, `${d}.searchAgain`, ...side(`${R}.Matchmake.Searching`, `${O}.MultiModeSelection`));
+    expectFire(st, `${d}.searchAgain`, ...side(`${R}.Matchmake`, `${O}.MultiModeSelection`));
     expectFire(st, `${d}.closeNotice`, ...side(`${R}.MultiModeSelection`, `${O}.MultiModeSelection`));
     expectFire(st, `${d}.friendMatch`, ...side(`${R}.FriendMatch.Room`, `${O}.MultiModeSelection`));
   }
@@ -1544,23 +1526,23 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   }
   if (/PLAYERS\[[^\]]+\]\.(emoji|greeting)|\bp\.(emoji|greeting)/.test(appJs)) fail('app.js が絵文字とあいさつを PLAYERS から読んでいる (保存した値・固定した値を使う)');
 
-  // 開けるのは Random Match (Ready を待っている画面 (U62) と相手を探している画面)、Friend Match トップ (#1891 の FB 12。Join a Match を開いている間は除く、U63)、
+  // 開けるのは Random Match (相手を探している画面)、Friend Match トップ (#1891 の FB 12。Join a Match を開いている間は除く、U63)、
   // ‹ を押せる部屋の画面 (期限切れを除く、U68)。今の画面の上にダイアログで開く。Online Battle・対戦中には行もボタンも無く、専用の Profile 画面は無い
   if (Object.keys(SCREENS).some((n) => /\.Profile$/.test(n)) || Object.values(SCREENS).some((sp) => sp.view === 'profile')) fail('専用の Profile 画面が残っている');
   if (/\.Profile\b/.test(read('js', 'scenarios.js'))) fail('シナリオに Profile 画面が残っている');
   if (!/FB 12/.test(u56.desc) || !/#1891/.test(u56.desc)) fail('U56 の説明に #1891 の FB 12 (入口をダイアログに変えた) が無い');
   for (const [d, R, O] of [['host', 'Host', 'Client'], ['client', 'Client', 'Host']]) {
-    const searching = [`${R}.Matchmake.Searching`, `${R}.Matchmake.NextOpponent`];
+    const searching = [`${R}.Matchmake`, `${R}.Matchmake.NextOpponent`];
     // Join a Match のダイアログ (U63) を開いている間はモーダルなので、Profile のボタンは後ろに見えるが押せない (‹ と同じ)
     const friendTopAll = Object.keys(SCREENS).filter((n) => n.startsWith(`${R}.FriendMatch.Room`));
     const friendTop = friendTopAll.filter((n) => !SCREENS[n].join);
     // U68 (#1891 の FB): Match Code を出している部屋の画面のうち、‹ を押せるもの (送っている間・読み込み・自分の再接続中は ‹ を押せない) と期限切れ以外
     const lobby = Object.keys(SCREENS).filter((n) => n.startsWith(`${R}.FriendMatch.Lobby.`) && SCREENS[n].back === 'back' && !/\.CodeExpired$/.test(n));
     if (lobby.length < (R === 'Host' ? 15 : 12) || !lobby.includes(L(R, 'Ready')) || !lobby.includes(L(R, 'Ready.WaitingForOpponent'))) fail(`${R} の Profile を開ける部屋の画面が ${lobby.join(', ')}`);
-    const openable = searching.concat([`${R}.Matchmake`], friendTop, lobby);
+    const openable = searching.concat(friendTop, lobby);
     if (friendTop.length < (R === 'Host' ? 4 : 6)) fail(`${R} の Friend Match トップの状態が ${friendTop.length} 個しかない`);
     if (R === 'Client' && friendTopAll.length - friendTop.length < 15) fail('Client の Join a Match を開いた状態が少ない');
-    const others = [`${O}.MultiModeSelection`, L(O, 'Ready'), `${O}.Game.Play`, `${O}.Matchmake.Searching`];
+    const others = [`${O}.MultiModeSelection`, L(O, 'Ready'), `${O}.Game.Play`, `${O}.Matchmake`];
     for (const name of Object.keys(SCREENS).filter((n) => n.startsWith(R + '.'))) {
       for (const o of others) {
         const st = d === 'host' ? at(name, o) : at(o, name);
@@ -1574,9 +1556,9 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
       const hasButton = !!SCREENS[name].profile || (SCREENS[name].items || []).some((it) => it.event === 'profile');
       if (hasButton !== (openable.includes(name) || friendTopAll.includes(name))) fail(`${name} の Profile のボタンが ${hasButton ? 'ある' : '無い'}`);
     }
-    if (!SCREENS[`${R}.Matchmake`].profile || !SCREENS[`${R}.Matchmake.Searching`].profile || SCREENS[`${R}.Matchmake`].title !== 'Random Match' || SCREENS[`${R}.FriendMatch.Room`].title !== 'Friend Match') fail(`${R} の Random Match / Friend Match の画面に Profile が無い`);
+    if (!SCREENS[`${R}.Matchmake`].profile || SCREENS[`${R}.Matchmake`].title !== 'Random Match' || SCREENS[`${R}.FriendMatch.Room`].title !== 'Friend Match') fail(`${R} の Random Match / Friend Match の画面に Profile が無い`);
     if (Engine.canFire(at(`${R}.MultiModeSelection`, `${O}.MultiModeSelection`), `${d}.profile`)) fail(`${R}: Online Battle から Profile を開ける`);
-    // ダイアログの中の操作は、絵文字 10 個・あいさつ 10 個 (相手を探している間、部屋の画面 (U68)、探していない間 (Ready を待っている・Friend Match トップ) で 1 行ずつ)・× で閉じるだけ。
+    // ダイアログの中の操作は、絵文字 10 個・あいさつ 10 個 (相手を探している間、部屋の画面 (U68)、探していない間 (Friend Match トップ) で 1 行ずつ)・× で閉じるだけ。
     // Save / Cancel は無い (#1891 の FB 14)。どれも画面はそのまま
     const inDialog = TRANSITIONS.filter((r) => r.from[d + 'Dialog'] === 'profile');
     const picks = PROFILE_EMOJIS.map((e) => `dialog.pickEmoji.${e.id}`).concat(PROFILE_GREETINGS.map((g) => `dialog.pickGreeting.${g.id}`));
@@ -1592,14 +1574,14 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
     if (!pfHtml.includes(`'<button type="button" class="d-close" aria-label="Close"' + attrs(dev, d.close) + '>\\u00d7</button>'`)) fail('Profile のダイアログの右上に × (Close) が無い (U64)');
     if (/pf-back|aria-label="Back"|Saved|ProfileSaved/.test(pfHtml) || /pf-back|pf-saved/.test(read('css', 'style.css')) || 'ProfileSaved' in ctx.DEVICE_FIELDS) fail('Profile のダイアログに ‹ (Back) か "Saved" が残っている (U64)');
     // 選ぶとすぐ保存し、見本が変わる (#1891 の FB 14)。× で閉じても保存した値のまま、次に開くとその値から。どちらでも画面はそのまま
-    for (const where of [`${R}.Matchmake.Searching`, `${R}.Matchmake`, `${R}.FriendMatch.Room`, L(R, 'Ready'), L(R, 'Ready.WaitingForOpponent')]) {
+    for (const where of [`${R}.Matchmake`, `${R}.FriendMatch.Room`, L(R, 'Ready'), L(R, 'Ready.WaitingForOpponent')]) {
       const open = (st) => Engine.fire(st, `${d}.profile`);
       const st = d === 'host' ? at(where, `${O}.MultiModeSelection`) : at(`${O}.MultiModeSelection`, where);
       const pick = (s, e, g) => [`${d}.dialog.pickEmoji.${e}`, `${d}.dialog.pickGreeting.${g}`].reduce((x, ev) => { const r = Engine.fire(x, ev); if (!r) fail(`${ev} の行が無い`); return r ? r.state : x; }, s);
       const before = `${st[d + 'Emoji']} ${say(st[d + 'Greeting'])}`;
       let o = open(st).state;
       if (`${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== before) fail(`${where}: Profile を開いたときに値が変わる`);
-      for (const ev of ['back', 'cancelSearch', 'startSearch', 'createMatch', 'ready', 'cancelReady', 'copyCode']) if (Engine.canFire(o, `${d}.${ev}`)) fail(`${where}: Profile のダイアログの後ろの画面を操作できる (${ev}、モーダルでない)`);
+      for (const ev of ['back', 'cancelSearch', 'createMatch', 'ready', 'cancelReady', 'copyCode']) if (Engine.canFire(o, `${d}.${ev}`)) fail(`${where}: Profile のダイアログの後ろの画面を操作できる (${ev}、モーダルでない)`);
       o = pick(o, 'robot', 'goodLuck');
       if (o[d] !== where || o[d + 'Dialog'] !== 'profile' || `${o[d + 'Emoji']} ${say(o[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: Profile で選んでもすぐ保存されない`);
       // 相手を探している間と部屋の画面 (U68) で選んだものは、この対戦の相手に見せる値にもなる
@@ -1611,7 +1593,7 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
       if (`${reopenedHere[d + 'Emoji']} ${say(reopenedHere[d + 'Greeting'])}` !== '\u{1F916} Good luck!') fail(`${where}: Profile をもう一度開くと保存した値から始まらない`);
     }
     // Profile を開けない画面へ変わる (相手が見つかる) とダイアログは閉じる。選んだものは保存済みで、見つかった相手にも見える
-    const both = Engine.fire(pickState(at('Host.Matchmake.Searching', 'Client.Matchmake.Searching'), d), 'sys.opponentFound');
+    const both = Engine.fire(pickState(at('Host.Matchmake', 'Client.Matchmake'), d), 'sys.opponentFound');
     if (!both || both.state[d] !== `${R}.Opponent` || both.state[d + 'Dialog'] !== null || both.state[d + 'Emoji'] !== '\u{1F680}' || both.state[d + 'ShownEmoji'] !== '\u{1F680}') fail(`${R}: 相手が見つかっても Profile のダイアログが閉じないか、選んだものが保存されていない`);
     // U68: 部屋の中で画面が変わる (相手が Ready を押す・相手が切断する) ときは開いたまま。読み込みが始まる・期限が切れると閉じる
     const go = (st, evs) => evs.reduce((x, ev) => { const r = x && Engine.fire(x, ev); if (x && !r) fail(`U68: ${ev} の行が無い (${x.host} / ${x.client})`); return r && r.state; }, st);
@@ -1648,33 +1630,27 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   if (shown(next, 'host') !== '\u{1F680} Bring it on!' || shown(next, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`次の部屋を作っても新しい値にならない (${shown(next, 'host')} / ${shown(next, 'client')})`);
   next = run(next, ['client.openJoin', 'client.enterCode', 'client.joinMatch'], '次の部屋');
   if (shown(next, 'client') !== '\u{1F340} Have fun!') fail(`次の部屋に入っても新しい値にならない (${shown(next, 'client')})`);
-  // 次の検索から: 探していないとき (Friend Match トップ、Random Match で Ready を待っている間) に保存しただけでは変わらず、
-  // Random Match の Ready / Search again / Find Next Opponent で新しい値。Random Match の画面を開いただけ (U62) では固定しない。
+  // 次の検索から: 探していないとき (Friend Match トップ) に保存しただけでは変わらず、
+  // Random Match (開くとすぐ探す、U74)・Search again・Find Next Opponent・Back to Random Match で新しい値。
   // 相手を探している間に選んだものは、まだ相手がいないので見つかる相手に見える (#1891 の FB 12 / FB 14)
   let srch = run(Engine.initialState(), ['host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.robot', 'host.dialog.closeProfile', 'host.back'], '検索');
   if (srch && srch.hostShownEmoji !== null) fail('検索の前に相手に見せる値が決まっている');
   srch = run(srch, ['host.randomMatch'], '検索');
-  if (srch && srch.hostShownEmoji !== null) fail('Random Match の画面を開いただけで値が固定される (U62: Ready で探し始めるときに固定する)');
-  srch = run(srch, ['host.startSearch'], '検索');
-  if (srch && srch.hostShownEmoji !== '\u{1F916}') fail('Random Match の Ready で値が固定されない');
+  if (srch && srch.hostShownEmoji !== '\u{1F916}') fail('Random Match の画面を開いて探し始めても値が固定されない (U74)');
   srch = run(srch, ['host.leaveApp', 'host.friendMatch', 'host.profile', 'host.dialog.pickEmoji.star', 'host.dialog.closeProfile'], '検索');
   if (srch && srch.hostShownEmoji !== '\u{1F916}') fail('探していないときに保存しただけで、相手に見せる値が変わる');
-  srch = run(srch, ['host.back', 'host.randomMatch', 'host.profile', 'host.dialog.pickGreeting.haveFun', 'host.dialog.closeProfile'], '検索');
-  if (shown(srch, 'host') !== '\u{1F916} Hello!') fail(`Random Match で Ready を待っている間に選んだだけで、相手に見せる値が変わる (${shown(srch, 'host')})`);
-  srch = run(srch, ['host.startSearch'], '検索');
-  if (shown(srch, 'host') !== '\u{1F31F} Have fun!') fail(`Ready を待っている間に選んだものが、Ready で固定されない (${shown(srch, 'host')})`);
+  srch = run(srch, ['host.back', 'host.randomMatch'], '検索');
+  if (shown(srch, 'host') !== '\u{1F31F} Hello!') fail(`探していないときに選んだものが、次に Random Match を開いたときに固定されない (${shown(srch, 'host')})`);
   srch = run(srch, ['host.profile', 'host.dialog.pickGreeting.letsGo'], '検索');
   if (shown(srch, 'host') !== '\u{1F31F} Let\u2019s go!' || `${srch.hostEmoji} ${say(srch.hostGreeting)}` !== '\u{1F31F} Let\u2019s go!') fail(`相手を探している間に選んだものが、見つかる相手に見える値にならない (${shown(srch, 'host')})`);
   srch = run(srch, ['host.dialog.closeProfile'], '検索');
-  srch = run(srch, ['client.randomMatch', 'client.startSearch', 'sys.opponentFound'], '検索');
+  srch = run(srch, ['client.randomMatch', 'sys.opponentFound'], '検索');
   if (shown(srch, 'host') !== '\u{1F31F} Let\u2019s go!') fail(`探している間に保存した値が VS 画面に出ない (${shown(srch, 'host')})`);
   srch = Object.assign({}, run(srch, ['vs.done', 'game.countdownDone', 'host.win'], '検索'), { hostEmoji: '\u{1F9E0}' });
   const nextOpp = run(srch, ['host.findNextOpponent'], '検索');
   if (nextOpp && nextOpp.hostShownEmoji !== '\u{1F9E0}') fail('Find Next Opponent で値が固定されない');
-  let backToRandom = run(srch, ['host.backToRandomMatch'], '検索');
-  if (backToRandom && backToRandom.hostShownEmoji !== '\u{1F31F}') fail('Back to Random Match (Ready を待つだけ) で値が変わる (U59 / U62: メニューの Random Match と同じ)');
-  backToRandom = run(backToRandom, ['host.startSearch'], '検索');
-  if (backToRandom && backToRandom.hostShownEmoji !== '\u{1F9E0}') fail('Back to Random Match のあとの Ready で値が固定されない');
+  const backToRandom = run(srch, ['host.backToRandomMatch'], '検索');
+  if (backToRandom && backToRandom.hostShownEmoji !== '\u{1F9E0}') fail('Back to Random Match (すぐ探す、U59 / U74) で値が固定されない');
   const rematch = run(srch, ['client.rematch', 'host.rematch'], '再戦');
   if (rematch && rematch.hostShownEmoji !== '\u{1F31F}') fail('同じ相手との再戦で固定した値が変わる (次の部屋・次の検索ではない)');
   // 固定する行の一覧: イベントが部屋を作る・入る・探し始めるもので、行き先が部屋の画面か相手を探す画面 (失敗や Match Code の誤りの行には無い)。
@@ -1682,13 +1658,13 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
   for (const r of TRANSITIONS) {
     const d = Engine.deviceOf(r.event);
     const copies = !!(r.copy && r.copy[d + 'ShownEmoji']);
-    const want = d !== null && /\.(createMatch|dialog\.createMatch|joinMatch|startSearch|searchAgain|findNextOpponent)$/.test(r.event) &&
-      /\.(FriendMatch\.Lobby\.|Matchmake\.Searching$|Matchmake\.NextOpponent$)/.test(r.to[d]);
+    const want = d !== null && /\.(createMatch|dialog\.createMatch|joinMatch|randomMatch|backToRandomMatch|searchAgain|findNextOpponent)$/.test(r.event) &&
+      /\.(FriendMatch\.Lobby\.|Matchmake$|Matchmake\.NextOpponent$)/.test(r.to[d]);
     if (copies !== want) fail(`${r.id} (${r.event} → ${r.to[d]}): 相手に見せる値を${copies ? '固定する' : '固定しない'}`);
     if (copies && !r.decided.includes('U56')) fail(`${r.id}: 値を固定する行に決定 U56 が無い`);
     const m = /\.dialog\.pick(Emoji|Greeting)\./.exec(r.event);
     if (m) {
-      const whileSearching = states(r.from[d]).every((n) => /\.Matchmake\.(Searching|NextOpponent)$|\.FriendMatch\.Lobby\./.test(n));
+      const whileSearching = states(r.from[d]).every((n) => /\.Matchmake(\.NextOpponent)?$|\.FriendMatch\.Lobby\./.test(n));
       const writes = !!r.set && (d + 'Shown' + m[1]) in r.set;
       if (writes !== whileSearching || (writes && r.set[d + 'Shown' + m[1]] !== r.set[d + m[1]])) fail(`${r.id}: 相手を探している間・部屋の画面${whileSearching ? '' : 'の外'}で選んだ値を相手に見せる値へ${writes ? '書く' : '書かない'}`);
     }
@@ -1703,9 +1679,9 @@ console.log('ok  U44〜U55 (2026-10-08): 時間切れの決着、再戦なし、
 
   // シナリオ 22: 相手を探している間に選ぶ (すぐ保存) → ランダム対戦の VS 画面に出る。再戦の VS 画面にもあいさつは出る
   const sc22 = SCENARIOS.find((x) => x.id === '22');
-  const vs22 = sc22 && Engine.replay(sc22, 9).state;
-  const search22 = sc22 && Engine.replay(sc22, 5).state;
-  if (!search22 || search22.host !== 'Host.Matchmake.Searching' || search22.hostDialog !== 'profile' || search22.hostEmoji !== '\u{1F680}') fail('シナリオ 22 で相手を探している間に Profile のダイアログが開いていないか、選んだものが保存されていない');
+  const vs22 = sc22 && Engine.replay(sc22, 7).state;
+  const search22 = sc22 && Engine.replay(sc22, 4).state;
+  if (!search22 || search22.host !== 'Host.Matchmake' || search22.hostDialog !== 'profile' || search22.hostEmoji !== '\u{1F680}') fail('シナリオ 22 で相手を探している間に Profile のダイアログが開いていないか、選んだものが保存されていない');
   if (!vs22 || vs22.host !== 'Host.Opponent' || shown(vs22, 'host') !== '\u{1F680} Bring it on!' || shown(vs22, 'client') !== '\u{1F60E} Let\u2019s go!') fail(`シナリオ 22 の VS 画面が ${vs22 && shown(vs22, 'host')}`);
   const end22 = sc22 && Engine.replay(sc22);
   if (!end22 || end22.failedAt !== -1 || end22.state.client !== 'Client.Opponent' || shown(end22.state, 'host') !== '\u{1F680} Bring it on!') fail('シナリオ 22 の最後が再戦の VS 画面 (ホストのあいさつ付き) でない');
